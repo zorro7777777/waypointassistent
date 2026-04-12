@@ -21,6 +21,36 @@ button {
     height: 50px;
 }
 
+/* status UI */
+#info {
+    background: #111;
+    color: #0f0;
+    padding: 12px;
+    border-radius: 8px;
+    font-family: monospace;
+}
+
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    margin: 4px 0;
+}
+
+.label {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.value {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.offroute {
+    color: red;
+    font-weight: bold;
+}
+
 .passed { background: #c8f7c5; }
 .skipped { background: #ffd6d6; }
 .current { background: #fff3b0; }
@@ -72,6 +102,8 @@ let paused = false;
 
 let watchId = null;
 
+let offRoute = false;
+
 const tolerance = 10;
 
 // ================== DISTANCE ==================
@@ -96,29 +128,24 @@ document.getElementById('gpxFile').addEventListener('change', e => {
     reader.onload = evt => {
         const xml = new DOMParser().parseFromString(evt.target.result, "text/xml");
 
-        // Trackpoints
         trackpoints = Array.from(xml.getElementsByTagName('trkpt')).map(p => ({
             lat: parseFloat(p.getAttribute('lat')),
             lon: parseFloat(p.getAttribute('lon'))
         }));
 
-        // Waypoints
         const wpts = Array.from(xml.getElementsByTagName('wpt'));
-
         processWaypoints(wpts);
-
         updateWaypointsTable();
     };
 
     reader.readAsText(e.target.files[0]);
 });
 
-// ================== SORT LOGIC (NIEUW) ==================
+// ================== WAYPOINTS ==================
 function processWaypoints(wpts) {
 
     let temp = [];
 
-    // originele waypoints
     wpts.forEach(wp => {
         temp.push({
             name: wp.getElementsByTagName('name')[0]?.textContent || "WP",
@@ -127,7 +154,6 @@ function processWaypoints(wpts) {
         });
     });
 
-    // start + einde toevoegen
     temp.unshift({
         name: "Start",
         lat: trackpoints[0].lat,
@@ -140,23 +166,19 @@ function processWaypoints(wpts) {
         lon: trackpoints.at(-1).lon
     });
 
-    // 🔥 KERN: index bepalen langs route
     const withIndex = temp.map(wp => ({
         ...wp,
         rank: findClosestTrackpointIndex(wp.lat, wp.lon)
     }));
 
-    // 🔥 sorteren zoals jouw ander script
     withIndex.sort((a,b)=>a.rank - b.rank);
 
-    // status toevoegen
     waypoints = withIndex.map(wp => ({
         ...wp,
         status: "pending"
     }));
 }
 
-// ================== INDEX ==================
 function findClosestTrackpointIndex(lat, lon) {
     let best = 0;
     let minDist = Infinity;
@@ -171,118 +193,120 @@ function findClosestTrackpointIndex(lat, lon) {
     return best;
 }
 
-// ================== FORWARD TRACK ==================
-function findClosestForward(lat, lon) {
-
-    let best = currentTrackIndex;
-    let bestDist = Infinity;
-
-    for (let i=currentTrackIndex;i<Math.min(trackpoints.length, currentTrackIndex+50);i++) {
-        const d = calculateDistance(lat, lon, trackpoints[i].lat, trackpoints[i].lon);
-        if (d < bestDist) { bestDist=d; best=i; }
-    }
-
-    if (best < currentTrackIndex - 5) return currentTrackIndex;
-
-    return best;
-}
-
 // ================== BUTTONS ==================
-const startStopBtn = document.getElementById('startStopBtn');
-const pauseBtn = document.getElementById('pauseBtn');
-
-startStopBtn.onclick = () => {
+document.getElementById('startStopBtn').onclick = () => {
 
     if (!trackingActive) {
         startTracking();
+        trackingActive = true;
         startStopBtn.textContent = "⏹️ Stop activiteit";
         pauseBtn.disabled = false;
-        trackingActive = true;
     } else {
         stopTracking();
+        trackingActive = false;
         startStopBtn.textContent = "▶️ Start activiteit";
         pauseBtn.disabled = true;
-        trackingActive = false;
     }
 };
 
-pauseBtn.onclick = () => {
+document.getElementById('pauseBtn').onclick = () => {
     paused = !paused;
-
-    if (paused) {
-        pauseBtn.textContent = "▶️ Hervatten";
-    } else {
-        pauseBtn.textContent = "⏸️ Pauze";
-        lastPosition = null;
-    }
+    pauseBtn.textContent = paused ? "▶️ Hervatten" : "⏸️ Pauze";
 };
 
 // ================== TRACKING ==================
 function startTracking() {
 
-    watchId = navigator.geolocation.watchPosition(pos => {
+watchId = navigator.geolocation.watchPosition(pos => {
 
-        if (!trackingActive || paused) return;
+    if (!trackingActive || paused) return;
 
-        const { latitude, longitude } = pos.coords;
+    const { latitude, longitude } = pos.coords;
 
-        if (lastPosition) {
-            const d = calculateDistance(lastPosition.lat, lastPosition.lon, latitude, longitude);
-            if (d > 3) tripDistance += d;
-        }
+    if (lastPosition) {
+        tripDistance += calculateDistance(
+            lastPosition.lat,
+            lastPosition.lon,
+            latitude,
+            longitude
+        );
+    }
 
-        lastPosition = { lat: latitude, lon: longitude };
+    lastPosition = { lat: latitude, lon: longitude };
 
-        currentTrackIndex = findClosestForward(latitude, longitude);
+    checkOffRoute(latitude, longitude);
 
-        processRealtimeWaypoints(latitude, longitude);
+    updateInfo(latitude, longitude);
+    updateWaypointsTable();
 
-        updateWaypointsTable();
-        updateInfo(latitude, longitude);
+}, console.error, { enableHighAccuracy:true });
 
-    }, console.error, { enableHighAccuracy:true });
 }
 
 function stopTracking() {
     navigator.geolocation.clearWatch(watchId);
 
     tripDistance = 0;
-    currentTrackIndex = 0;
     currentWaypointIndex = 0;
     lastPosition = null;
+    offRoute = false;
 
     waypoints.forEach(wp => wp.status="pending");
 
-    updateWaypointsTable();
     document.getElementById('info').innerHTML = "Gestopt";
 }
 
-// ================== WAYPOINT LOGIC ==================
-function processRealtimeWaypoints(lat, lon) {
+// ================== OFF ROUTE ==================
+function checkOffRoute(lat, lon) {
 
-    while (currentWaypointIndex < waypoints.length) {
+    const route = trackpoints;
 
-        const wp = waypoints[currentWaypointIndex];
-        const dist = calculateDistance(lat, lon, wp.lat, wp.lon);
+    let min = Infinity;
 
-        if (dist <= tolerance) {
-            wp.status = "passed";
-            currentWaypointIndex++;
-            continue;
-        }
+    for (let i=0;i<route.length;i++) {
+        const d = calculateDistance(lat, lon, route[i].lat, route[i].lon);
+        if (d < min) min = d;
+    }
 
-        if (wp.rank < currentTrackIndex - 20) {
-            wp.status = "skipped";
-            currentWaypointIndex++;
-            continue;
-        }
+    if (min > 50 && !offRoute) {
+        offRoute = true;
+    }
 
-        break;
+    if (min < 10 && offRoute) {
+        offRoute = false;
     }
 }
 
 // ================== UI ==================
+function updateInfo(lat, lon) {
+
+    const next = waypoints[currentWaypointIndex];
+    let dist = next ? calculateDistance(lat,lon,next.lat,next.lon).toFixed(1)+" m" : "-";
+
+    const progress = ((currentTrackIndex / trackpoints.length) * 100).toFixed(1);
+
+    document.getElementById('info').innerHTML = `
+<div class="status-row"><div class="label">📍 LAT</div><div class="value">${lat.toFixed(6)}</div></div>
+<div class="status-row"><div class="label">📍 LON</div><div class="value">${lon.toFixed(6)}</div></div>
+
+<div class="status-row"><div class="label">📊 PROGRESS</div><div class="value">${progress}%</div></div>
+
+<div class="status-row"><div class="label">➡️ NEXT WP</div><div class="value">${dist}</div></div>
+
+<div class="status-row"><div class="label">🧭 TRIP</div><div class="value">${(tripDistance/1000).toFixed(2)} km</div></div>
+
+<div class="status-row ${offRoute ? 'offroute' : ''}">
+<div class="label">⚠️ ROUTE</div>
+<div class="value">${offRoute ? "OFF ROUTE" : "ON ROUTE"}</div>
+</div>
+
+<div class="status-row"><div class="label">STATUS</div><div class="value">${paused ? "PAUSED" : "ACTIVE"}</div></div>
+`;
+}
+
+// ================== TABLE ==================
 function updateWaypointsTable() {
+
     const list = document.getElementById('waypointsList');
     list.innerHTML = '';
 
@@ -305,23 +329,6 @@ function updateWaypointsTable() {
 
         list.appendChild(row);
     });
-}
-
-function updateInfo(lat, lon) {
-
-    const next = waypoints[currentWaypointIndex];
-
-    let dist = next ? calculateDistance(lat,lon,next.lat,next.lon).toFixed(1)+" m" : "-";
-
-    const progress = ((currentTrackIndex / trackpoints.length) * 100).toFixed(1);
-
-    document.getElementById('info').innerHTML = `
-    📍 Positie: ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
-    📊 Voortgang: ${progress}%<br>
-    ➡️ Afstand volgende WP: ${dist}<br>
-    🧭 Trip: ${(tripDistance/1000).toFixed(2)} km<br>
-    Status: ${paused ? "⏸️ Pauze" : "▶️ Actief"}
-    `;
 }
 
 </script>
