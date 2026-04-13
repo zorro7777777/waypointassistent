@@ -1,331 +1,351 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Wandel Tracker</title>
-
-<style>
-body { font-family: Arial; }
-
-.controls {
-    display: flex;
-    gap: 10px;
-    margin: 10px 0;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPX Waypoints Realtime Tracker v1</title>
+    <style>
+  table {
+    border-collapse: separate; /* Zorgt voor dubbele randen rond cellen */
+    border-spacing: 3px; /* Ruimte tussen de randen voor een dubbele rand-effect */
+    width: auto; /* Tabel past zich aan de inhoud aan */
+}
+th, td {
+    border: 2px double black; /* Dubbele rand rond cellen */
+    padding: 1px; /* Padding van 1px rondom de inhoud */
+}
+th {
+    text-align: center; /* Headers (labels) gecentreerd */
+    padding: 2px; /* Consistente padding rondom de labels */
+}
+td:first-child {
+    text-align: left;
+    padding-left: 3px; /* Extra padding aan de linkerkant */
+    padding-right: 3px; /* Consistente padding aan de rechterkant */
+}
+td:nth-child(2) {
+    text-align: left; /* Specifiek voor de tweede kolom: links uitlijnen */
+    padding-left: 3px;
+    padding-right: 3px;
+}
+td:not(:first-child):not(:nth-child(2)) {
+    text-align: right;
+    padding-left: 3px; /* Consistente padding aan de linkerkant */
+    padding-right: 3px; /* Extra padding aan de rechterkant */
 }
 
-button {
-    flex: 1;
-    padding: 12px;
-    font-size: 16px;
-    height: 50px;
+th:nth-child(2), td:nth-child(2),
+th:nth-child(3), td:nth-child(3) {
+    display: none;
 }
 
-.passed { background: #c8f7c5; }
-.skipped { background: #ffd6d6; }
-.current { background: #fff3b0; }
 
-table { border-spacing: 3px; }
-td, th { border: 2px double black; padding: 3px; }
-
-</style>
+    </style>
 </head>
-
 <body>
+    <h1>GPX Waypoints Realtime Tracker</h1>
+    <p>Selecteer een GPX-bestand om waypoints te volgen:</p>
+    <input type="file" id="gpxFile" accept=".gpx">
+    <div id="output" style="display: flex; font-size: 16px; color: black; margin-top: 10px;"></div>
 
-<h1>GPX Wandel Tracker</h1>
+    <h2>Waypoints</h2>
+    <table id="waypointsTable">
+        <thead>
+            <tr>
+                <th>Naam</th>
+                <th>Latitude</th>
+                <th>Longitude</th>
+            </tr>
+        </thead>
+        <tbody id="waypointsList">
+            <!-- Dynamisch gegenereerde waypoints -->
+        </tbody>
+    </table>
 
-<input type="file" id="gpxFile" accept=".gpx">
+    <h2>Realtime Volgen</h2>
+    <div id="realtimeInfo">Geen realtime gegevens beschikbaar.</div>
+   
 
-<div class="controls">
-    <button id="startStopBtn">▶️ Start activiteit</button>
-    <button id="pauseBtn" disabled>⏸️ Pauze</button>
-</div>
+    <script>
+        let waypoints = [];
+        const tolerance = 10; // 10 meter tolerantie
+        let tripDistance = 0;
+        let lastPosition = null; // Voor het bijhouden van de laatste positie
+        let wakeLock = null; // Voor Wake Lock API
 
-<h2>Status</h2>
-<div id="info">Niet gestart</div>
+ 
 
-<h2>Waypoints</h2>
-<table>
-<thead>
-<tr>
-<th>Status</th><th>Naam</th><th>Lat</th><th>Lon</th>
-</tr>
-</thead>
-<tbody id="waypointsList"></tbody>
-</table>
+           // Haversine berekening afstanden
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Radius van de aarde in meters
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
 
-<script>
+document.getElementById('gpxFile').addEventListener('change', async function (event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = async function (e) {
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(e.target.result, "application/xml");
 
-// ================== DATA ==================
-let trackpoints = [];
-let waypoints = [];
+            const trackpoints = Array.from(xml.getElementsByTagName('trkpt'));
+            const waypointNodes = Array.from(xml.getElementsByTagName('wpt'));
 
-let currentTrackIndex = 0;
-let currentWaypointIndex = 0;
+            // Start en eind waypoints
+            const startWaypoint = {
+                name: "Start",
+                lat: parseFloat(trackpoints[0].getAttribute('lat')),
+                lon: parseFloat(trackpoints[0].getAttribute('lon')),
+                passed: false,
+                rank: 0
+            };
+            const endWaypoint = {
+                name: "Einde",
+                lat: parseFloat(trackpoints[trackpoints.length - 1].getAttribute('lat')),
+                lon: parseFloat(trackpoints[trackpoints.length - 1].getAttribute('lon')),
+                passed: false,
+                rank: trackpoints.length - 1
+            };
 
-let lastPosition = null;
-let tripDistance = 0;
+            // Verwerk waypoints
+            const processedWaypoints = await processWaypoints(waypointNodes, trackpoints);
 
-let trackingActive = false;
-let paused = false;
+            // Voeg start en eind waypoints toe
+            waypoints = [startWaypoint, ...processedWaypoints, endWaypoint];
 
-let watchId = null;
+            // Sorteer waypoints op rank
+            waypoints.sort((a, b) => a.rank - b.rank);
 
-const tolerance = 10;
+            // Werk de tabel bij
+            updateWaypointsTable();
 
-// ================== DISTANCE ==================
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000;
-    const dLat = (lat2 - lat1) * Math.PI/180;
-    const dLon = (lon2 - lon1) * Math.PI/180;
+            // Start realtime tracking
+            startRealtimeTracking();
 
-    const a = Math.sin(dLat/2)**2 +
-        Math.cos(lat1*Math.PI/180) *
-        Math.cos(lat2*Math.PI/180) *
-        Math.sin(dLon/2)**2;
+            // Activeer Wake Lock
+            requestWakeLock();
+        };
 
-    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-// ================== GPX LOAD ==================
-document.getElementById('gpxFile').addEventListener('change', e => {
-
-    const reader = new FileReader();
-
-    reader.onload = evt => {
-        const xml = new DOMParser().parseFromString(evt.target.result, "text/xml");
-
-        // Trackpoints
-        trackpoints = Array.from(xml.getElementsByTagName('trkpt')).map(p => ({
-            lat: parseFloat(p.getAttribute('lat')),
-            lon: parseFloat(p.getAttribute('lon'))
-        }));
-
-        // Waypoints
-        const wpts = Array.from(xml.getElementsByTagName('wpt'));
-
-        processWaypoints(wpts);
-
-        updateWaypointsTable();
-    };
-
-    reader.readAsText(e.target.files[0]);
+        reader.readAsText(file);
+    }
 });
 
-// ================== SORT LOGIC (NIEUW) ==================
-function processWaypoints(wpts) {
+function showMessage(message, type = 'info') {
+    const messageBox = document.createElement('div');
+    messageBox.textContent = message;
+    messageBox.style.position = 'fixed';
+    messageBox.style.bottom = '20px';
+    messageBox.style.left = '50%';
+    messageBox.style.transform = 'translateX(-50%)';
+    messageBox.style.padding = '10px';
+    messageBox.style.color = '#fff';
+    messageBox.style.backgroundColor = type === 'error' ? '#ff4d4d' : '#4caf50';
+    messageBox.style.borderRadius = '5px';
+    messageBox.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+    document.body.appendChild(messageBox);
 
-    let temp = [];
-
-    // originele waypoints
-    wpts.forEach(wp => {
-        temp.push({
-            name: wp.getElementsByTagName('name')[0]?.textContent || "WP",
-            lat: parseFloat(wp.getAttribute('lat')),
-            lon: parseFloat(wp.getAttribute('lon'))
-        });
-    });
-
-    // start + einde toevoegen
-    temp.unshift({
-        name: "Start",
-        lat: trackpoints[0].lat,
-        lon: trackpoints[0].lon
-    });
-
-    temp.push({
-        name: "Einde",
-        lat: trackpoints.at(-1).lat,
-        lon: trackpoints.at(-1).lon
-    });
-
-    // 🔥 KERN: index bepalen langs route
-    const withIndex = temp.map(wp => ({
-        ...wp,
-        rank: findClosestTrackpointIndex(wp.lat, wp.lon)
-    }));
-
-    // 🔥 sorteren zoals jouw ander script
-    withIndex.sort((a,b)=>a.rank - b.rank);
-
-    // status toevoegen
-    waypoints = withIndex.map(wp => ({
-        ...wp,
-        status: "pending"
-    }));
+    setTimeout(() => {
+        document.body.removeChild(messageBox);
+    }, 3000);
 }
 
-// ================== INDEX ==================
-function findClosestTrackpointIndex(lat, lon) {
-    let best = 0;
-    let minDist = Infinity;
-
-    for (let i = 0; i < trackpoints.length; i++) {
-        const d = calculateDistance(lat, lon, trackpoints[i].lat, trackpoints[i].lon);
-        if (d < minDist) {
-            minDist = d;
-            best = i;
-        }
-    }
-    return best;
-}
-
-// ================== FORWARD TRACK ==================
-function findClosestForward(lat, lon) {
-
-    let best = currentTrackIndex;
-    let bestDist = Infinity;
-
-    for (let i=currentTrackIndex;i<Math.min(trackpoints.length, currentTrackIndex+50);i++) {
-        const d = calculateDistance(lat, lon, trackpoints[i].lat, trackpoints[i].lon);
-        if (d < bestDist) { bestDist=d; best=i; }
-    }
-
-    if (best < currentTrackIndex - 5) return currentTrackIndex;
-
-    return best;
-}
-
-// ================== BUTTONS ==================
-const startStopBtn = document.getElementById('startStopBtn');
-const pauseBtn = document.getElementById('pauseBtn');
-
-startStopBtn.onclick = () => {
-
-    if (!trackingActive) {
-        startTracking();
-        startStopBtn.textContent = "⏹️ Stop activiteit";
-        pauseBtn.disabled = false;
-        trackingActive = true;
-    } else {
-        stopTracking();
-        startStopBtn.textContent = "▶️ Start activiteit";
-        pauseBtn.disabled = true;
-        trackingActive = false;
-    }
-};
-
-pauseBtn.onclick = () => {
-    paused = !paused;
-
-    if (paused) {
-        pauseBtn.textContent = "▶️ Hervatten";
-    } else {
-        pauseBtn.textContent = "⏸️ Pauze";
-        lastPosition = null;
-    }
-};
-
-// ================== TRACKING ==================
-function startTracking() {
-
-    watchId = navigator.geolocation.watchPosition(pos => {
-
-        if (!trackingActive || paused) return;
-
-        const { latitude, longitude } = pos.coords;
-
-        if (lastPosition) {
-            const d = calculateDistance(lastPosition.lat, lastPosition.lon, latitude, longitude);
-            if (d > 3) tripDistance += d;
-        }
-
-        lastPosition = { lat: latitude, lon: longitude };
-
-        currentTrackIndex = findClosestForward(latitude, longitude);
-
-        processRealtimeWaypoints(latitude, longitude);
-
-        updateWaypointsTable();
-        updateInfo(latitude, longitude);
-
-    }, console.error, { enableHighAccuracy:true });
-}
-
-function stopTracking() {
-    navigator.geolocation.clearWatch(watchId);
-
-    tripDistance = 0;
-    currentTrackIndex = 0;
-    currentWaypointIndex = 0;
-    lastPosition = null;
-
-    waypoints.forEach(wp => wp.status="pending");
-
-    updateWaypointsTable();
-    document.getElementById('info').innerHTML = "Gestopt";
-}
-
-// ================== WAYPOINT LOGIC ==================
-function processRealtimeWaypoints(lat, lon) {
-
-    while (currentWaypointIndex < waypoints.length) {
-
-        const wp = waypoints[currentWaypointIndex];
-        const dist = calculateDistance(lat, lon, wp.lat, wp.lon);
-
-        if (dist <= tolerance) {
-            wp.status = "passed";
-            currentWaypointIndex++;
-            continue;
-        }
-
-        if (wp.rank < currentTrackIndex - 20) {
-            wp.status = "skipped";
-            currentWaypointIndex++;
-            continue;
-        }
-
-        break;
-    }
-}
-
-// ================== UI ==================
 function updateWaypointsTable() {
-    const list = document.getElementById('waypointsList');
-    list.innerHTML = '';
+    const waypointsList = document.getElementById('waypointsList');
+    waypointsList.innerHTML = ''; // Maak de tabel leeg
 
-    waypoints.forEach((wp,i)=>{
-
-        let sym="⏳", cls="";
-        if (wp.status==="passed") { sym="✅"; cls="passed"; }
-        if (wp.status==="skipped") { sym="⚠️"; cls="skipped"; }
-        if (i===currentWaypointIndex) cls="current";
-
-        const row=document.createElement('tr');
-        row.className=cls;
-
-        row.innerHTML=`
-        <td>${sym}</td>
-        <td>${wp.name}</td>
-        <td>${wp.lat.toFixed(5)}</td>
-        <td>${wp.lon.toFixed(5)}</td>
+    waypoints.forEach(wp => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${wp.name}</td>
+            <td>${wp.lat.toFixed(6)}</td>
+            <td>${wp.lon.toFixed(6)}</td>
         `;
 
-        list.appendChild(row);
+        // Voeg een klikfunctionaliteit toe aan de rij
+        row.addEventListener('click', () => {
+            if (navigator.onLine) {
+                const lat = wp.lat.toFixed(6);
+                const lon = wp.lon.toFixed(6);
+                // Open Street View via Google.be
+                window.open(`https://www.google.be/maps?q=&layer=c&cbll=${lat},${lon}`, '_blank');
+            } else {
+                // Toon een melding als er geen internetverbinding is
+                showMessage('Geen internetverbinding. Kan Street View niet openen.', 'error');
+            }
+        });
+
+        waypointsList.appendChild(row);
     });
 }
 
-function updateInfo(lat, lon) {
 
-    const next = waypoints[currentWaypointIndex];
+async function processWaypoints(waypointNodes, trackpoints) {
+    const waypoints = [];
 
-    let dist = next ? calculateDistance(lat,lon,next.lat,next.lon).toFixed(1)+" m" : "-";
+    for (let i = 0; i < waypointNodes.length; i++) {
+        const wp = waypointNodes[i];
+        const rank = await findClosestTrackpointIndex(
+            parseFloat(wp.getAttribute('lat')),
+            parseFloat(wp.getAttribute('lon')),
+            trackpoints
+        );
 
-    const progress = ((currentTrackIndex / trackpoints.length) * 100).toFixed(1);
+        // Voeg waypoint toe als het geen duplicaat is
+        if (!waypoints.some(waypoint => waypoint.rank === rank)) {
+            waypoints.push({
+                name: wp.getElementsByTagName('name')[0]?.textContent || 'Waypoint',
+                lat: parseFloat(wp.getAttribute('lat')),
+                lon: parseFloat(wp.getAttribute('lon')),
+                passed: false,
+                rank
+            });
+        }
 
-document.getElementById('info').innerHTML = `
-ℹ️ <b>v1.0.0</b><br>
-📍 Positie: <b>${lat.toFixed(6)}, ${lon.toFixed(6)}</b><br>
-Status: <b>${paused ? "⏸️ Pauze" : "▶️ Actief"}</b>
-📊 Voortgang: <b>${progress}%</b><br>
-➡️ Afstand volgende WP: <b>${dist}</b><br>
-🧭 Trip: <b>${(tripDistance/1000).toFixed(3)} km</b><br>
-`;
+        // **Pauzeer om de 100 waypoints om de browser responsief te houden**
+        if (i % 100 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    return waypoints;
 }
 
-</script>
 
+async function findClosestTrackpointIndex(lat, lon, trackpoints) {
+    let closestIndex = -1;
+    let closestDistance = Infinity;
+
+    for (let index = 0; index < trackpoints.length; index++) {
+        const trkpt = trackpoints[index];
+        const trackLat = parseFloat(trkpt.getAttribute('lat'));
+        const trackLon = parseFloat(trkpt.getAttribute('lon'));
+        const distance = calculateDistance(lat, lon, trackLat, trackLon);
+
+        if (distance < closestDistance) {
+            closestDistance = distance;
+            closestIndex = index;
+        }
+
+        // Pauzeer om de 100 iteraties
+        if (index % 100 === 0) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    return closestIndex;
+}
+
+
+        function startRealtimeTracking() {
+            const realtimeInfo = document.getElementById('realtimeInfo');
+
+            if (!navigator.geolocation) {
+                realtimeInfo.textContent = 'Geolocatie wordt niet ondersteund door deze browser.';
+                return;
+            }
+
+    function updateRealtimeInfo(position) {
+    const { latitude, longitude, speed } = position.coords;
+
+    // Converteer snelheid van m/s naar km/u
+    const speedKmH = (speed || 0) * 3.6;
+
+    // Als de snelheid tussen 0 en 0.5 km/u is, beschouw dit als stilstand
+    if (speedKmH < 0.5) {
+        // Gebruiker staat stil, update alleen de laatste positie
+        lastPosition = { latitude, longitude };
+        updateWaypointsTable();
+    } else {
+        // Gebruiker beweegt (snelheid >= 0.5 km/u)
+        if (lastPosition) {
+            const distanceMoved = calculateDistance(
+                lastPosition.latitude,
+                lastPosition.longitude,
+                latitude,
+                longitude
+            );
+
+            // Voeg alleen afstand toe als de gebruiker meer dan 0.3 meter beweegt
+            if (distanceMoved > 0.3) {
+                tripDistance += distanceMoved;
+                updateWaypointsTable();
+            }
+        }
+
+        // Update de laatste positie
+        lastPosition = { latitude, longitude };
+    }
+
+    // Controleer of er een waypoint wordt bereikt
+    let closestWaypoint = null;
+    let closestDistance = Infinity;
+
+    waypoints.forEach(wp => {
+        const distance = calculateDistance(latitude, longitude, wp.lat, wp.lon);
+        if (distance <= tolerance && !wp.passed && distance < closestDistance) {
+            closestWaypoint = wp;
+            closestDistance = distance;
+        }
+    });
+
+    if (closestWaypoint) {
+        closestWaypoint.passed = true;
+        waypoints = waypoints.filter(wp => !wp.passed);
+        updateWaypointsTable();
+
+        // Toon een tijdelijke melding dat het waypoint is bereikt
+        const output = document.getElementById('output');
+        output.innerText = `Waypoint "${closestWaypoint.name}" bereikt!`;
+        output.style.display = 'block'; // Zorg dat de melding zichtbaar is
+
+        // Verberg de melding na xxx seconden
+        setTimeout(() => {
+            output.style.display = 'block';
+        }, 0);
+
+        realtimeInfo.innerHTML = `
+            <p><strong>Waypoint bereikt:</strong> ${closestWaypoint.name}</p>
+            <p><strong>Huidige positie:</strong> ${latitude.toFixed(6)}, ${longitude.toFixed(6)}</p>
+            <p><strong>Totale tripafstand:</strong> ${(tripDistance / 1000).toFixed(3)} km</p>
+        `;
+    } else {
+        realtimeInfo.innerHTML = `
+            <p><strong>Huidige positie:</strong> ${latitude.toFixed(6)}, ${longitude.toFixed(6)}</p>
+            <p><strong>Geen waypoints binnen ${tolerance} meter.</strong></p>
+            <p><strong>Totale tripafstand:</strong> ${(tripDistance / 1000).toFixed(3)} km</p>
+        `;
+    }
+}
+           navigator.geolocation.watchPosition(updateRealtimeInfo, error => {
+                console.error('Fout bij het ophalen van locatie:', error);
+                realtimeInfo.textContent = 'Fout bij het ophalen van locatiegegevens.';
+            }, { enableHighAccuracy: true, maximumAge: 0 });
+        }
+
+        async function requestWakeLock() {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                console.log('Wake Lock actief');
+                wakeLock.addEventListener('release', () => {
+                    console.log('Wake Lock vrijgegeven');
+                });
+            } catch (err) {
+                console.error('Wake Lock niet beschikbaar:', err);
+            }
+
+            document.addEventListener('visibilitychange', async () => {
+                if (document.visibilityState === 'visible' && wakeLock === null) {
+                    await requestWakeLock();
+                }
+            });
+        }
+    </script>
 </body>
 </html>
