@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Wandel Tracker V3.1</title>
+<title>GPX Wandel Tracker V4</title>
 
 <style>
 body { font-family: Arial; }
@@ -32,20 +32,19 @@ button {
     color: white;
 }
 
-/* button states */
-.start { background: #2ecc71; }   /* groen */
-.stop { background: #e74c3c; }    /* rood */
-.pause { background: #f39c12; }   /* oranje */
-.resume { background: #2ecc71; }  /* groen */
+.start { background: #2ecc71; }
+.stop { background: #e74c3c; }
+.pause { background: #f39c12; }
+.resume { background: #2ecc71; }
 
 .passed { background: #c8f7c5; }
+.skipped { background: #ffe1e1; }
 .current { background: #fff3b0; }
 
-/* waypoint name in blauw */
-td.name {
-    color: blue;
-    font-weight: bold;
-}
+/* waypoint styling */
+td.name { color: blue; font-weight: bold; }
+td.startName { color: green; font-weight: bold; }
+td.endName { color: red; font-weight: bold; }
 
 table { border-spacing: 3px; }
 td, th { border: 2px double black; padding: 6px; }
@@ -56,7 +55,7 @@ td, th { border: 2px double black; padding: 6px; }
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 3.1 (UI + resterende waypoints)</div>
+<div class="version">Versie 4.0 (segment projection engine)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -82,19 +81,17 @@ td, th { border: 2px double black; padding: 6px; }
 
 let trackpoints = [];
 let waypoints = [];
-
-let currentTrackIndex = 0;
-let currentWaypointIndex = 0;
+let trackCumDist = [];
 
 let lastPosition = null;
 let tripDistance = 0;
 
 let trackingActive = false;
 let paused = false;
-
 let watchId = null;
 
-const tolerance = 10;
+const tolerance = 15;
+const skipTolerance = 50;
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -109,6 +106,37 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+function buildTrackDistance() {
+    trackCumDist = [0];
+    for (let i = 1; i < trackpoints.length; i++) {
+        const d = calculateDistance(
+            trackpoints[i-1].lat, trackpoints[i-1].lon,
+            trackpoints[i].lat, trackpoints[i].lon
+        );
+        trackCumDist[i] = trackCumDist[i-1] + d;
+    }
+}
+
+function projectOnTrack(lat, lon) {
+    let bestDist = Infinity;
+    let bestIndex = 0;
+
+    for (let i = 0; i < trackpoints.length; i++) {
+        const d = calculateDistance(lat, lon, trackpoints[i].lat, trackpoints[i].lon);
+        if (d < bestDist) {
+            bestDist = d;
+            bestIndex = i;
+        }
+    }
+
+    return {
+        index: bestIndex,
+        dist: trackCumDist[bestIndex]
+    };
+}
+
+// GPX load
+
 document.getElementById('gpxFile').addEventListener('change', e => {
 
     const reader = new FileReader();
@@ -120,6 +148,8 @@ document.getElementById('gpxFile').addEventListener('change', e => {
             lat: parseFloat(p.getAttribute('lat')),
             lon: parseFloat(p.getAttribute('lon'))
         }));
+
+        buildTrackDistance();
 
         const wpts = Array.from(xml.getElementsByTagName('wpt'));
         processWaypoints(wpts);
@@ -141,43 +171,20 @@ function processWaypoints(wpts) {
         });
     });
 
-    temp.unshift({
-        name: "Start",
-        lat: trackpoints[0].lat,
-        lon: trackpoints[0].lon
+    temp.unshift({ name: "Start", lat: trackpoints[0].lat, lon: trackpoints[0].lon });
+    temp.push({ name: "Einde", lat: trackpoints.at(-1).lat, lon: trackpoints.at(-1).lon });
+
+    waypoints = temp.map(wp => {
+        const proj = projectOnTrack(wp.lat, wp.lon);
+        return {
+            ...wp,
+            rankDist: proj.dist,
+            touched: false,
+            status: "pending"
+        };
     });
 
-    temp.push({
-        name: "Einde",
-        lat: trackpoints.at(-1).lat,
-        lon: trackpoints.at(-1).lon
-    });
-
-    const withIndex = temp.map(wp => ({
-        ...wp,
-        rank: findClosestTrackpointIndex(wp.lat, wp.lon)
-    }));
-
-    withIndex.sort((a,b)=>a.rank - b.rank);
-
-    waypoints = withIndex.map(wp => ({
-        ...wp,
-        status: "pending"
-    }));
-}
-
-function findClosestTrackpointIndex(lat, lon) {
-    let best = 0;
-    let minDist = Infinity;
-
-    for (let i = 0; i < trackpoints.length; i++) {
-        const d = calculateDistance(lat, lon, trackpoints[i].lat, trackpoints[i].lon);
-        if (d < minDist) {
-            minDist = d;
-            best = i;
-        }
-    }
-    return best;
+    waypoints.sort((a,b)=>a.rankDist-b.rankDist);
 }
 
 const startStopBtn = document.getElementById('startStopBtn');
@@ -188,36 +195,24 @@ startStopBtn.onclick = () => {
     if (!trackingActive) {
         startTracking();
         trackingActive = true;
+        startStopBtn.className = "stop";
         startStopBtn.textContent = "⏹️ Stop activiteit";
-        setBtnState(startStopBtn, "stop");
         pauseBtn.disabled = false;
     } else {
         stopTracking();
         trackingActive = false;
+        startStopBtn.className = "start";
         startStopBtn.textContent = "▶️ Start activiteit";
-        setBtnState(startStopBtn, "start");
         pauseBtn.disabled = true;
     }
 };
 
 pauseBtn.onclick = () => {
-
     paused = !paused;
-
-    if (paused) {
-        pauseBtn.textContent = "▶️ Hervatten";
-        setBtnState(pauseBtn, "resume");
-    } else {
-        pauseBtn.textContent = "⏸️ Pauze";
-        setBtnState(pauseBtn, "pause");
-        lastPosition = null;
-    }
+    pauseBtn.className = paused ? "resume" : "pause";
+    pauseBtn.textContent = paused ? "▶️ Hervatten" : "⏸️ Pauze";
+    if (!paused) lastPosition = null;
 };
-
-function setBtnState(btn, state) {
-    btn.classList.remove("start","stop","pause","resume");
-    btn.classList.add(state);
-}
 
 function startTracking() {
 
@@ -231,15 +226,12 @@ function startTracking() {
             const d = calculateDistance(lastPosition.lat, lastPosition.lon, latitude, longitude);
             if (d > 3) tripDistance += d;
         }
-
         lastPosition = { lat: latitude, lon: longitude };
 
-        currentTrackIndex = findClosestForward(latitude, longitude);
+        const proj = projectOnTrack(latitude, longitude);
 
-        processRealtimeWaypoints(latitude, longitude);
-
-        updateWaypointsTable();
-        updateInfo(latitude, longitude);
+        updateWaypoints(proj.dist);
+        updateUI(proj, latitude, longitude);
 
     }, console.error, { enableHighAccuracy:true });
 }
@@ -248,44 +240,32 @@ function stopTracking() {
     navigator.geolocation.clearWatch(watchId);
 
     tripDistance = 0;
-    currentTrackIndex = 0;
-    currentWaypointIndex = 0;
     lastPosition = null;
 
-    waypoints.forEach(wp => wp.status="pending");
+    waypoints.forEach(w => {
+        w.touched = false;
+        w.status = "pending";
+    });
 
     updateWaypointsTable();
     document.getElementById('info').innerHTML = "Gestopt";
 }
 
-function processRealtimeWaypoints(lat, lon) {
+function updateWaypoints(currentDist) {
 
-    while (currentWaypointIndex < waypoints.length) {
+    waypoints.forEach(wp => {
 
-        const wp = waypoints[currentWaypointIndex];
-        const dist = calculateDistance(lat, lon, wp.lat, wp.lon);
+        const near = Math.abs(currentDist - wp.rankDist) < tolerance;
+        if (near) wp.touched = true;
 
-        if (dist <= tolerance) {
+        if (wp.touched && currentDist >= wp.rankDist - tolerance) {
             wp.status = "passed";
-            currentWaypointIndex++;
-            continue;
         }
 
-        break;
-    }
-}
-
-function findClosestForward(lat, lon) {
-
-    let best = currentTrackIndex;
-    let bestDist = Infinity;
-
-    for (let i=currentTrackIndex;i<Math.min(trackpoints.length, currentTrackIndex+50);i++) {
-        const d = calculateDistance(lat, lon, trackpoints[i].lat, trackpoints[i].lon);
-        if (d < bestDist) { bestDist=d; best=i; }
-    }
-
-    return best;
+        if (!wp.touched && currentDist > wp.rankDist + skipTolerance) {
+            wp.status = "skipped";
+        }
+    });
 }
 
 function updateWaypointsTable() {
@@ -293,37 +273,33 @@ function updateWaypointsTable() {
     const list = document.getElementById('waypointsList');
     list.innerHTML = '';
 
-    waypoints.forEach((wp,i)=>{
+    waypoints.forEach(wp => {
 
-        let sym="⏳", cls="";
-        if (wp.status==="passed") { sym="✅"; cls="passed"; }
-        if (i===currentWaypointIndex) cls="current";
+        let sym = "⏳", cls = "";
+        if (wp.status === "passed") { sym = "✅"; cls = "passed"; }
+        if (wp.status === "skipped") { sym = "⚠️"; cls = "skipped"; }
 
-        const row=document.createElement('tr');
-        row.className=cls;
+        let nameClass = "name";
+        if (wp.name === "Start") nameClass = "startName";
+        if (wp.name === "Einde") nameClass = "endName";
 
-        row.innerHTML=`
-        <td>${sym}</td>
-        <td class="name">${wp.name}</td>
-        `;
+        const row = document.createElement('tr');
+        row.className = cls;
 
+        row.innerHTML = `<td>${sym}</td><td class="${nameClass}">${wp.name}</td>`;
         list.appendChild(row);
     });
 }
 
-function updateInfo(lat, lon) {
+function updateUI(proj, lat, lon) {
 
-    const next = waypoints[currentWaypointIndex];
-
-    const remaining = Math.max(0, waypoints.length - currentWaypointIndex);
-
-    let dist = next ? calculateDistance(lat,lon,next.lat,next.lon).toFixed(0)+" m" : "-";
+    const remaining = waypoints.filter(w => w.status !== "passed").length;
 
     document.getElementById('info').innerHTML = `
-    📍 Positie: ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
-    ➡️ Afstand volgende WP: ${dist}<br>
-    🧭 Trip (GPS): ${(tripDistance/1000).toFixed(3)} km<br>
-    📌 Resterende WP's: ${remaining}<br>
+    📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
+    🧭 Afstand op track: ${proj.dist.toFixed(1)} m<br>
+    🧭 Trip GPS: ${(tripDistance/1000).toFixed(2)} km<br>
+    📌 Resterend: ${remaining}<br>
     Status: ${paused ? "⏸️ Pauze" : "▶️ Actief"}
     `;
 }
@@ -332,3 +308,4 @@ function updateInfo(lat, lon) {
 
 </body>
 </html>
+
