@@ -3,309 +3,133 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Wandel Tracker V4</title>
-
+<title>GPX Navigation Engine V7</title>
 <style>
-body { font-family: Arial; }
-
-h1 { margin-bottom: 5px; }
-
-.version {
-    font-size: 14px;
-    color: #666;
-    margin-bottom: 10px;
-}
-
-.controls {
-    display: flex;
-    gap: 10px;
-    margin: 10px 0;
-}
-
-button {
-    flex: 1;
-    padding: 12px;
-    font-size: 16px;
-    height: 50px;
-    border: none;
-    border-radius: 6px;
-    color: white;
-}
-
-.start { background: #2ecc71; }
-.stop { background: #e74c3c; }
-.pause { background: #f39c12; }
-.resume { background: #2ecc71; }
-
-.passed { background: #c8f7c5; }
-.skipped { background: #ffe1e1; }
-.current { background: #fff3b0; }
-
-/* waypoint styling */
-td.name { color: blue; font-weight: bold; }
-td.startName { color: green; font-weight: bold; }
-td.endName { color: red; font-weight: bold; }
-
-table { border-spacing: 3px; }
-td, th { border: 2px double black; padding: 6px; }
-
-</style>
+body{font-family:Arial}
+h1{margin-bottom:5px}
+.version{font-size:14px;color:#666;margin-bottom:10px}
+.controls{display:flex;gap:10px;margin:10px 0}
+button{flex:1;padding:12px;font-size:16px;height:50px;border:none;border-radius:6px;color:white}
+.start{background:#2ecc71}
+.stop{background:#e74c3c}
+.pause{background:#f39c12}
+.resume{background:#2ecc71}
+.passed{background:#c8f7c5}
+.offroute{background:#ffe1e1}
+td.name{color:blue;font-weight:bold}
+td.startName{color:green;font-weight:bold}
+td.endName{color:red;font-weight:bold}
+table{border-spacing:3px}td,th{border:2px double black;padding:6px}</style>
 </head>
-
 <body>
-
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 4.0 (segment projection engine)</div>
-
+<div class="version">Versie 7.0 (Navigation Engine: snapping + smoothing)</div>
 <input type="file" id="gpxFile" accept=".gpx">
-
 <div class="controls">
-    <button id="startStopBtn" class="start">▶️ Start activiteit</button>
-    <button id="pauseBtn" class="pause" disabled>⏸️ Pauze</button>
+<button id="startStopBtn" class="start">▶️ Start</button>
+<button id="pauseBtn" class="pause" disabled>⏸️ Pauze</button>
 </div>
-
 <h2>Status</h2>
 <div id="info">Niet gestart</div>
-
 <h2>Waypoints</h2>
 <table>
-<thead>
-<tr>
-<th>Status</th><th>Naam</th>
-</tr>
-</thead>
+<thead><tr><th>Status</th><th>Naam</th></tr></thead>
 <tbody id="waypointsList"></tbody>
 </table>
-
 <script>
 
-let trackpoints = [];
-let waypoints = [];
-let trackCumDist = [];
+// ================= CORE DATA =================
+let track=[],cum=[],seg=[];
+let waypoints=[];
+let lastRaw=null;
+let smooth={lat:0,lon:0,init:false};
+let trip=0;
+let active=false;
+let paused=false;
+let watchId=null;
 
-let lastPosition = null;
-let tripDistance = 0;
+const WP_TOL=18;
+const OFF_ROAD=70;
+const ALPHA=0.25; // smoothing factor
 
-let trackingActive = false;
-let paused = false;
-let watchId = null;
+// ================= DIST =================
+function dist(a,b,c,d){const R=6371000;const dLat=(c-a)*Math.PI/180;const dLon=(d-b)*Math.PI/180;const x=Math.sin(dLat/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
 
-const tolerance = 15;
-const skipTolerance = 50;
-
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000;
-    const dLat = (lat2 - lat1) * Math.PI/180;
-    const dLon = (lon2 - lon1) * Math.PI/180;
-
-    const a = Math.sin(dLat/2)**2 +
-        Math.cos(lat1*Math.PI/180) *
-        Math.cos(lat2*Math.PI/180) *
-        Math.sin(dLon/2)**2;
-
-    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+// ================= KALMAN / EMA SMOOTH =================
+function smoothGPS(lat,lon){
+if(!smooth.init){smooth={lat,lon,init:true};return smooth;}
+smooth.lat=smooth.lat+(lat-smooth.lat)*ALPHA;
+smooth.lon=smooth.lon+(lon-smooth.lon)*ALPHA;
+return smooth;
 }
 
-function buildTrackDistance() {
-    trackCumDist = [0];
-    for (let i = 1; i < trackpoints.length; i++) {
-        const d = calculateDistance(
-            trackpoints[i-1].lat, trackpoints[i-1].lon,
-            trackpoints[i].lat, trackpoints[i].lon
-        );
-        trackCumDist[i] = trackCumDist[i-1] + d;
-    }
+// ================= TRACK BUILD =================
+function build(){cum=[0];seg=[];for(let i=0;i<track.length-1;i++){const d=dist(track[i].lat,track[i].lon,track[i+1].lat,track[i+1].lon);seg[i]=d;cum[i+1]=cum[i]+d}}
+
+// ================= SEGMENT PROJECTION =================
+function project(lat,lon){
+let best={pos:0,off:1e9};
+for(let i=0;i<track.length-1;i++){
+const A=track[i],B=track[i+1];
+const dx=B.lon-A.lon,dy=B.lat-A.lat;
+const len2=dx*dx+dy*dy;if(!len2)continue;
+let t=((lon-A.lon)*dx+(lat-A.lat)*dy)/len2;t=Math.max(0,Math.min(1,t));
+const pl=A.lat+t*(B.lat-A.lat);
+const po=A.lon+t*(B.lon-A.lon);
+const d=dist(lat,lon,pl,po);
+const along=cum[i]+t*seg[i];
+if(d<best.off)best={pos:along,off:d}}
+return best;
 }
 
-function projectOnTrack(lat, lon) {
-    let bestDist = Infinity;
-    let bestIndex = 0;
+// ================= LOAD =================
+document.getElementById('gpxFile').addEventListener('change',e=>{
+const r=new FileReader();
+r.onload=ev=>{
+const xml=new DOMParser().parseFromString(ev.target.result,"text/xml");
+track=[...xml.getElementsByTagName('trkpt')].map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
+build();
+const w=[...xml.getElementsByTagName('wpt')];
+waypoints=w.map(x=>({name:x.getElementsByTagName('name')[0]?.textContent||"WP",lat:+x.getAttribute('lat'),lon:+x.getAttribute('lon'),dist:0,passed:false}));
+waypoints.unshift({name:"Start",lat:track[0].lat,lon:track[0].lon,dist:0,passed:false});
+waypoints.push({name:"Einde",lat:track.at(-1).lat,lon:track.at(-1).lon,dist:cum.at(-1),passed:false});
+waypoints.forEach(w=>w.dist=project(w.lat,w.lon).pos);
+waypoints.sort((a,b)=>a.dist-b.dist);
+render();};r.readAsText(e.target.files[0]);});
 
-    for (let i = 0; i < trackpoints.length; i++) {
-        const d = calculateDistance(lat, lon, trackpoints[i].lat, trackpoints[i].lon);
-        if (d < bestDist) {
-            bestDist = d;
-            bestIndex = i;
-        }
-    }
+// ================= UI =================
+const btn=document.getElementById('startStopBtn');const pb=document.getElementById('pauseBtn');
+btn.onclick=()=>{if(!active){start();active=true;btn.className="stop";pb.disabled=false}else{stop();active=false;btn.className="start";pb.disabled=true}};
+pb.onclick=()=>{paused=!paused;pb.className=paused?"resume":"pause"};
 
-    return {
-        index: bestIndex,
-        dist: trackCumDist[bestIndex]
-    };
+// ================= START ENGINE =================
+function start(){
+watchId=navigator.geolocation.watchPosition(p=>{
+if(!active||paused)return;
+const raw=smoothGPS(p.coords.latitude,p.coords.longitude);
+if(lastRaw)trip+=dist(lastRaw.lat,lastRaw.lon,raw.lat,raw.lon);
+lastRaw=raw;
+const pr=project(raw.lat,raw.lon);
+
+for(const w of waypoints){
+if(!w.passed && Math.abs(pr.pos-w.dist)<WP_TOL)w.passed=true;
+if(!w.passed && pr.off>OFF_ROAD)w.off=true;
 }
 
-// GPX load
-
-document.getElementById('gpxFile').addEventListener('change', e => {
-
-    const reader = new FileReader();
-
-    reader.onload = evt => {
-        const xml = new DOMParser().parseFromString(evt.target.result, "text/xml");
-
-        trackpoints = Array.from(xml.getElementsByTagName('trkpt')).map(p => ({
-            lat: parseFloat(p.getAttribute('lat')),
-            lon: parseFloat(p.getAttribute('lon'))
-        }));
-
-        buildTrackDistance();
-
-        const wpts = Array.from(xml.getElementsByTagName('wpt'));
-        processWaypoints(wpts);
-        updateWaypointsTable();
-    };
-
-    reader.readAsText(e.target.files[0]);
-});
-
-function processWaypoints(wpts) {
-
-    let temp = [];
-
-    wpts.forEach(wp => {
-        temp.push({
-            name: wp.getElementsByTagName('name')[0]?.textContent || "WP",
-            lat: parseFloat(wp.getAttribute('lat')),
-            lon: parseFloat(wp.getAttribute('lon'))
-        });
-    });
-
-    temp.unshift({ name: "Start", lat: trackpoints[0].lat, lon: trackpoints[0].lon });
-    temp.push({ name: "Einde", lat: trackpoints.at(-1).lat, lon: trackpoints.at(-1).lon });
-
-    waypoints = temp.map(wp => {
-        const proj = projectOnTrack(wp.lat, wp.lon);
-        return {
-            ...wp,
-            rankDist: proj.dist,
-            touched: false,
-            status: "pending"
-        };
-    });
-
-    waypoints.sort((a,b)=>a.rankDist-b.rankDist);
+updateUI(pr,raw.lat,raw.lon);
+render();
+},console.error,{enableHighAccuracy:true});
 }
 
-const startStopBtn = document.getElementById('startStopBtn');
-const pauseBtn = document.getElementById('pauseBtn');
+// ================= STOP =================
+function stop(){navigator.geolocation.clearWatch(watchId);trip=0;lastRaw=null;waypoints.forEach(w=>{w.passed=false;w.off=false});render();}
 
-startStopBtn.onclick = () => {
+// ================= RENDER =================
+function render(){const l=document.getElementById('waypointsList');l.innerHTML="";waypoints.forEach(w=>{let s="⏳",c="";if(w.passed){s="✅";c="passed"}else if(w.off){s="⚠️";c="offroute"}let n="name";if(w.name==="Start")n="startName";if(w.name==="Einde")n="endName";l.innerHTML+=`<tr class="${c}"><td>${s}</td><td class="${n}">${w.name}</td></tr>`})}
 
-    if (!trackingActive) {
-        startTracking();
-        trackingActive = true;
-        startStopBtn.className = "stop";
-        startStopBtn.textContent = "⏹️ Stop activiteit";
-        pauseBtn.disabled = false;
-    } else {
-        stopTracking();
-        trackingActive = false;
-        startStopBtn.className = "start";
-        startStopBtn.textContent = "▶️ Start activiteit";
-        pauseBtn.disabled = true;
-    }
-};
-
-pauseBtn.onclick = () => {
-    paused = !paused;
-    pauseBtn.className = paused ? "resume" : "pause";
-    pauseBtn.textContent = paused ? "▶️ Hervatten" : "⏸️ Pauze";
-    if (!paused) lastPosition = null;
-};
-
-function startTracking() {
-
-    watchId = navigator.geolocation.watchPosition(pos => {
-
-        if (!trackingActive || paused) return;
-
-        const { latitude, longitude } = pos.coords;
-
-        if (lastPosition) {
-            const d = calculateDistance(lastPosition.lat, lastPosition.lon, latitude, longitude);
-            if (d > 3) tripDistance += d;
-        }
-        lastPosition = { lat: latitude, lon: longitude };
-
-        const proj = projectOnTrack(latitude, longitude);
-
-        updateWaypoints(proj.dist);
-        updateUI(proj, latitude, longitude);
-
-    }, console.error, { enableHighAccuracy:true });
-}
-
-function stopTracking() {
-    navigator.geolocation.clearWatch(watchId);
-
-    tripDistance = 0;
-    lastPosition = null;
-
-    waypoints.forEach(w => {
-        w.touched = false;
-        w.status = "pending";
-    });
-
-    updateWaypointsTable();
-    document.getElementById('info').innerHTML = "Gestopt";
-}
-
-function updateWaypoints(currentDist) {
-
-    waypoints.forEach(wp => {
-
-        const near = Math.abs(currentDist - wp.rankDist) < tolerance;
-        if (near) wp.touched = true;
-
-        if (wp.touched && currentDist >= wp.rankDist - tolerance) {
-            wp.status = "passed";
-        }
-
-        if (!wp.touched && currentDist > wp.rankDist + skipTolerance) {
-            wp.status = "skipped";
-        }
-    });
-}
-
-function updateWaypointsTable() {
-
-    const list = document.getElementById('waypointsList');
-    list.innerHTML = '';
-
-    waypoints.forEach(wp => {
-
-        let sym = "⏳", cls = "";
-        if (wp.status === "passed") { sym = "✅"; cls = "passed"; }
-        if (wp.status === "skipped") { sym = "⚠️"; cls = "skipped"; }
-
-        let nameClass = "name";
-        if (wp.name === "Start") nameClass = "startName";
-        if (wp.name === "Einde") nameClass = "endName";
-
-        const row = document.createElement('tr');
-        row.className = cls;
-
-        row.innerHTML = `<td>${sym}</td><td class="${nameClass}">${wp.name}</td>`;
-        list.appendChild(row);
-    });
-}
-
-function updateUI(proj, lat, lon) {
-
-    const remaining = waypoints.filter(w => w.status !== "passed").length;
-
-    document.getElementById('info').innerHTML = `
-    📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
-    🧭 Afstand op track: ${proj.dist.toFixed(1)} m<br>
-    🧭 Trip GPS: ${(tripDistance/1000).toFixed(2)} km<br>
-    📌 Resterend: ${remaining}<br>
-    Status: ${paused ? "⏸️ Pauze" : "▶️ Actief"}
-    `;
-}
+// ================= UI =================
+function updateUI(pr,lat,lon){const r=waypoints.filter(w=>!w.passed).length;document.getElementById('info').innerHTML=`📍 ${lat.toFixed(6)},${lon.toFixed(6)}<br>📏 Track: ${pr.pos.toFixed(1)} m<br>🧭 Trip: ${(trip/1000).toFixed(2)} km<br>📌 Resterend: ${r}<br>⚠️ Off-route: ${pr.off>OFF_ROAD?"JA":"nee"}`}
 
 </script>
-
 </body>
 </html>
-
