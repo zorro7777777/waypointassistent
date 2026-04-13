@@ -3,10 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Wandel Tracker V2</title>
+<title>GPX Wandel Tracker V3</title>
 
 <style>
 body { font-family: Arial; }
+
+h1 { margin-bottom: 5px; }
+
+.version {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 10px;
+}
 
 .controls {
     display: flex;
@@ -22,18 +30,24 @@ button {
 }
 
 .passed { background: #c8f7c5; }
-.skipped { background: #ffd6d6; }
 .current { background: #fff3b0; }
 
+/* waypoint name in blauw */
+td.name {
+    color: blue;
+    font-weight: bold;
+}
+
 table { border-spacing: 3px; }
-td, th { border: 2px double black; padding: 3px; }
+td, th { border: 2px double black; padding: 6px; }
 
 </style>
 </head>
 
 <body>
 
-<h1>GPX Wandel Tracker V2</h1>
+<h1>GPX Wandel Tracker</h1>
+<div class="version">Versie 3.0 (vereenvoudigde tracking)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -49,7 +63,7 @@ td, th { border: 2px double black; padding: 3px; }
 <table>
 <thead>
 <tr>
-<th>Status</th><th>Naam</th><th>Lat</th><th>Lon</th>
+<th>Status</th><th>Naam</th>
 </tr>
 </thead>
 <tbody id="waypointsList"></tbody>
@@ -96,29 +110,24 @@ document.getElementById('gpxFile').addEventListener('change', e => {
     reader.onload = evt => {
         const xml = new DOMParser().parseFromString(evt.target.result, "text/xml");
 
-        // Trackpoints
         trackpoints = Array.from(xml.getElementsByTagName('trkpt')).map(p => ({
             lat: parseFloat(p.getAttribute('lat')),
             lon: parseFloat(p.getAttribute('lon'))
         }));
 
-        // Waypoints
         const wpts = Array.from(xml.getElementsByTagName('wpt'));
-
         processWaypoints(wpts);
-
         updateWaypointsTable();
     };
 
     reader.readAsText(e.target.files[0]);
 });
 
-// ================== SORT LOGIC (NIEUW) ==================
+// ================== WAYPOINT PROCESS ==================
 function processWaypoints(wpts) {
 
     let temp = [];
 
-    // originele waypoints
     wpts.forEach(wp => {
         temp.push({
             name: wp.getElementsByTagName('name')[0]?.textContent || "WP",
@@ -127,7 +136,6 @@ function processWaypoints(wpts) {
         });
     });
 
-    // start + einde toevoegen
     temp.unshift({
         name: "Start",
         lat: trackpoints[0].lat,
@@ -140,23 +148,19 @@ function processWaypoints(wpts) {
         lon: trackpoints.at(-1).lon
     });
 
-    // 🔥 KERN: index bepalen langs route
     const withIndex = temp.map(wp => ({
         ...wp,
         rank: findClosestTrackpointIndex(wp.lat, wp.lon)
     }));
 
-    // 🔥 sorteren zoals jouw ander script
     withIndex.sort((a,b)=>a.rank - b.rank);
 
-    // status toevoegen
     waypoints = withIndex.map(wp => ({
         ...wp,
         status: "pending"
     }));
 }
 
-// ================== INDEX ==================
 function findClosestTrackpointIndex(lat, lon) {
     let best = 0;
     let minDist = Infinity;
@@ -168,22 +172,6 @@ function findClosestTrackpointIndex(lat, lon) {
             best = i;
         }
     }
-    return best;
-}
-
-// ================== FORWARD TRACK ==================
-function findClosestForward(lat, lon) {
-
-    let best = currentTrackIndex;
-    let bestDist = Infinity;
-
-    for (let i=currentTrackIndex;i<Math.min(trackpoints.length, currentTrackIndex+50);i++) {
-        const d = calculateDistance(lat, lon, trackpoints[i].lat, trackpoints[i].lon);
-        if (d < bestDist) { bestDist=d; best=i; }
-    }
-
-    if (best < currentTrackIndex - 5) return currentTrackIndex;
-
     return best;
 }
 
@@ -209,12 +197,9 @@ startStopBtn.onclick = () => {
 pauseBtn.onclick = () => {
     paused = !paused;
 
-    if (paused) {
-        pauseBtn.textContent = "▶️ Hervatten";
-    } else {
-        pauseBtn.textContent = "⏸️ Pauze";
-        lastPosition = null;
-    }
+    pauseBtn.textContent = paused ? "▶️ Hervatten" : "⏸️ Pauze";
+
+    if (!paused) lastPosition = null;
 };
 
 // ================== TRACKING ==================
@@ -257,7 +242,7 @@ function stopTracking() {
     document.getElementById('info').innerHTML = "Gestopt";
 }
 
-// ================== WAYPOINT LOGIC ==================
+// ================== SIMPLE WAYPOINT LOGIC (NO SKIP) ==================
 function processRealtimeWaypoints(lat, lon) {
 
     while (currentWaypointIndex < waypoints.length) {
@@ -271,14 +256,21 @@ function processRealtimeWaypoints(lat, lon) {
             continue;
         }
 
-        if (wp.rank < currentTrackIndex - 20) {
-            wp.status = "skipped";
-            currentWaypointIndex++;
-            continue;
-        }
-
         break;
     }
+}
+
+function findClosestForward(lat, lon) {
+
+    let best = currentTrackIndex;
+    let bestDist = Infinity;
+
+    for (let i=currentTrackIndex;i<Math.min(trackpoints.length, currentTrackIndex+50);i++) {
+        const d = calculateDistance(lat, lon, trackpoints[i].lat, trackpoints[i].lon);
+        if (d < bestDist) { bestDist=d; best=i; }
+    }
+
+    return best;
 }
 
 // ================== UI ==================
@@ -290,7 +282,7 @@ function updateWaypointsTable() {
 
         let sym="⏳", cls="";
         if (wp.status==="passed") { sym="✅"; cls="passed"; }
-        if (wp.status==="skipped") { sym="⚠️"; cls="skipped"; }
+
         if (i===currentWaypointIndex) cls="current";
 
         const row=document.createElement('tr');
@@ -298,9 +290,7 @@ function updateWaypointsTable() {
 
         row.innerHTML=`
         <td>${sym}</td>
-        <td>${wp.name}</td>
-        <td>${wp.lat.toFixed(5)}</td>
-        <td>${wp.lon.toFixed(5)}</td>
+        <td class="name">${wp.name}</td>
         `;
 
         list.appendChild(row);
@@ -313,13 +303,10 @@ function updateInfo(lat, lon) {
 
     let dist = next ? calculateDistance(lat,lon,next.lat,next.lon).toFixed(1)+" m" : "-";
 
-    const progress = ((currentTrackIndex / trackpoints.length) * 100).toFixed(1);
-
     document.getElementById('info').innerHTML = `
     📍 Positie: ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
-    📊 Voortgang: ${progress}%<br>
     ➡️ Afstand volgende WP: ${dist}<br>
-    🧭 Trip: ${(tripDistance/1000).toFixed(2)} km<br>
+    🧭 Trip (GPS): ${(tripDistance/1000).toFixed(2)} km<br>
     Status: ${paused ? "⏸️ Pauze" : "▶️ Actief"}
     `;
 }
