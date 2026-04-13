@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Wandel Tracker V3</title>
+<title>GPX Wandel Tracker V3.1</title>
 
 <style>
 body { font-family: Arial; }
@@ -27,7 +27,16 @@ button {
     padding: 12px;
     font-size: 16px;
     height: 50px;
+    border: none;
+    border-radius: 6px;
+    color: white;
 }
+
+/* button states */
+.start { background: #2ecc71; }   /* groen */
+.stop { background: #e74c3c; }    /* rood */
+.pause { background: #f39c12; }   /* oranje */
+.resume { background: #2ecc71; }  /* groen */
 
 .passed { background: #c8f7c5; }
 .current { background: #fff3b0; }
@@ -47,13 +56,13 @@ td, th { border: 2px double black; padding: 6px; }
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 3.0 (vereenvoudigde tracking)</div>
+<div class="version">Versie 3.1 (UI + resterende waypoints)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
 <div class="controls">
-    <button id="startStopBtn">▶️ Start activiteit</button>
-    <button id="pauseBtn" disabled>⏸️ Pauze</button>
+    <button id="startStopBtn" class="start">▶️ Start activiteit</button>
+    <button id="pauseBtn" class="pause" disabled>⏸️ Pauze</button>
 </div>
 
 <h2>Status</h2>
@@ -71,7 +80,6 @@ td, th { border: 2px double black; padding: 6px; }
 
 <script>
 
-// ================== DATA ==================
 let trackpoints = [];
 let waypoints = [];
 
@@ -88,7 +96,6 @@ let watchId = null;
 
 const tolerance = 10;
 
-// ================== DISTANCE ==================
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000;
     const dLat = (lat2 - lat1) * Math.PI/180;
@@ -102,7 +109,6 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// ================== GPX LOAD ==================
 document.getElementById('gpxFile').addEventListener('change', e => {
 
     const reader = new FileReader();
@@ -123,7 +129,6 @@ document.getElementById('gpxFile').addEventListener('change', e => {
     reader.readAsText(e.target.files[0]);
 });
 
-// ================== WAYPOINT PROCESS ==================
 function processWaypoints(wpts) {
 
     let temp = [];
@@ -175,7 +180,6 @@ function findClosestTrackpointIndex(lat, lon) {
     return best;
 }
 
-// ================== BUTTONS ==================
 const startStopBtn = document.getElementById('startStopBtn');
 const pauseBtn = document.getElementById('pauseBtn');
 
@@ -183,26 +187,38 @@ startStopBtn.onclick = () => {
 
     if (!trackingActive) {
         startTracking();
-        startStopBtn.textContent = "⏹️ Stop activiteit";
-        pauseBtn.disabled = false;
         trackingActive = true;
+        startStopBtn.textContent = "⏹️ Stop activiteit";
+        setBtnState(startStopBtn, "stop");
+        pauseBtn.disabled = false;
     } else {
         stopTracking();
-        startStopBtn.textContent = "▶️ Start activiteit";
-        pauseBtn.disabled = true;
         trackingActive = false;
+        startStopBtn.textContent = "▶️ Start activiteit";
+        setBtnState(startStopBtn, "start");
+        pauseBtn.disabled = true;
     }
 };
 
 pauseBtn.onclick = () => {
+
     paused = !paused;
 
-    pauseBtn.textContent = paused ? "▶️ Hervatten" : "⏸️ Pauze";
-
-    if (!paused) lastPosition = null;
+    if (paused) {
+        pauseBtn.textContent = "▶️ Hervatten";
+        setBtnState(pauseBtn, "resume");
+    } else {
+        pauseBtn.textContent = "⏸️ Pauze";
+        setBtnState(pauseBtn, "pause");
+        lastPosition = null;
+    }
 };
 
-// ================== TRACKING ==================
+function setBtnState(btn, state) {
+    btn.classList.remove("start","stop","pause","resume");
+    btn.classList.add(state);
+}
+
 function startTracking() {
 
     watchId = navigator.geolocation.watchPosition(pos => {
@@ -242,7 +258,6 @@ function stopTracking() {
     document.getElementById('info').innerHTML = "Gestopt";
 }
 
-// ================== SIMPLE WAYPOINT LOGIC (NO SKIP) ==================
 function processRealtimeWaypoints(lat, lon) {
 
     while (currentWaypointIndex < waypoints.length) {
@@ -273,8 +288,8 @@ function findClosestForward(lat, lon) {
     return best;
 }
 
-// ================== UI ==================
 function updateWaypointsTable() {
+
     const list = document.getElementById('waypointsList');
     list.innerHTML = '';
 
@@ -282,7 +297,6 @@ function updateWaypointsTable() {
 
         let sym="⏳", cls="";
         if (wp.status==="passed") { sym="✅"; cls="passed"; }
-
         if (i===currentWaypointIndex) cls="current";
 
         const row=document.createElement('tr');
@@ -301,12 +315,15 @@ function updateInfo(lat, lon) {
 
     const next = waypoints[currentWaypointIndex];
 
+    const remaining = Math.max(0, waypoints.length - currentWaypointIndex);
+
     let dist = next ? calculateDistance(lat,lon,next.lat,next.lon).toFixed(1)+" m" : "-";
 
     document.getElementById('info').innerHTML = `
     📍 Positie: ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
     ➡️ Afstand volgende WP: ${dist}<br>
     🧭 Trip (GPS): ${(tripDistance/1000).toFixed(2)} km<br>
+    📌 Resterende WP's: ${remaining}<br>
     Status: ${paused ? "⏸️ Pauze" : "▶️ Actief"}
     `;
 }
