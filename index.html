@@ -21,12 +21,13 @@ button {
     height: 50px;
 }
 
-/* knop kleuren */
+/* knoppen */
 .start { background: #4CAF50; color: white; }
 .stop { background: #f44336; color: white; }
 .pause { background: #ff9800; color: white; }
 .resume { background: #2196F3; color: white; }
 
+/* waypoint status */
 .passed { background: #c8f7c5; }
 .skipped { background: #ffd6d6; }
 .current { background: #fff3b0; }
@@ -85,6 +86,11 @@ let watchId = null;
 
 const tolerance = 10;
 
+// afwijking
+let offRoute = false;
+const offRouteThreshold = 50;
+const returnThreshold = 10;
+
 // ================== DISTANCE ==================
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -113,7 +119,7 @@ function calculateTotalTrackDistance() {
     }
 }
 
-// ================== GPX LOAD ==================
+// ================== GPX ==================
 document.getElementById('gpxFile').addEventListener('change', e => {
 
     const reader = new FileReader();
@@ -204,6 +210,22 @@ function findClosestForward(lat, lon) {
     return best;
 }
 
+// ================== DISTANCE TO ROUTE ==================
+function distanceToRoute(lat, lon) {
+
+    let minDist = Infinity;
+
+    const start = Math.max(0, currentTrackIndex - 50);
+    const end = Math.min(trackpoints.length, currentTrackIndex + 50);
+
+    for (let i = start; i < end; i++) {
+        const d = calculateDistance(lat, lon, trackpoints[i].lat, trackpoints[i].lon);
+        if (d < minDist) minDist = d;
+    }
+
+    return minDist;
+}
+
 // ================== BUTTONS ==================
 const startStopBtn = document.getElementById('startStopBtn');
 const pauseBtn = document.getElementById('pauseBtn');
@@ -257,6 +279,17 @@ function startTracking() {
 
         currentTrackIndex = findClosestForward(latitude, longitude);
 
+        // 🚨 afwijking check
+        const distRoute = distanceToRoute(latitude, longitude);
+
+        if (!offRoute && distRoute > offRouteThreshold) {
+            offRoute = true;
+        }
+
+        if (offRoute && distRoute < returnThreshold) {
+            offRoute = false;
+        }
+
         processRealtimeWaypoints(latitude, longitude);
 
         updateWaypointsTable();
@@ -279,7 +312,7 @@ function stopTracking() {
     document.getElementById('info').innerHTML = "Gestopt";
 }
 
-// ================== WAYPOINT LOGIC ==================
+// ================== WAYPOINT ==================
 function processRealtimeWaypoints(lat, lon) {
 
     while (currentWaypointIndex < waypoints.length) {
@@ -341,8 +374,13 @@ function updateInfo(lat, lon) {
         ? ((tripDistance / totalTrackDistance) * 100).toFixed(1)
         : 0;
 
+    let routeStatus = offRoute
+        ? `<div style="color:red;font-weight:bold">⚠️ VAN ROUTE (${distanceToRoute(lat,lon).toFixed(1)} m)</div>`
+        : `<div style="color:green">✔️ Op route</div>`;
+
     document.getElementById('info').innerHTML = `
     <div class="big">📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}</div>
+    ${routeStatus}
     📊 Voortgang: <b>${progress}%</b><br>
     ➡️ Volgend WP: <b>${dist}</b><br>
     🧭 Trip: <b>${(tripDistance/1000).toFixed(2)} km</b><br>
