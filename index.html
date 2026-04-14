@@ -16,19 +16,20 @@ button{flex:1;padding:12px;font-size:16px;height:50px;border:none;border-radius:
 .resume{background:#2ecc71}
 .passed{background:#c8f7c5}
 .offroute{background:#ffe1e1}
-td.name{color:blue;font-weight:bold}
 td.startName{color:green;font-weight:bold}
 td.endName{color:red;font-weight:bold}
-table{border-spacing:3px}td,th{border:2px double black;padding:6px}</style>
+table{border-spacing:3px}td,th{border:2px double black;padding:6px}
+</style>
 </head>
 <body>
+
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 7.1 (Navigation Engine + fixes)</div>
+<div class="version">Versie 7.3 (Waterdicht Start-Lock Engine)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
 <div class="controls">
-<button id="startStopBtn" class="start">▶️ Start</button>
+<button id="startStopBtn" class="start">▶️ Start activiteit</button>
 <button id="pauseBtn" class="pause" disabled>⏸️ Pauze</button>
 </div>
 
@@ -43,85 +44,84 @@ table{border-spacing:3px}td,th{border:2px double black;padding:6px}</style>
 
 <script>
 
-let track=[],cum=[],seg=[];
-let waypoints=[];
+// ================= CORE STATE =================
+let track = [];
+let cum = [];
+let waypoints = [];
 
-let lastRaw=null;
-let smooth={lat:0,lon:0,init:false};
-let trip=0;
+let currentIndex = 0;
+let lastIndex = 0;
 
-let active=false;
-let paused=false;
-let watchId=null;
+let trip = 0;
 
-let totalTrack=0;
+let watchId = null;
+let active = false;
+let paused = false;
 
-const WP_TOL=18;
-const OFF_ROAD=70;
-const ALPHA=0.25;
+// START LOCK SYSTEM
+let startLocked = false;
+let gpsSamples = 0;
+let lastLat = null;
+let lastLon = null;
+
+const MIN_MOVE = 10;      // meters before tracking unlocks
+const LOCK_SAMPLES = 3;   // GPS stabilization
 
 // ================= DIST =================
 function dist(a,b,c,d){
 const R=6371000;
 const dLat=(c-a)*Math.PI/180;
 const dLon=(d-b)*Math.PI/180;
-const x=Math.sin(dLat/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;
+const x=Math.sin(dLat/2)**2 + Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;
 return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
 
-// ================= SMOOTH =================
-function smoothGPS(lat,lon){
-if(!smooth.init){smooth={lat,lon,init:true};return smooth;}
-smooth.lat+= (lat-smooth.lat)*ALPHA;
-smooth.lon+= (lon-smooth.lon)*ALPHA;
-return {...smooth};
-}
-
-// ================= BUILD =================
+// ================= BUILD TRACK =================
 function build(){
-cum=[0];seg=[];
+cum=[0];
 for(let i=0;i<track.length-1;i++){
-const d=dist(track[i].lat,track[i].lon,track[i+1].lat,track[i+1].lon);
-seg[i]=d;
-cum[i+1]=cum[i]+d;
+cum[i+1]=cum[i]+dist(track[i].lat,track[i].lon,track[i+1].lat,track[i+1].lon);
 }
-totalTrack=cum[cum.length-1]||0;
 }
 
-// ================= PROJECT =================
-function project(lat,lon){
-let best={pos:0,off:1e9};
-for(let i=0;i<track.length-1;i++){
-const A=track[i],B=track[i+1];
-const dx=B.lon-A.lon,dy=B.lat-A.lat;
-const len2=dx*dx+dy*dy;if(!len2)continue;
-let t=((lon-A.lon)*dx+(lat-A.lat)*dy)/len2;
-t=Math.max(0,Math.min(1,t));
-const pl=A.lat+t*(B.lat-A.lat);
-const po=A.lon+t*(B.lon-A.lon);
-const d=dist(lat,lon,pl,po);
-const along=cum[i]+t*seg[i];
-if(d<best.off)best={pos:along,off:d};
+// ================= FIND INDEX =================
+function findClosestIndex(lat,lon,start=0){
+let best=start;
+let bestD=Infinity;
+for(let i=start;i<track.length;i++){
+const d=dist(lat,lon,track[i].lat,track[i].lon);
+if(d<bestD){bestD=d;best=i;}
 }
 return best;
 }
 
-// ================= LOAD =================
+// ================= LOAD GPX =================
 document.getElementById('gpxFile').addEventListener('change',e=>{
 const r=new FileReader();
 r.onload=ev=>{
 const xml=new DOMParser().parseFromString(ev.target.result,"text/xml");
-track=[...xml.getElementsByTagName('trkpt')].map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
+
+track=[...xml.getElementsByTagName('trkpt')].map(p=>({
+lat:+p.getAttribute('lat'),
+lon:+p.getAttribute('lon')
+}));
+
 build();
 
 const w=[...xml.getElementsByTagName('wpt')];
-waypoints=w.map(x=>({name:x.getElementsByTagName('name')[0]?.textContent||"WP",lat:+x.getAttribute('lat'),lon:+x.getAttribute('lon'),dist:0,passed:false}));
+waypoints=w.map(x=>({
+name:x.getElementsByTagName('name')[0]?.textContent||"WP",
+lat:+x.getAttribute('lat'),
+lon:+x.getAttribute('lon'),
+index:0,
+passed:false
+}));
 
-waypoints.unshift({name:"Start",lat:track[0].lat,lon:track[0].lon,dist:0,passed:false});
-waypoints.push({name:"Einde",lat:track.at(-1).lat,lon:track.at(-1).lon,dist:totalTrack,passed:false});
+waypoints.unshift({name:"Start",lat:track[0].lat,lon:track[0].lon,index:0,passed:false});
+waypoints.push({name:"Einde",lat:track.at(-1).lat,lon:track.at(-1).lon,index:track.length-1,passed:false});
 
-waypoints.forEach(w=>w.dist=project(w.lat,w.lon).pos);
-waypoints.sort((a,b)=>a.dist-b.dist);
+waypoints.forEach(w=>w.index=findClosestIndex(w.lat,w.lon));
+waypoints.sort((a,b)=>a.index-b.index);
 
 render();
 };
@@ -134,12 +134,14 @@ const pb=document.getElementById('pauseBtn');
 
 btn.onclick=()=>{
 if(!active){
-start();active=true;
+active=true;
+start();
 btn.className="stop";
 btn.textContent="⏹️ Stop";
 pb.disabled=false;
-}else{
-stop();active=false;
+} else {
+stop();
+active=false;
 btn.className="start";
 btn.textContent="▶️ Start";
 pb.disabled=true;
@@ -152,25 +154,59 @@ pb.className=paused?"resume":"pause";
 pb.textContent=paused?"▶️ Hervatten":"⏸️ Pauze";
 };
 
-// ================= START =================
+// ================= START ENGINE =================
 function start(){
 watchId=navigator.geolocation.watchPosition(p=>{
 if(!active||paused)return;
 
-const raw=smoothGPS(p.coords.latitude,p.coords.longitude);
+const lat=p.coords.latitude;
+const lon=p.coords.longitude;
 
-if(lastRaw){
-trip+=dist(lastRaw.lat,lastRaw.lon,raw.lat,raw.lon);
+// INIT LOCK SYSTEM
+if(!startLocked){
+
+gpsSamples++;
+
+if(lastLat && lastLon){
+const moved=dist(lastLat,lastLon,lat,lon);
+if(moved > MIN_MOVE) gpsSamples++;
 }
-lastRaw=raw;
 
-const pr=project(raw.lat,raw.lon);
+lastLat=lat;
+lastLon=lon;
 
+// wait for stable GPS before unlocking
+if(gpsSamples >= LOCK_SAMPLES){
+currentIndex = findClosestIndex(lat,lon,0);
+lastIndex = currentIndex;
+startLocked = true;
+}
+
+updateUI(lat,lon);
+render();
+return;
+}
+
+// NORMAL TRACKING
+currentIndex = findClosestIndex(lat,lon,currentIndex);
+
+if(currentIndex < lastIndex) currentIndex = lastIndex;
+
+// trip calculation
+if(lastIndex > 0){
+trip += cum[currentIndex] - cum[lastIndex];
+}
+
+lastIndex = currentIndex;
+
+// waypoint logic (ONLY AFTER LOCK)
 for(const w of waypoints){
-if(!w.passed && Math.abs(pr.pos-w.dist)<WP_TOL)w.passed=true;
+if(!w.passed && currentIndex >= w.index){
+w.passed = true;
+}
 }
 
-updateUI(pr,raw.lat,raw.lon);
+updateUI(lat,lon);
 render();
 
 },console.error,{enableHighAccuracy:true});
@@ -179,17 +215,17 @@ render();
 // ================= STOP =================
 function stop(){
 navigator.geolocation.clearWatch(watchId);
-trip=0;lastRaw=null;smooth={lat:0,lon:0,init:false};
+
+trip = 0;
+currentIndex = 0;
+lastIndex = 0;
+startLocked = false;
+gpsSamples = 0;
+lastLat = null;
+lastLon = null;
+
 waypoints.forEach(w=>w.passed=false);
 render();
-}
-
-// ================= NEXT WP =================
-function nextWaypointDist(current){
-for(const w of waypoints){
-if(!w.passed)return Math.max(0,w.dist-current);
-}
-return 0;
 }
 
 // ================= RENDER =================
@@ -198,25 +234,28 @@ const l=document.getElementById('waypointsList');
 l.innerHTML="";
 
 waypoints.forEach(w=>{
-let s="⏳",c="";
-if(w.passed){s="✅";c="passed"}
-let n="name";
+let s = w.passed ? "✅" : "⏳";
+let n = "name";
 if(w.name==="Start")n="startName";
 if(w.name==="Einde")n="endName";
-l.innerHTML+=`<tr class="${c}"><td>${s}</td><td class="${n}">${w.name}</td></tr>`;
+
+l.innerHTML += `<tr><td>${s}</td><td class="${n}">${w.name}</td></tr>`;
 });
 }
 
 // ================= UI =================
-function updateUI(pr,lat,lon){
+function updateUI(lat,lon){
 
-const remaining=waypoints.filter(w=>!w.passed).length;
-const nextDist=nextWaypointDist(pr.pos);
+const remaining = waypoints.filter(w=>!w.passed).length;
+const next = waypoints.find(w=>!w.passed);
+const nextDist = next ? Math.max(0, cum[next.index] - cum[currentIndex]) : 0;
 
-document.getElementById('info').innerHTML=`
-📍 ${lat.toFixed(6)},${lon.toFixed(6)}<br>
-📏 Track positie: ${pr.pos.toFixed(1)} m<br>
-🛤️ Totale track: ${(totalTrack/1000).toFixed(3)} km<br>
+const total = cum[cum.length-1] || 0;
+
+document.getElementById('info').innerHTML = `
+📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
+📏 Track positie: ${cum[currentIndex].toFixed(1)} m<br>
+🛤️ Totale track: ${(total/1000).toFixed(3)} km<br>
 🧭 Trip: ${(trip/1000).toFixed(3)} km<br>
 📌 Resterend WP: ${remaining}<br>
 ➡️ Volgend WP: ${nextDist.toFixed(1)} m<br>
