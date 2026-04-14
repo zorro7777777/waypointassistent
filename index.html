@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Tracker V11.2 Stable Smooth Engine</title>
+<title>GPX Tracker V11.3 Stable Smooth Engine</title>
+
 <style>
 body{font-family:Arial}
 .version{color:#666;margin-bottom:10px}
@@ -20,10 +21,11 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 .resumeBtn{background:#2ecc71}
 </style>
 </head>
+
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 11.2 (Smooth Trip + Stable Waypoints)</div>
+<div class="version">Versie 11.3 (Trip + Steps + Pas Engine)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -62,12 +64,16 @@ let gpsTrip=0;
 let lastLat=null;
 let lastLon=null;
 
-// smoothing buffer
+// smoothing
 let buffer=[];
 const BUFFER_SIZE=5;
 
 const MAX_SPEED=10;
 const TOLERANCE=10;
+
+// 🟢 STEP PARAMETERS
+const STEP_LENGTH = 0.67;     // meter
+const PACE_LENGTH = STEP_LENGTH * 2;
 
 // ================= DIST =================
 function dist(a,b,c,d){
@@ -101,7 +107,9 @@ const r=new FileReader();
 r.onload=ev=>{
 const xml=new DOMParser().parseFromString(ev.target.result,"text/xml");
 
-track=[...xml.getElementsByTagName('trkpt')].map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
+track=[...xml.getElementsByTagName('trkpt')]
+.map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
+
 buildCum();
 
 const w=[...xml.getElementsByTagName('wpt')];
@@ -229,9 +237,17 @@ l.innerHTML+=`<tr>
 }
 
 function updateUI(lat,lon,speed){
+
+const steps = gpsTrip / STEP_LENGTH;
+const paces = gpsTrip / PACE_LENGTH;
+const totalTrack = cum[cum.length-1] || 0;
+
 document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
 🧭 Trip (GPS): ${(gpsTrip/1000).toFixed(3)} km<br>
+📏 Totale track: ${(totalTrack/1000).toFixed(3)} km<br>
+👣 Stappen: ${Math.round(steps)}<br>
+🚶 Passen: ${Math.round(paces)}<br>
 🚶 Snelheid: ${speed.toFixed(2)} km/u<br>
 `;
 }
