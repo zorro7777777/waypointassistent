@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Tracker V12 Stable Smooth Engine</title>
+<title>GPX Tracker V11.4 Stable Smooth Engine</title>
 
 <style>
 body{font-family:Arial}
@@ -25,7 +25,7 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 12 (Cadans + Calorie Engine)</div>
+<div class="version">Versie 11.4 (Cadans + Calorie Engine)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -75,13 +75,13 @@ const TOLERANCE=10;
 // STEP MODEL
 const STEP_LENGTH=0.67;
 const PACE_LENGTH=STEP_LENGTH*2;
-const USER_WEIGHT=70; // kg default
+const USER_WEIGHT=92;
 
 // ================= DIST =================
 function dist(a,b,c,d){
 const R=6371000;
 const dLat=(c-a)*Math.PI/180;
-const dLon=(c-b)*Math.PI/180;
+const dLon=(d-b)*Math.PI/180;
 const x=Math.sin(dLat/2)**2 + Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;
 return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
@@ -115,6 +115,7 @@ track=[...xml.getElementsByTagName('trkpt')]
 buildCum();
 
 const w=[...xml.getElementsByTagName('wpt')];
+
 waypoints=w.map(x=>({
 name:x.getElementsByTagName('name')[0]?.textContent||"WP",
 lat:+x.getAttribute('lat'),
@@ -169,10 +170,19 @@ gpsTrip+=avg;
 }
 
 // STEP + TIME
-let dt=lastTime?(now-lastTime)/1000:1;
-const stepAdd=(gpsTrip/STEP_LENGTH);
-const cadence=(stepAdd/dt)*60;
-const calories=(gpsTrip/1000)*USER_WEIGHT*1.0;
+let dt = lastTime ? (now-lastTime)/1000 : 1;
+
+const steps = gpsTrip / STEP_LENGTH;
+const cadence = (steps/dt)*60;
+
+// CALORIES (speed-based MET)
+let MET = 1.8;
+if(speed < 4) MET = 1.8;
+else if(speed < 5.5) MET = 2.8;
+else if(speed < 7) MET = 3.5;
+else MET = 4.5;
+
+const calories = (gpsTrip/1000) * USER_WEIGHT * MET;
 
 lastTime=now;
 lastLat=lat;
@@ -186,7 +196,7 @@ if(wd<=TOLERANCE) w.passed=true;
 }
 }
 
-updateUI(lat,lon,speed,cadence,calories);
+updateUI(lat,lon,speed,steps,cadence,calories);
 render();
 
 },console.error,{enableHighAccuracy:true});
@@ -247,29 +257,16 @@ l.innerHTML+=`<tr>
 });
 }
 
-function updateUI(lat,lon,speed){
+function updateUI(lat,lon,speed,steps,cadence,calories){
 
-const steps = gpsTrip / STEP_LENGTH;
-const paces = gpsTrip / PACE_LENGTH;
 const totalTrack = cum[cum.length-1] || 0;
-
-// 🔥 CALORIES (intensity-based MET model)
-let MET = 1.8;
-
-if (speed < 4) MET = 1.8;
-else if (speed < 5.5) MET = 2.8;
-else if (speed < 7) MET = 3.5;
-else MET = 4.5;
-
-const calories = (gpsTrip/1000) * 92 * MET;
-
 
 document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
 🧭 Trip (GPS): ${(gpsTrip/1000).toFixed(3)} km<br>
 📏 Totale track: ${(totalTrack/1000).toFixed(3)} km<br>
 👣 Stappen: ${Math.round(steps)}<br>
-🚶 Passen: ${Math.round(paces)}<br>
+🚶 Cadans: ${Math.round(cadence)} spm<br>
 🚶 Snelheid: ${speed.toFixed(2)} km/u<br>
 🔥 Calorieën: ${calories.toFixed(0)} kcal<br>
 `;
