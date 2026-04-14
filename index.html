@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Navigation Engine V8.2 (Final Stable)</title>
+<title>GPX Navigation Engine V8.3 (Final Stable)</title>
 <style>
 body{font-family:Arial}
 h1{margin-bottom:5px}
@@ -23,7 +23,7 @@ td.endName{color:red;font-weight:bold}
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 8.2 (Final Stable Engine)</div>
+<div class="version">Versie 8.3 (Final Stable Engine)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -152,7 +152,7 @@ if(moved<5 && acc<30)gpsStableCount++; else gpsStableCount=0;
 
 lastLat=lat; lastLon=lon;
 
-if((now-unlockStartTime)>=3000 && gpsStableCount>=3 && acc<25){
+if((now-unlockStartTime)>=2000 && gpsStableCount>=3 && acc<26){
 currentIndex=findClosestIndex(lat,lon,0);
 lastIndex=currentIndex;
 startLocked=true;
@@ -172,7 +172,7 @@ if(lastLat && lastLon){ d=dist(lastLat,lastLon,lat,lon); }
 
 const dt = lastTime ? (now-lastTime)/1000 : 1;
 
-if(d>GPS_MIN_MOVE && d<30){
+if(d>GPS_MIN_MOVE && d<26){
 
 // PASLENGTE
 const stepInput=parseFloat(document.getElementById('stepLength').value)||0.67;
@@ -280,7 +280,8 @@ document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
 🛤️ Totale track: ${(total/1000).toFixed(3)} km<br>
 🧭 Trip (hybrid): ${(hybridTrip/1000).toFixed(3)} km<br>
-👣 Stappen: ${Math.round(steps)}<br>
+👣 Passen: ${Math.round(steps)}<br>
+👣 Steps: ${Math.round(steps)*2}<br>
 🚶 Snelheid: ${speed.toFixed(2)} km/u<br>
 👣 Cadans: ${Math.round(cadence)} spm<br>
 📌 Resterend WP: ${remaining}<br>
