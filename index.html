@@ -3,17 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Navigation Engine V7.4 (Fixed Unlock)</title>
+<title>GPX Navigation Engine V7.5 (Dual Mode Trip Engine)</title>
 <style>
 body{font-family:Arial}
 h1{margin-bottom:5px}
 .version{font-size:14px;color:#666;margin-bottom:10px}
-.controls{display:flex;gap:10px;margin:10px 0}
+.controls{display:flex;gap:10px;margin:10px 0;flex-wrap:wrap}
 button{flex:1;padding:12px;font-size:16px;height:50px;border:none;border-radius:6px;color:white}
 .start{background:#2ecc71}
 .stop{background:#e74c3c}
 .pause{background:#f39c12}
 .resume{background:#2ecc71}
+.mode{background:#3498db}
 .passed{background:#c8f7c5}
 td.startName{color:green;font-weight:bold}
 td.endName{color:red;font-weight:bold}
@@ -23,13 +24,14 @@ table{border-spacing:3px}td,th{border:2px double black;padding:6px}
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 7.4 (Stable Unlock Engine)</div>
+<div class="version">Versie 7.5 (Dual Mode Trip Engine)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
 <div class="controls">
 <button id="startStopBtn" class="start">▶️ Start activiteit</button>
 <button id="pauseBtn" class="pause" disabled>⏸️ Pauze</button>
+<button id="modeBtn" class="mode">🧭 Mode: Route</button>
 </div>
 
 <h2>Status</h2>
@@ -57,12 +59,15 @@ let watchId=null;
 let active=false;
 let paused=false;
 
-// ================= UNLOCK SYSTEM (FIXED) =================
+// ================= MODE =================
+let mode="route"; // route | gps
+let lastLat=null;
+let lastLon=null;
+
+// ================= UNLOCK =================
 let startLocked=false;
 let unlockStartTime=null;
 let gpsStableCount=0;
-let lastLat=null;
-let lastLon=null;
 
 const MIN_STABLE_TIME=3000;
 const MIN_MOVE=10;
@@ -129,21 +134,11 @@ r.readAsText(e.target.files[0]);
 // ================= BUTTONS =================
 const btn=document.getElementById('startStopBtn');
 const pb=document.getElementById('pauseBtn');
+const mb=document.getElementById('modeBtn');
 
 btn.onclick=()=>{
-if(!active){
-active=true;
-start();
-btn.className="stop";
-btn.textContent="⏹️ Stop";
-pb.disabled=false;
-}else{
-stop();
-active=false;
-btn.className="start";
-btn.textContent="▶️ Start";
-pb.disabled=true;
-}
+if(!active){active=true;start();btn.className="stop";btn.textContent="⏹️ Stop";pb.disabled=false;}
+else{stop();active=false;btn.className="start";btn.textContent="▶️ Start";pb.disabled=true;}
 };
 
 pb.onclick=()=>{
@@ -152,28 +147,32 @@ pb.className=paused?"resume":"pause";
 pb.textContent=paused?"▶️ Hervatten":"⏸️ Pauze";
 };
 
-// ================= START ENGINE =================
+mb.onclick=()=>{
+mode = (mode==="route") ? "gps" : "route";
+mb.textContent = "🧭 Mode: " + (mode==="route" ? "Route" : "GPS");
+};
+
+// ================= START =================
 function start(){
 watchId=navigator.geolocation.watchPosition(p=>{
 if(!active||paused)return;
 
 const lat=p.coords.latitude;
 const lon=p.coords.longitude;
-const acc=p.coords.accuracy || 999;
+const acc=p.coords.accuracy||999;
 const now=Date.now();
 
-// ================= FIXED UNLOCK =================
+// ================= UNLOCK =================
 if(!startLocked){
-
-if(!unlockStartTime) unlockStartTime=now;
+if(!unlockStartTime)unlockStartTime=now;
 
 if(lastLat && lastLon){
 const moved=dist(lastLat,lastLon,lat,lon);
-if(moved < MIN_MOVE && acc < 30){gpsStableCount++;} else {gpsStableCount=0;}
+if(moved < MIN_MOVE && acc < 30)gpsStableCount++;
+else gpsStableCount=0;
 }
 
-lastLat=lat;
-lastLon=lon;
+lastLat=lat; lastLon=lon;
 
 const timeOK=(now-unlockStartTime)>=MIN_STABLE_TIME;
 const stableOK=gpsStableCount>=REQUIRED_STABLE;
@@ -194,13 +193,25 @@ return;
 currentIndex=findClosestIndex(lat,lon,currentIndex);
 if(currentIndex<lastIndex)currentIndex=lastIndex;
 
+// ================= TRIP ENGINE =================
+if(mode==="route"){
 if(lastIndex>0){trip+=cum[currentIndex]-cum[lastIndex];}
+}
+else if(mode==="gps"){
+if(lastLat && lastLon){
+const d=dist(lastLat,lastLon,lat,lon);
+if(d>3)trip+=d;
+}
+}
 
 lastIndex=currentIndex;
 
+// ================= WAYPOINTS =================
 for(const w of waypoints){
 if(!w.passed && currentIndex>=w.index)w.passed=true;
 }
+
+lastLat=lat; lastLon=lon;
 
 updateUI(lat,lon);
 render();
@@ -217,8 +228,7 @@ lastIndex=0;
 startLocked=false;
 gpsStableCount=0;
 unlockStartTime=null;
-lastLat=null;
-lastLon=null;
+lastLat=null; lastLon=null;
 waypoints.forEach(w=>w.passed=false);
 render();
 }
@@ -247,7 +257,7 @@ document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
 📏 Track positie: ${cum[currentIndex].toFixed(1)} m<br>
 🛤️ Totale track: ${(total/1000).toFixed(3)} km<br>
-🧭 Trip: ${(trip/1000).toFixed(3)} km<br>
+🧭 Trip (${mode}): ${(trip/1000).toFixed(3)} km<br>
 📌 Resterend WP: ${remaining}<br>
 ➡️ Volgend WP: ${nextDist.toFixed(1)} m
 `;
