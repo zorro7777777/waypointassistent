@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Tracker V11.4 Stable Smooth Engine</title>
+<title>GPX Tracker V11.5 Stable Cadence Engine</title>
 
 <style>
 body{font-family:Arial}
@@ -25,7 +25,7 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 11.4 (Cadans + Calorie Engine)</div>
+<div class="version">Versie 11.5 (Cadence Rolling Window Fix)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -68,6 +68,9 @@ let lastTime=null;
 // smoothing
 let buffer=[];
 const BUFFER_SIZE=5;
+
+// cadence system
+let stepHistory=[];
 
 const MAX_SPEED=10;
 const TOLERANCE=10;
@@ -169,13 +172,38 @@ const avg=buffer.reduce((a,b)=>a+b,0)/buffer.length;
 gpsTrip+=avg;
 }
 
-// STEP + TIME
-let dt = lastTime ? (now-lastTime)/1000 : 1;
-
+// ================= STEPS =================
 const steps = gpsTrip / STEP_LENGTH;
-const cadence = (steps/dt)*60;
 
-// CALORIES (speed-based MET)
+// ================= CADENCE (60s window) =================
+const nowSec = now / 1000;
+
+stepHistory.push({ t: nowSec, s: steps });
+
+// keep last 60 sec
+stepHistory = stepHistory.filter(x => (nowSec - x.t) <= 60);
+
+let cadence = 0;
+
+if(stepHistory.length > 1){
+
+    const oldest = stepHistory[0];
+    const newest = stepHistory[stepHistory.length - 1];
+
+    const dtMin = (newest.t - oldest.t) / 60;
+    const ds = newest.s - oldest.s;
+
+    cadence = dtMin > 0 ? ds / dtMin : 0;
+}
+
+// fallback first minute
+if(stepHistory.length < 3){
+    cadence = (speed > 0)
+        ? (speed / 3.6) / STEP_LENGTH * 60
+        : 0;
+}
+
+// ================= CALORIES =================
 let MET = 1.8;
 if(speed < 4) MET = 1.8;
 else if(speed < 5.5) MET = 2.8;
@@ -184,6 +212,7 @@ else MET = 4.5;
 
 const calories = (gpsTrip/1000) * USER_WEIGHT * MET;
 
+// ================= STATE UPDATE =================
 lastTime=now;
 lastLat=lat;
 lastLon=lon;
@@ -207,11 +236,15 @@ navigator.geolocation.clearWatch(watchId);
 watchId=null;
 active=false;
 paused=false;
+
 lastLat=null;
 lastLon=null;
 lastTime=null;
+
 gpsTrip=0;
 buffer=[];
+stepHistory=[];
+
 render();
 }
 
