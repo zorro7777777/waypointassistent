@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Tracker V11.7 Stable Calories Engine</title>
+<title>GPX Tracker V11.8 Stable Full Engine</title>
 
 <style>
 body{font-family:Arial}
@@ -25,7 +25,7 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 11.7 (Stable Calories + Cadence + GPS Engine)</div>
+<div class="version">Versie 11.8 (Stable Segments + Calories + Cadence)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -65,10 +65,7 @@ let lastLat=null;
 let lastLon=null;
 let lastTime=null;
 
-// cadence
 let stepHistory=[];
-
-// calories
 let caloriesTotal=0;
 
 const MAX_SPEED=10;
@@ -134,13 +131,23 @@ waypoints.unshift({name:"Start",lat:track[0].lat,lon:track[0].lon,index:0,passed
 waypoints.push({name:"Einde",lat:track.at(-1).lat,lon:track.at(-1).lon,index:track.length-1,passed:false,segment:0});
 
 waypoints.forEach(w=>w.index=closestIndex(w.lat,w.lon));
+
+// SORT FIRST (BELANGRIJK FIX)
 waypoints.sort((a,b)=>a.index-b.index);
 
+// SEGMENTS FIXED
 for(let i=0;i<waypoints.length;i++){
-if(i===0){waypoints[i].segment=0;continue;}
+if(i===0){
+waypoints[i].segment=0;
+continue;
+}
+
 const prev=waypoints[i-1];
 const curr=waypoints[i];
-waypoints[i].segment=Math.max(0,cum[curr.index]-cum[prev.index]);
+
+const seg=cum[curr.index]-cum[prev.index];
+
+waypoints[i].segment=(seg>0 && isFinite(seg)) ? seg : 0;
 }
 
 render();
@@ -166,50 +173,49 @@ if(lastLat){
 d=dist(lastLat,lastLon,lat,lon);
 }
 
-// smooth GPS trip
+// smooth GPS
 if(d>0.3 && d<25 && acc<30 && speed<MAX_SPEED){
-gpsTrip += d;
+gpsTrip+=d;
 }
 
 // ================= STEPS =================
-const steps = gpsTrip / STEP_LENGTH;
+const steps=gpsTrip/STEP_LENGTH;
 
 // ================= CADENCE =================
-const nowSec = now / 1000;
+const nowSec=now/1000;
 
 stepHistory.push({t:nowSec,s:steps});
-stepHistory = stepHistory.filter(x => (nowSec - x.t) <= 60);
+stepHistory=stepHistory.filter(x=>(nowSec-x.t)<=60);
 
-let cadence = 0;
+let cadence=0;
 
-if(stepHistory.length > 1){
+if(stepHistory.length>1){
 const o=stepHistory[0];
 const n=stepHistory[stepHistory.length-1];
 
 const dt=(n.t-o.t)/60;
 const ds=(n.s-o.s);
 
-cadence = dt>0 ? ds/dt : 0;
+cadence=dt>0?ds/dt:0;
 }
 
-if(stepHistory.length < 3){
-cadence = speed>0 ? ((speed/3.6)/STEP_LENGTH)*60 : 0;
-}
-
-// ================= MET FUNCTION =================
-function getMET(speedKmh){
-if(speedKmh < 4) return 2.5;
-if(speedKmh < 5.5) return 3.5;
-if(speedKmh < 6.5) return 4.3;
-return 5.0;
+if(stepHistory.length<3){
+cadence=speed>0?((speed/3.6)/STEP_LENGTH)*60:0;
 }
 
 // ================= CALORIES (FIXED) =================
-let dtSec = lastTime ? (now - lastTime)/1000 : 0;
+function getMET(speedKmh){
+if(speedKmh<4) return 2.5;
+if(speedKmh<5.5) return 3.5;
+if(speedKmh<6.5) return 4.3;
+return 5.0;
+}
 
-if(dtSec > 0 && dtSec < 10){
-    const MET = getMET(speed);
-    caloriesTotal += MET * USER_WEIGHT * (dtSec / 3600);
+let dtSec=lastTime?(now-lastTime)/1000:0;
+
+if(dtSec>0 && dtSec<10){
+const MET=getMET(speed);
+caloriesTotal+=MET*USER_WEIGHT*(dtSec/3600);
 }
 
 // ================= UPDATE STATE =================
@@ -268,7 +274,7 @@ l.innerHTML+=`
 
 function updateUI(lat,lon,speed,steps,cadence,calories){
 
-const totalTrack = cum[cum.length-1] || 0;
+const totalTrack=cum[cum.length-1]||0;
 
 document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
