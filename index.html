@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Tracker V12.0 Stable Engine</title>
+<title>GPX Tracker V12.1 Stable Engine</title>
 
 <style>
 body{font-family:Arial}
@@ -25,7 +25,7 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 12.0 (Stable + Calories)</div>
+<div class="version">Versie 12.1 (Waypoint Fix - Route Based)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -115,6 +115,22 @@ if(d<bestD){bestD=d;best=i;}
 return best;
 }
 
+// 🟢 NIEUW: positie op track bepalen
+function getCurrentCumPos(lat, lon){
+let bestIdx = 0;
+let bestD = Infinity;
+
+for(let i=0;i<track.length;i++){
+const d = dist(lat, lon, track[i].lat, track[i].lon);
+if(d < bestD){
+bestD = d;
+bestIdx = i;
+}
+}
+
+return cum[bestIdx];
+}
+
 // ================= LOAD =================
 document.getElementById('gpxFile').onchange=e=>{
 const r=new FileReader();
@@ -134,16 +150,21 @@ lat:+x.getAttribute('lat'),
 lon:+x.getAttribute('lon'),
 index:0,
 passed:false,
-segment:0
+segment:0,
+cumPos:0
 }));
 
-waypoints.unshift({name:"Start",lat:track[0].lat,lon:track[0].lon,index:0,passed:false,segment:0});
-waypoints.push({name:"Einde",lat:track.at(-1).lat,lon:track.at(-1).lon,index:track.length-1,passed:false,segment:0});
+waypoints.unshift({name:"Start",lat:track[0].lat,lon:track[0].lon,index:0,passed:false,segment:0,cumPos:0});
+waypoints.push({name:"Einde",lat:track.at(-1).lat,lon:track.at(-1).lon,index:track.length-1,passed:false,segment:0,cumPos:0});
 
-waypoints.forEach(w=>w.index=closestIndex(w.lat,w.lon));
+waypoints.forEach(w=>{
+w.index=closestIndex(w.lat,w.lon);
+w.cumPos=cum[w.index];
+});
+
 waypoints.sort((a,b)=>a.index-b.index);
 
-// segmenten (zoals jouw werkende versie)
+// segmenten
 for(let i=0;i<waypoints.length;i++){
 if(i===0){
 waypoints[i].segment=0;
@@ -220,11 +241,14 @@ lastTime=now;
 lastLat=lat;
 lastLon=lon;
 
-// waypoints
+// 🟢 NIEUWE WAYPOINT LOGICA (FIX)
+const currentPos = getCurrentCumPos(lat, lon);
+
 for(let w of waypoints){
 if(!w.passed){
-const wd=dist(lat,lon,w.lat,w.lon);
-if(wd<=TOLERANCE) w.passed=true;
+if(currentPos >= w.cumPos - TOLERANCE){
+w.passed = true;
+}
 }
 }
 
