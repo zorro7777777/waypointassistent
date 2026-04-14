@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Tracker V11.4 Stable Smooth Engine</title>
+<title>GPX Tracker V12 Stable Smooth Engine</title>
 
 <style>
 body{font-family:Arial}
@@ -25,7 +25,7 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 11.4 (Cadans + Calorie Engine)</div>
+<div class="version">Versie 12 (Cadans + Calorie Engine)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -247,13 +247,30 @@ l.innerHTML+=`<tr>
 });
 }
 
-function updateUI(lat,lon,speed,cadence,calories){
+function updateUI(lat,lon,speed){
+
+const steps = gpsTrip / STEP_LENGTH;
+const paces = gpsTrip / PACE_LENGTH;
+const totalTrack = cum[cum.length-1] || 0;
+
+// 🔥 CALORIES (intensity-based MET model)
+let MET = 1.8;
+
+if (speed < 4) MET = 1.8;
+else if (speed < 5.5) MET = 2.8;
+else if (speed < 7) MET = 3.5;
+else MET = 4.5;
+
+const calories = (gpsTrip/1000) * 92 * MET;
+
 
 document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
 🧭 Trip (GPS): ${(gpsTrip/1000).toFixed(3)} km<br>
+📏 Totale track: ${(totalTrack/1000).toFixed(3)} km<br>
+👣 Stappen: ${Math.round(steps)}<br>
+🚶 Passen: ${Math.round(paces)}<br>
 🚶 Snelheid: ${speed.toFixed(2)} km/u<br>
-👣 Cadans: ${isNaN(cadence)?0:cadence.toFixed(0)} spm<br>
 🔥 Calorieën: ${calories.toFixed(0)} kcal<br>
 `;
 }
