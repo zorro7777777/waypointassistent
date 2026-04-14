@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Tracker V10.2</title>
+<title>GPX Tracker V11 Stable Core</title>
 <style>
 body{font-family:Arial}
 .version{color:#666;margin-bottom:10px}
@@ -23,12 +23,12 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 10.2 (Stable Segment + Pure GPS Engine)</div>
+<div class="version">Versie 11 (Stable Core Clean Architecture)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
 <div class="controls">
-<button id="startStopBtn" class="startBtn">▶️ Start</button>
+<button id="startBtn" class="startBtn">▶️ Start</button>
 <button id="pauseBtn" class="pauseBtn" disabled>⏸️ Pauze</button>
 </div>
 
@@ -49,16 +49,26 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 
 <script>
 
-let track=[], cum=[], waypoints=[];
-let gpsTrip=0;
-let lastLat=null,lastLon=null,lastTime=null;
-let watchId=null;
+// ================= CORE STATE =================
+let track=[];
+let cum=[];
+let waypoints=[];
 
+let watchId=null;
 let active=false;
 let paused=false;
 
-const MAX_SPEED_KMH=8;
+let gpsTrip=0;
 
+let lastLat=null;
+let lastLon=null;
+
+const MAX_SPEED_KMH=8;
+const MIN_MOVE=1;
+const MAX_JUMP=25;
+const ACC_LIMIT=25;
+
+// ================= DISTANCE =================
 function dist(a,b,c,d){
 const R=6371000;
 const dLat=(c-a)*Math.PI/180;
@@ -67,6 +77,7 @@ const x=Math.sin(dLat/2)**2 + Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Ma
 return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
 
+// ================= TRACK =================
 function buildCum(){
 cum=[0];
 for(let i=0;i<track.length-1;i++){
@@ -83,14 +94,17 @@ if(d<bestD){bestD=d;best=i;}
 return best;
 }
 
-// LOAD
-
+// ================= LOAD =================
 document.getElementById('gpxFile').onchange=e=>{
 const r=new FileReader();
 r.onload=ev=>{
 const xml=new DOMParser().parseFromString(ev.target.result,"text/xml");
 
-track=[...xml.getElementsByTagName('trkpt')].map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
+track=[...xml.getElementsByTagName('trkpt')].map(p=>({
+lat:+p.getAttribute('lat'),
+lon:+p.getAttribute('lon')
+}));
+
 buildCum();
 
 const w=[...xml.getElementsByTagName('wpt')];
@@ -117,26 +131,62 @@ waypoints[i].segment=Math.max(0,cum[curr.index]-cum[prev.index]);
 }
 
 render();
-startGPS();
 };
 r.readAsText(e.target.files[0]);
 };
 
-// BUTTON LOGIC
+// ================= GPS ENGINE (SINGLE LOOP) =================
+function startTracking(){
+if(watchId) return;
 
-const startBtn=document.getElementById('startStopBtn');
+watchId=navigator.geolocation.watchPosition(p=>{
+if(!active || paused) return;
+
+const lat=p.coords.latitude;
+const lon=p.coords.longitude;
+const acc=p.coords.accuracy||999;
+const speed=p.coords.speed? p.coords.speed*3.6 : 0;
+
+let d=0;
+if(lastLat) d=dist(lastLat,lastLon,lat,lon);
+
+// FILTER REAL MOVEMENT
+if(d>MIN_MOVE && d<MAX_JUMP && acc<ACC_LIMIT && speed<MAX_SPEED_KMH){
+    gpsTrip += d;
+}
+
+lastLat=lat;
+lastLon=lon;
+
+update(lat,lon,speed);
+
+},console.error,{enableHighAccuracy:true});
+}
+
+function stopTracking(){
+navigator.geolocation.clearWatch(watchId);
+watchId=null;
+lastLat=null;
+lastLon=null;
+gpsTrip=0;
+active=false;
+paused=false;
+render();
+}
+
+// ================= BUTTONS =================
+const startBtn=document.getElementById('startBtn');
 const pauseBtn=document.getElementById('pauseBtn');
 
 startBtn.onclick=()=>{
 if(!active){
 active=true;
+startTracking();
 startBtn.textContent="⏹️ Stop";
 startBtn.className="stopBtn";
 pauseBtn.disabled=false;
-startGPS();
 }else{
-active=false;
-stopGPS();
+stopTracking();
 startBtn.textContent="▶️ Start";
 startBtn.className="startBtn";
 pauseBtn.disabled=true;
@@ -145,44 +195,11 @@ pauseBtn.disabled=true;
 
 pauseBtn.onclick=()=>{
 paused=!paused;
-if(paused){
-pauseBtn.textContent="▶️ Hervatten";
-pauseBtn.className="resumeBtn";
-}else{
-pauseBtn.textContent="⏸️ Pauze";
-pauseBtn.className="pauseBtn";
-}
+pauseBtn.textContent=paused?"▶️ Hervatten":"⏸️ Pauze";
+pauseBtn.className=paused?"resumeBtn":"pauseBtn";
 };
 
-function startGPS(){
-watchId=navigator.geolocation.watchPosition(p=>{
-if(!active||paused)return;
-
-const lat=p.coords.latitude;
-const lon=p.coords.longitude;
-const acc=p.coords.accuracy||999;
-const speed=p.coords.speed?p.coords.speed*3.6:0;
-
-let d=0;
-if(lastLat)d=dist(lastLat,lastLon,lat,lon);
-
-if(d>1&&d<25&&acc<20&&speed<MAX_SPEED_KMH){
-gpsTrip+=d;
-}
-
-lastLat=lat;lastLon=lon;lastTime=Date.now();
-update(lat,lon,speed);
-
-},console.error,{enableHighAccuracy:true});
-}
-
-function stopGPS(){
-navigator.geolocation.clearWatch(watchId);
-lastLat=null;lastLon=null;
-gpsTrip=0;
-render();
-}
-
+// ================= UI =================
 function render(){
 const l=document.getElementById('list');
 l.innerHTML="";
