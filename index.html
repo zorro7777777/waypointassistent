@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Navigation Engine V7.9 (Smart Walking AI)</title>
+<title>GPX Navigation Engine V8.1 (Hybrid Distance Engine)</title>
 <style>
 body{font-family:Arial}
 h1{margin-bottom:5px}
@@ -24,7 +24,7 @@ td.endName{color:red;font-weight:bold}
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 7.9 (Smart Walking AI)</div>
+<div class="version">Versie 8.1 (Hybrid Distance Engine - FINAL)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -34,7 +34,6 @@ td.endName{color:red;font-weight:bold}
 <div class="controls">
 <button id="startStopBtn" class="start">▶️ Start activiteit</button>
 <button id="pauseBtn" class="pause" disabled>⏸️ Pauze</button>
-<button id="modeBtn" class="mode">🧭 Mode: GPS</button>
 </div>
 
 <h2>Status</h2>
@@ -50,16 +49,17 @@ td.endName{color:red;font-weight:bold}
 
 let track=[], cum=[], waypoints=[];
 let currentIndex=0, lastIndex=0;
-let trip=0, steps=0;
+
+let gpsTrip=0;
+let stepTrip=0;
+let hybridTrip=0;
+let steps=0;
+
 let watchId=null, active=false, paused=false;
-let mode="gps";
 
-let lastLat=null, lastLon=null;
-let lastTime=null;
+let lastLat=null, lastLon=null, lastTime=null;
 
-// SMART METRICS
-let speed=0;           // km/h
-let cadence=0;         // stappen/min
+let speedSamples=[], cadenceSamples=[];
 
 const WAYPOINT_TOLERANCE=10;
 const GPS_MIN_MOVE=0.7;
@@ -128,7 +128,6 @@ r.readAsText(e.target.files[0]);
 
 const btn=document.getElementById('startStopBtn');
 const pb=document.getElementById('pauseBtn');
-const mb=document.getElementById('modeBtn');
 
 btn.onclick=()=>{
 if(!active){active=true;start();btn.className="stop";btn.textContent="⏹️ Stop";pb.disabled=false;}
@@ -139,11 +138,6 @@ pb.onclick=()=>{
 paused=!paused;
 pb.className=paused?"resume":"pause";
 pb.textContent=paused?"▶️ Hervatten":"⏸️ Pauze";
-};
-
-mb.onclick=()=>{
-mode=(mode==="route")?"gps":"route";
-mb.textContent="🧭 Mode: "+(mode==="route"?"Route":"GPS");
 };
 
 // START
@@ -157,6 +151,7 @@ const lon=p.coords.longitude;
 const acc=p.coords.accuracy||999;
 const now=Date.now();
 
+// UNLOCK
 if(!startLocked){
 if(!unlockStartTime)unlockStartTime=now;
 
@@ -182,31 +177,46 @@ return;
 currentIndex=findClosestIndex(lat,lon,currentIndex);
 if(currentIndex<lastIndex)currentIndex=lastIndex;
 
-// DISTANCE + TIME
 let d=0;
-if(lastLat && lastLon){
-d=dist(lastLat,lastLon,lat,lon);
-}
+if(lastLat && lastLon){ d=dist(lastLat,lastLon,lat,lon); }
 
 const dt = lastTime ? (now-lastTime)/1000 : 1;
 
-if(d>GPS_MIN_MOVE && d<50){
-trip+=d;
+if(d>GPS_MIN_MOVE && d<30){
 
-const stepLen=parseFloat(document.getElementById('stepLength').value)||0.67;
-const stepAdd=d/stepLen;
-steps+=stepAdd;
+// GPS DIST
+ gpsTrip+=d;
 
-// SPEED km/h
-speed = (d/dt)*3.6;
+// STEP DIST
+ const stepLen=parseFloat(document.getElementById('stepLength').value)||0.67;
+ const stepAdd=d/stepLen;
+ steps+=stepAdd;
+ stepTrip = steps * stepLen;
 
-// CADENCE steps/min
-cadence = (stepAdd/dt)*60;
+// 🔥 HYBRID (core)
+ hybridTrip = (gpsTrip*0.6) + (stepTrip*0.4);
+
+// SPEED FILTER
+ let instSpeed=(d/dt)*3.6;
+ if(instSpeed<8){
+ speedSamples.push(instSpeed);
+ if(speedSamples.length>5) speedSamples.shift();
+ }
+
+// CADENCE FILTER
+ let instCad=(stepAdd/dt)*60;
+ if(instCad<200){
+ cadenceSamples.push(instCad);
+ if(cadenceSamples.length>5) cadenceSamples.shift();
+ }
 }
 
 lastTime=now;
 lastLat=lat; lastLon=lon;
 lastIndex=currentIndex;
+
+const speed = speedSamples.length ? speedSamples.reduce((a,b)=>a+b)/speedSamples.length : 0;
+const cadence = cadenceSamples.length ? cadenceSamples.reduce((a,b)=>a+b)/cadenceSamples.length : 0;
 
 // WAYPOINT
 for(const w of waypoints){
@@ -216,7 +226,7 @@ if(wd<=WAYPOINT_TOLERANCE)w.passed=true;
 }
 }
 
-updateUI(lat,lon);
+updateUI(lat,lon,speed,cadence);
 render();
 
 },console.error,{enableHighAccuracy:true});
@@ -224,8 +234,9 @@ render();
 
 function stop(){
 navigator.geolocation.clearWatch(watchId);
-trip=0; steps=0; speed=0; cadence=0;
+gpsTrip=0; stepTrip=0; hybridTrip=0; steps=0;
 currentIndex=0; lastIndex=0;
+speedSamples=[]; cadenceSamples=[];
 startLocked=false; gpsStableCount=0; unlockStartTime=null;
 lastLat=null; lastLon=null; lastTime=null;
 waypoints.forEach(w=>w.passed=false);
@@ -244,7 +255,11 @@ l.innerHTML+=`<tr><td>${s}</td><td class="${n}">${w.name}</td></tr>`;
 });
 }
 
-function updateUI(lat,lon){
+setInterval(()=>{
+if(lastLat && lastLon) updateUI(lastLat,lastLon);
+},1000);
+
+function updateUI(lat,lon,speed=0,cadence=0){
 const remaining=waypoints.filter(w=>!w.passed).length;
 const next=waypoints.find(w=>!w.passed);
 const nextDist=next?Math.max(0,cum[next.index]-cum[currentIndex]):0;
@@ -253,7 +268,6 @@ const total=cum[cum.length-1]||0;
 const stepLen=parseFloat(document.getElementById('stepLength').value)||0.67;
 const stepsToNext=nextDist/stepLen;
 
-// ETA (sec)
 const eta = speed>0 ? (nextDist/(speed/3.6)) : 0;
 
 function formatTime(s){
@@ -266,7 +280,7 @@ return `${m}m ${sec}s`;
 document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
 🛤️ Totale track: ${(total/1000).toFixed(3)} km<br>
-🧭 Trip: ${(trip/1000).toFixed(3)} km<br>
+🧭 Trip (hybrid): ${(hybridTrip/1000).toFixed(3)} km<br>
 👣 Stappen: ${Math.round(steps)}<br>
 🚶 Snelheid: ${speed.toFixed(2)} km/u<br>
 👣 Cadans: ${Math.round(cadence)} spm<br>
