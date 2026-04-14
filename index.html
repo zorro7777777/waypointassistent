@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Tracker V11.8 Stable Full Engine</title>
+<title>GPX Tracker V12.0 Stable Engine</title>
 
 <style>
 body{font-family:Arial}
@@ -25,7 +25,7 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 11.8 (Stable Segments + Calories + Cadence)</div>
+<div class="version">Versie 12.0 (Stable + Calories)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -78,21 +78,31 @@ const USER_WEIGHT=92;
 function dist(a,b,c,d){
 const R=6371000;
 const dLat=(c-a)*Math.PI/180;
-const dLon=(c-b)*Math.PI/180;
+const dLon=(d-b)*Math.PI/180;
 const x=Math.sin(dLat/2)**2 +
         Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
         Math.sin(dLon/2)**2;
 return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
 
+// ================= CALORIES =================
+function getMET(speed){
+if(speed < 4) return 2.5;
+if(speed < 5.5) return 3.5;
+if(speed < 6.5) return 4.3;
+return 5.0;
+}
+
+function calculateCalories(speed, dtSec){
+const MET = getMET(speed);
+return MET * USER_WEIGHT * (dtSec / 3600);
+}
+
 // ================= TRACK =================
 function buildCum(){
 cum=[0];
 for(let i=0;i<track.length-1;i++){
-cum[i+1]=cum[i]+dist(
-track[i].lat,track[i].lon,
-track[i+1].lat,track[i+1].lon
-);
+cum[i+1]=cum[i]+dist(track[i].lat,track[i].lon,track[i+1].lat,track[i+1].lon);
 }
 }
 
@@ -131,11 +141,9 @@ waypoints.unshift({name:"Start",lat:track[0].lat,lon:track[0].lon,index:0,passed
 waypoints.push({name:"Einde",lat:track.at(-1).lat,lon:track.at(-1).lon,index:track.length-1,passed:false,segment:0});
 
 waypoints.forEach(w=>w.index=closestIndex(w.lat,w.lon));
-
-// SORT FIRST (BELANGRIJK FIX)
 waypoints.sort((a,b)=>a.index-b.index);
 
-// SEGMENTS FIXED
+// segmenten (zoals jouw werkende versie)
 for(let i=0;i<waypoints.length;i++){
 if(i===0){
 waypoints[i].segment=0;
@@ -146,7 +154,6 @@ const prev=waypoints[i-1];
 const curr=waypoints[i];
 
 const seg=cum[curr.index]-cum[prev.index];
-
 waypoints[i].segment=(seg>0 && isFinite(seg)) ? seg : 0;
 }
 
@@ -169,19 +176,17 @@ const speed=(p.coords.speed||0)*3.6;
 const now=p.timestamp||Date.now();
 
 let d=0;
-if(lastLat){
-d=dist(lastLat,lastLon,lat,lon);
-}
+if(lastLat) d=dist(lastLat,lastLon,lat,lon);
 
-// smooth GPS
+// trip
 if(d>0.3 && d<25 && acc<30 && speed<MAX_SPEED){
 gpsTrip+=d;
 }
 
-// ================= STEPS =================
+// steps
 const steps=gpsTrip/STEP_LENGTH;
 
-// ================= CADENCE =================
+// cadence
 const nowSec=now/1000;
 
 stepHistory.push({t:nowSec,s:steps});
@@ -203,27 +208,19 @@ if(stepHistory.length<3){
 cadence=speed>0?((speed/3.6)/STEP_LENGTH)*60:0;
 }
 
-// ================= CALORIES (FIXED) =================
-function getMET(speedKmh){
-if(speedKmh<4) return 2.5;
-if(speedKmh<5.5) return 3.5;
-if(speedKmh<6.5) return 4.3;
-return 5.0;
-}
-
-let dtSec=lastTime?(now-lastTime)/1000:0;
+// ================= CALORIES =================
+let dtSec = lastTime ? (now-lastTime)/1000 : 0;
 
 if(dtSec>0 && dtSec<10){
-const MET=getMET(speed);
-caloriesTotal+=MET*USER_WEIGHT*(dtSec/3600);
+caloriesTotal += calculateCalories(speed, dtSec);
 }
 
-// ================= UPDATE STATE =================
+// update state
 lastTime=now;
 lastLat=lat;
 lastLon=lon;
 
-// ================= WAYPOINTS =================
+// waypoints
 for(let w of waypoints){
 if(!w.passed){
 const wd=dist(lat,lon,w.lat,w.lon);
