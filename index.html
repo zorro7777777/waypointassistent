@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Navigation Engine V8.3 (Final Stable)</title>
+<title>GPX Navigation Engine V9 (Final Stable)</title>
 <style>
 body{font-family:Arial}
 h1{margin-bottom:5px}
@@ -23,7 +23,7 @@ td.endName{color:red;font-weight:bold}
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 8.3 (Final Stable Engine)</div>
+<div class="version">Versie 9 (Final Stable Engine)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -152,7 +152,7 @@ if(moved<5 && acc<30)gpsStableCount++; else gpsStableCount=0;
 
 lastLat=lat; lastLon=lon;
 
-if((now-unlockStartTime)>=2000 && gpsStableCount>=3 && acc<26){
+if((now-unlockStartTime)>=3000 && gpsStableCount>=3 && acc<25){
 currentIndex=findClosestIndex(lat,lon,0);
 lastIndex=currentIndex;
 startLocked=true;
@@ -172,19 +172,23 @@ if(lastLat && lastLon){ d=dist(lastLat,lastLon,lat,lon); }
 
 const dt = lastTime ? (now-lastTime)/1000 : 1;
 
-if(d>GPS_MIN_MOVE && d<26){
+if(d>GPS_MIN_MOVE && d<30){
 
 // PASLENGTE
-const stepInput=parseFloat(document.getElementById('stepLength').value)||0.67;
-const stepLen=stepInput*2;
+// gebruiker input = staplengte
+const stepLength=parseFloat(document.getElementById('stepLength').value)||0.67;
+
+// afgeleide = paslengte (2 stappen)
+const passLength=stepLength*2;
 
 // GPS
  gpsTrip+=d;
 
 // STAPPEN
- const stepAdd=d/stepLen;
- steps+=stepAdd;
- stepTrip = steps * stepLen;
+ const passes=d/passLength;
+ steps+=passes;
+ // stepTrip volgt nu directe afstand
+stepTrip += d;
 
 // HYBRID
  hybridTrip = (gpsTrip*0.65) + (stepTrip*0.35);
@@ -263,9 +267,12 @@ const next=waypoints.find(w=>!w.passed);
 const nextDist=next?Math.max(0,cum[next.index]-cum[currentIndex]):0;
 const total=cum[cum.length-1]||0;
 
-const stepInput=parseFloat(document.getElementById('stepLength').value)||0.67;
-const stepLen=stepInput*2;
-const stepsToNext=nextDist/stepLen;
+// gebruiker input = staplengte
+const stepLength=parseFloat(document.getElementById('stepLength').value)||0.67;
+
+// afgeleide = paslengte (2 stappen)
+const passLength=stepLength*2;
+const stepsToNext=(nextDist/stepLength);
 
 const eta = speed>0 ? (nextDist/(speed/3.6)) : 0;
 
@@ -281,7 +288,6 @@ document.getElementById('info').innerHTML=`
 🛤️ Totale track: ${(total/1000).toFixed(3)} km<br>
 🧭 Trip (hybrid): ${(hybridTrip/1000).toFixed(3)} km<br>
 👣 Passen: ${Math.round(steps)}<br>
-👣 Steps: ${Math.round(steps)*2}<br>
 🚶 Snelheid: ${speed.toFixed(2)} km/u<br>
 👣 Cadans: ${Math.round(cadence)} spm<br>
 📌 Resterend WP: ${remaining}<br>
