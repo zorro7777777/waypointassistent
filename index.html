@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Navigation Engine V7.8 (Smart Walking AI)</title>
+<title>GPX Navigation Engine V7.9 (Smart Walking AI)</title>
 <style>
 body{font-family:Arial}
 h1{margin-bottom:5px}
@@ -24,7 +24,7 @@ td.endName{color:red;font-weight:bold}
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 7.8 (Smart Walking AI)</div>
+<div class="version">Versie 7.9 (Smart Walking AI)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -62,7 +62,7 @@ let speed=0;           // km/h
 let cadence=0;         // stappen/min
 
 const WAYPOINT_TOLERANCE=10;
-const GPS_MIN_MOVE=1.2;
+const GPS_MIN_MOVE=0.7;
 
 // UNLOCK
 let startLocked=false;
