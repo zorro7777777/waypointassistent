@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Tracker V15 Stable Cadence Engine</title>
+<title>GPX Tracker V11.6 Stable Cadence + MET Engine</title>
 
 <style>
 body{font-family:Arial}
@@ -25,7 +25,7 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 15 (Cadence Rolling Window Fix)</div>
+<div class="version">Versie 11.6 (Correct MET Calories + Cadence Stable)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -65,19 +65,13 @@ let lastLat=null;
 let lastLon=null;
 let lastTime=null;
 
-// smoothing
-let buffer=[];
-const BUFFER_SIZE=5;
-
-// cadence system
+// cadence
 let stepHistory=[];
 
 const MAX_SPEED=10;
 const TOLERANCE=10;
 
-// STEP MODEL
 const STEP_LENGTH=0.67;
-const PACE_LENGTH=STEP_LENGTH*2;
 const USER_WEIGHT=92;
 
 // ================= DIST =================
@@ -162,62 +156,56 @@ const now=p.timestamp||Date.now();
 let d=0;
 if(lastLat) d=dist(lastLat,lastLon,lat,lon);
 
-// SMOOTH TRIP ENGINE
+// smooth trip
 if(d>0.3 && d<25 && acc<30 && speed<MAX_SPEED){
-
-buffer.push(d);
-if(buffer.length>BUFFER_SIZE) buffer.shift();
-
-const avg=buffer.reduce((a,b)=>a+b,0)/buffer.length;
-gpsTrip+=avg;
+gpsTrip += d;
 }
 
-// ================= STEPS =================
+// ================= steps =================
 const steps = gpsTrip / STEP_LENGTH;
 
-// ================= CADENCE (60s window) =================
+// ================= cadence (60s) =================
 const nowSec = now / 1000;
 
-stepHistory.push({ t: nowSec, s: steps });
-
-// keep last 60 sec
+stepHistory.push({t:nowSec,s:steps});
 stepHistory = stepHistory.filter(x => (nowSec - x.t) <= 60);
 
 let cadence = 0;
 
 if(stepHistory.length > 1){
+const o = stepHistory[0];
+const n = stepHistory[stepHistory.length-1];
 
-    const oldest = stepHistory[0];
-    const newest = stepHistory[stepHistory.length - 1];
+const dt = (n.t - o.t)/60;
+const ds = n.s - o.s;
 
-    const dtMin = (newest.t - oldest.t) / 60;
-    const ds = newest.s - oldest.s;
-
-    cadence = dtMin > 0 ? ds / dtMin : 0;
+cadence = dt > 0 ? ds/dt : 0;
 }
 
-// fallback first minute
 if(stepHistory.length < 3){
-    cadence = (speed > 0)
-        ? (speed / 3.6) / STEP_LENGTH * 60
-        : 0;
+cadence = (speed>0) ? ((speed/3.6)/STEP_LENGTH)*60 : 0;
 }
 
-// ================= CALORIES =================
-let MET = 1.8;
-if(speed < 4) MET = 1.8;
-else if(speed < 5.5) MET = 2.8;
-else if(speed < 7) MET = 3.5;
-else MET = 4.5;
+// ================= MET CALORIES (CORRECT) =================
+function getMET(speedKmh){
+if(speedKmh < 4) return 2.5;
+if(speedKmh < 5.5) return 3.5;
+if(speedKmh < 6.5) return 4.3;
+return 5.0;
+}
 
-const calories = (gpsTrip/1000) * USER_WEIGHT * MET;
+const MET = getMET(speed);
+const dtHours = (lastTime ? (now-lastTime)/1000 : 1) / 3600;
 
-// ================= STATE UPDATE =================
+// kcal = MET * weight * time
+const calories = MET * USER_WEIGHT * dtHours;
+
+// update state
 lastTime=now;
 lastLat=lat;
 lastLon=lon;
 
-// WAYPOINT ENGINE
+// waypoints
 for(let w of waypoints){
 if(!w.passed){
 const wd=dist(lat,lon,w.lat,w.lon);
@@ -237,15 +225,46 @@ watchId=null;
 active=false;
 paused=false;
 
+gpsTrip=0;
+stepHistory=[];
 lastLat=null;
 lastLon=null;
 lastTime=null;
 
-gpsTrip=0;
-buffer=[];
-stepHistory=[];
-
 render();
+}
+
+// ================= UI =================
+function render(){
+const l=document.getElementById('list');
+l.innerHTML="";
+waypoints.forEach(w=>{
+let c="";
+if(w.name==="Start")c="startName";
+if(w.name==="Einde")c="endName";
+
+l.innerHTML+=`
+<tr>
+<td>${w.passed?"✅":"⏳"}</td>
+<td class="${c}">${w.name}</td>
+<td>${w.segment.toFixed(1)}</td>
+</tr>`;
+});
+}
+
+function updateUI(lat,lon,speed,steps,cadence,calories){
+
+const totalTrack = cum[cum.length-1] || 0;
+
+document.getElementById('info').innerHTML=`
+📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
+🧭 Trip (GPS): ${(gpsTrip/1000).toFixed(3)} km<br>
+📏 Totale track: ${(totalTrack/1000).toFixed(3)} km<br>
+👣 Stappen: ${Math.round(steps)}<br>
+🚶 Cadans: ${Math.round(cadence)} spm<br>
+🚶 Snelheid: ${speed.toFixed(2)} km/u<br>
+🔥 Calorieën: ${calories.toFixed(0)} kcal<br>
+`;
 }
 
 // ================= BUTTONS =================
@@ -272,38 +291,6 @@ paused=!paused;
 pauseBtn.textContent=paused?"▶️ Hervatten":"⏸️ Pauze";
 pauseBtn.className=paused?"resumeBtn":"pauseBtn";
 };
-
-// ================= UI =================
-function render(){
-const l=document.getElementById('list');
-l.innerHTML="";
-waypoints.forEach(w=>{
-let c="";
-if(w.name==="Start")c="startName";
-if(w.name==="Einde")c="endName";
-
-l.innerHTML+=`<tr>
-<td>${w.passed?"✅":"⏳"}</td>
-<td class="${c}">${w.name}</td>
-<td>${w.segment.toFixed(1)}</td>
-</tr>`;
-});
-}
-
-function updateUI(lat,lon,speed,steps,cadence,calories){
-
-const totalTrack = cum[cum.length-1] || 0;
-
-document.getElementById('info').innerHTML=`
-📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
-🧭 Trip (GPS): ${(gpsTrip/1000).toFixed(3)} km<br>
-📏 Totale track: ${(totalTrack/1000).toFixed(3)} km<br>
-👣 Stappen: ${Math.round(steps)}<br>
-🚶 Cadans: ${Math.round(cadence)} spm<br>
-🚶 Snelheid: ${speed.toFixed(2)} km/u<br>
-🔥 Calorieën: ${calories.toFixed(0)} kcal<br>
-`;
-}
 
 </script>
 
