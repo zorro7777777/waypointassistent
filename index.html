@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Tracker V12.1 Stable Engine</title>
+<title>GPX Tracker V13 Stable Engine</title>
 
 <style>
 body{font-family:Arial}
@@ -25,7 +25,7 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 12.1 (Waypoint Fix - Route Based)</div>
+<div class="version">Versie 13 (Stable + Smart Waypoints)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -68,10 +68,13 @@ let lastTime=null;
 let stepHistory=[];
 let caloriesTotal=0;
 
-const MAX_SPEED=8;
+// 🔥 NEW: waypoint pointer
+let currentWP = 0;
+
+const MAX_SPEED=10;
 const TOLERANCE=10;
 
-const STEP_LENGTH=0.68;
+const STEP_LENGTH=0.67;
 const USER_WEIGHT=92;
 
 // ================= DIST =================
@@ -83,19 +86,6 @@ const x=Math.sin(dLat/2)**2 +
         Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
         Math.sin(dLon/2)**2;
 return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
-}
-
-// ================= CALORIES =================
-function getMET(speed){
-if(speed < 4) return 2.5;
-if(speed < 5.5) return 3.5;
-if(speed < 6.5) return 4.3;
-return 5.0;
-}
-
-function calculateCalories(speed, dtSec){
-const MET = getMET(speed);
-return MET * USER_WEIGHT * (dtSec / 3600);
 }
 
 // ================= TRACK =================
@@ -113,22 +103,6 @@ const d=dist(lat,lon,track[i].lat,track[i].lon);
 if(d<bestD){bestD=d;best=i;}
 }
 return best;
-}
-
-// 🟢 NIEUW: positie op track bepalen
-function getCurrentCumPos(lat, lon){
-let bestIdx = 0;
-let bestD = Infinity;
-
-for(let i=0;i<track.length;i++){
-const d = dist(lat, lon, track[i].lat, track[i].lon);
-if(d < bestD){
-bestD = d;
-bestIdx = i;
-}
-}
-
-return cum[bestIdx];
 }
 
 // ================= LOAD =================
@@ -150,30 +124,20 @@ lat:+x.getAttribute('lat'),
 lon:+x.getAttribute('lon'),
 index:0,
 passed:false,
-segment:0,
-cumPos:0
+segment:0
 }));
 
-waypoints.unshift({name:"Start",lat:track[0].lat,lon:track[0].lon,index:0,passed:false,segment:0,cumPos:0});
-waypoints.push({name:"Einde",lat:track.at(-1).lat,lon:track.at(-1).lon,index:track.length-1,passed:false,segment:0,cumPos:0});
+waypoints.unshift({name:"Start",lat:track[0].lat,lon:track[0].lon,index:0,passed:false,segment:0});
+waypoints.push({name:"Einde",lat:track.at(-1).lat,lon:track.at(-1).lon,index:track.length-1,passed:false,segment:0});
 
-waypoints.forEach(w=>{
-w.index=closestIndex(w.lat,w.lon);
-w.cumPos=cum[w.index];
-});
-
+waypoints.forEach(w=>w.index=closestIndex(w.lat,w.lon));
 waypoints.sort((a,b)=>a.index-b.index);
 
-// segmenten
+// segment fix (stabiel)
 for(let i=0;i<waypoints.length;i++){
-if(i===0){
-waypoints[i].segment=0;
-continue;
-}
-
+if(i===0){waypoints[i].segment=0;continue;}
 const prev=waypoints[i-1];
 const curr=waypoints[i];
-
 const seg=cum[curr.index]-cum[prev.index];
 waypoints[i].segment=(seg>0 && isFinite(seg)) ? seg : 0;
 }
@@ -200,57 +164,50 @@ let d=0;
 if(lastLat) d=dist(lastLat,lastLon,lat,lon);
 
 // trip
-if(d>0.3 && d<25 && acc<28 && speed<MAX_SPEED){
+if(d>0.3 && d<25 && acc<30 && speed<MAX_SPEED){
 gpsTrip+=d;
 }
 
+// ================= WAYPOINT ENGINE (FIXED) =================
+while(currentWP < waypoints.length){
+const w = waypoints[currentWP];
+const currentIndex = closestIndex(lat,lon);
+
+// 🔥 only advance if truly passed on route
+if(currentIndex >= w.index){
+w.passed = true;
+currentWP++;
+}else{
+break;
+}
+}
+
 // steps
-const steps=gpsTrip/STEP_LENGTH;
+const steps = gpsTrip / STEP_LENGTH;
 
-// cadence
-const nowSec=now/1000;
-
+// cadence (simple stable)
+const nowSec = now / 1000;
 stepHistory.push({t:nowSec,s:steps});
-stepHistory=stepHistory.filter(x=>(nowSec-x.t)<=60);
+stepHistory = stepHistory.filter(x => (nowSec - x.t) <= 60);
 
 let cadence=0;
-
 if(stepHistory.length>1){
 const o=stepHistory[0];
 const n=stepHistory[stepHistory.length-1];
-
 const dt=(n.t-o.t)/60;
 const ds=(n.s-o.s);
-
 cadence=dt>0?ds/dt:0;
 }
 
-if(stepHistory.length<3){
-cadence=speed>0?((speed/3.6)/STEP_LENGTH)*60:0;
-}
-
-// ================= CALORIES =================
+// calories
 let dtSec = lastTime ? (now-lastTime)/1000 : 0;
-
 if(dtSec>0 && dtSec<10){
-caloriesTotal += calculateCalories(speed, dtSec);
+caloriesTotal += (speed/3.6) * USER_WEIGHT * 0.9 * (dtSec/3600);
 }
 
-// update state
 lastTime=now;
 lastLat=lat;
 lastLon=lon;
-
-// 🟢 NIEUWE WAYPOINT LOGICA (FIX)
-const currentPos = getCurrentCumPos(lat, lon);
-
-for(let w of waypoints){
-if(!w.passed){
-if(currentPos >= w.cumPos - TOLERANCE){
-w.passed = true;
-}
-}
-}
 
 updateUI(lat,lon,speed,steps,cadence,caloriesTotal);
 render();
@@ -267,6 +224,7 @@ paused=false;
 gpsTrip=0;
 stepHistory=[];
 caloriesTotal=0;
+currentWP=0;
 
 lastLat=null;
 lastLon=null;
