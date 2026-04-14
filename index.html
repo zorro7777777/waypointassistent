@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Navigation Engine V8.1 (Hybrid Distance Engine)</title>
+<title>GPX Navigation Engine V8.2 (Final Stable)</title>
 <style>
 body{font-family:Arial}
 h1{margin-bottom:5px}
@@ -14,7 +14,6 @@ button{flex:1;padding:12px;font-size:16px;height:50px;border:none;border-radius:
 .stop{background:#e74c3c}
 .pause{background:#f39c12}
 .resume{background:#2ecc71}
-.mode{background:#3498db}
 input.step{width:100%;padding:8px;margin-top:5px}
 table{border-spacing:3px}td,th{border:2px double black;padding:6px}
 td.startName{color:green;font-weight:bold}
@@ -24,7 +23,7 @@ td.endName{color:red;font-weight:bold}
 <body>
 
 <h1>GPX Wandel Tracker</h1>
-<div class="version">Versie 8.1 (Hybrid Distance Engine - FINAL)</div>
+<div class="version">Versie 8.2 (Final Stable Engine)</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -50,11 +49,7 @@ td.endName{color:red;font-weight:bold}
 let track=[], cum=[], waypoints=[];
 let currentIndex=0, lastIndex=0;
 
-let gpsTrip=0;
-let stepTrip=0;
-let hybridTrip=0;
-let steps=0;
-
+let gpsTrip=0, stepTrip=0, hybridTrip=0, steps=0;
 let watchId=null, active=false, paused=false;
 
 let lastLat=null, lastLon=null, lastTime=null;
@@ -68,8 +63,6 @@ const GPS_MIN_MOVE=0.7;
 let startLocked=false;
 let unlockStartTime=null;
 let gpsStableCount=0;
-const MIN_STABLE_TIME=3000;
-const REQUIRED_STABLE=3;
 
 function dist(a,b,c,d){
 const R=6371000;
@@ -140,8 +133,6 @@ pb.className=paused?"resume":"pause";
 pb.textContent=paused?"▶️ Hervatten":"⏸️ Pauze";
 };
 
-// START
-
 function start(){
 watchId=navigator.geolocation.watchPosition(p=>{
 if(!active||paused)return;
@@ -151,7 +142,6 @@ const lon=p.coords.longitude;
 const acc=p.coords.accuracy||999;
 const now=Date.now();
 
-// UNLOCK
 if(!startLocked){
 if(!unlockStartTime)unlockStartTime=now;
 
@@ -162,7 +152,7 @@ if(moved<5 && acc<30)gpsStableCount++; else gpsStableCount=0;
 
 lastLat=lat; lastLon=lon;
 
-if((now-unlockStartTime)>=MIN_STABLE_TIME && gpsStableCount>=REQUIRED_STABLE && acc<25){
+if((now-unlockStartTime)>=3000 && gpsStableCount>=3 && acc<25){
 currentIndex=findClosestIndex(lat,lon,0);
 lastIndex=currentIndex;
 startLocked=true;
@@ -184,28 +174,31 @@ const dt = lastTime ? (now-lastTime)/1000 : 1;
 
 if(d>GPS_MIN_MOVE && d<30){
 
-// GPS DIST
+// PASLENGTE
+const stepInput=parseFloat(document.getElementById('stepLength').value)||0.67;
+const stepLen=stepInput*2;
+
+// GPS
  gpsTrip+=d;
 
-// STEP DIST
- const stepLen=parseFloat(document.getElementById('stepLength').value)||0.67;
+// STAPPEN
  const stepAdd=d/stepLen;
  steps+=stepAdd;
  stepTrip = steps * stepLen;
 
-// 🔥 HYBRID (core)
- hybridTrip = (gpsTrip*0.6) + (stepTrip*0.4);
+// HYBRID
+ hybridTrip = (gpsTrip*0.65) + (stepTrip*0.35);
 
-// SPEED FILTER
+// SPEED
  let instSpeed=(d/dt)*3.6;
  if(instSpeed<8){
  speedSamples.push(instSpeed);
  if(speedSamples.length>5) speedSamples.shift();
  }
 
-// CADENCE FILTER
+// CADENCE
  let instCad=(stepAdd/dt)*60;
- if(instCad<200){
+ if(instCad<180){
  cadenceSamples.push(instCad);
  if(cadenceSamples.length>5) cadenceSamples.shift();
  }
@@ -218,12 +211,17 @@ lastIndex=currentIndex;
 const speed = speedSamples.length ? speedSamples.reduce((a,b)=>a+b)/speedSamples.length : 0;
 const cadence = cadenceSamples.length ? cadenceSamples.reduce((a,b)=>a+b)/cadenceSamples.length : 0;
 
-// WAYPOINT
-for(const w of waypoints){
-if(!w.passed){
-const wd=dist(lat,lon,w.lat,w.lon);
-if(wd<=WAYPOINT_TOLERANCE)w.passed=true;
-}
+// WAYPOINT STRICT
+for(let i=0;i<waypoints.length;i++){
+ const w=waypoints[i];
+ if(!w.passed){
+   const prevPassed = i===0 ? true : waypoints[i-1].passed;
+   if(prevPassed){
+     const wd=dist(lat,lon,w.lat,w.lon);
+     if(wd<=WAYPOINT_TOLERANCE){ w.passed=true; }
+   }
+   break;
+ }
 }
 
 updateUI(lat,lon,speed,cadence);
@@ -265,7 +263,8 @@ const next=waypoints.find(w=>!w.passed);
 const nextDist=next?Math.max(0,cum[next.index]-cum[currentIndex]):0;
 const total=cum[cum.length-1]||0;
 
-const stepLen=parseFloat(document.getElementById('stepLength').value)||0.67;
+const stepInput=parseFloat(document.getElementById('stepLength').value)||0.67;
+const stepLen=stepInput*2;
 const stepsToNext=nextDist/stepLen;
 
 const eta = speed>0 ? (nextDist/(speed/3.6)) : 0;
