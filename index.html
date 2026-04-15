@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Strava Engine v28 FORWARD</title>
+<title>Strava Engine v27 FIELD</title>
 
 <style>
 body{font-family:Arial}
@@ -18,14 +18,18 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 .startBtn{background:#2ecc71}
 .resetBtn{background:#3498db}
 
-.slow{color:#e74c3c;font-weight:bold;margin-left:10px;}
+.slow{
+color:#e74c3c;
+font-weight:bold;
+margin-left:10px;
+}
 </style>
 </head>
 
 <body>
 
-<h1>GPX STRAVA ENGINE v28</h1>
-<div class="version">FORWARD TRACKING + ANTI-CROSSING</div>
+<h1>GPX STRAVA ENGINE v27 FIELD</h1>
+<div class="version">TRUE PASS + ANTI-OMMETJE + STABLE GPS CORE</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -64,7 +68,6 @@ let lastLat=null;
 let lastLon=null;
 
 let maxRoutePos=0;
-let lastIndex=0; // 🔥 NEW
 
 // ================= CONFIG =================
 const RADIUS=20;
@@ -93,25 +96,19 @@ track[i+1].lat,track[i+1].lon
 }
 }
 
-// ================= FORWARD PROJECT =================
-function projectForward(lat,lon){
+// ================= ROUTE POSITION =================
+function projectOnRoute(lat,lon){
+let best=Infinity;
+let bestPos=0;
 
-let bestDist=Infinity;
-let bestIndex=lastIndex;
-
-// 🔥 alleen vooruit zoeken
-for(let i=lastIndex;i<track.length;i++){
+for(let i=0;i<track.length;i++){
 const d=dist(lat,lon,track[i].lat,track[i].lon);
-if(d<bestDist){
-bestDist=d;
-bestIndex=i;
+if(d<best){
+best=d;
+bestPos=cumDist[i];
 }
 }
-
-// update index
-lastIndex=bestIndex;
-
-return cumDist[bestIndex];
+return bestPos;
 }
 
 // ================= DIST TO TRACK =================
@@ -154,7 +151,6 @@ gpsTrip=0;
 lastLat=null;
 lastLon=null;
 maxRoutePos=0;
-lastIndex=0;
 
 active=false;
 
@@ -174,15 +170,12 @@ track=[...xml.getElementsByTagName('trkpt')]
 
 buildPolyline();
 
-// reset state
 gpsTrip=0;
 lastLat=null;
 lastLon=null;
 maxRoutePos=0;
-lastIndex=0;
 active=false;
 
-// WAYPOINTS
 waypoints=[...xml.getElementsByTagName('wpt')]
 .map(x=>({
 name:x.getElementsByTagName('name')[0]?.textContent||"WP",
@@ -220,17 +213,17 @@ touched:false,
 minDist:Infinity
 });
 
-// routePos
 waypoints.forEach(w=>{
-w.routePos=projectForward(w.lat,w.lon);
+w.routePos=projectOnRoute(w.lat,w.lon);
 });
 
-// sort
 waypoints.sort((a,b)=>a.routePos-b.routePos);
 
-// segments
 for(let i=0;i<waypoints.length;i++){
-if(i===0){waypoints[i].segment=0;continue;}
+if(i===0){
+waypoints[i].segment=0;
+continue;
+}
 waypoints[i].segment=waypoints[i].routePos-waypoints[i-1].routePos;
 }
 
@@ -243,7 +236,7 @@ r.readAsText(e.target.files[0]);
 // ================= ENGINE =================
 function process(lat,lon){
 
-const pos=projectForward(lat,lon);
+const pos=projectOnRoute(lat,lon);
 
 if(pos>maxRoutePos){
 maxRoutePos=pos;
@@ -270,6 +263,13 @@ const passedRoute=pos>=w.routePos-RADIUS;
 
 if(passedRoute && w.touched){
 w.passed=true;
+
+const endWp = waypoints.at(-1);
+if(w === endWp && active){
+stopTracking();
+document.getElementById('info').innerHTML += `<br>🏁 Einde bereikt → tracking gestopt`;
+}
+
 continue;
 }
 
@@ -297,7 +297,7 @@ const speed=(p.coords.speed||0)*3.6;
 let d=0;
 if(lastLat){
 d=dist(lastLat,lastLon,lat,lon);
-if(d>0.3 && d<25 && speed>=MIN_SPEED){
+if(d>0.3 && d<25){
 gpsTrip+=d;
 }
 }
@@ -321,6 +321,13 @@ document.getElementById('info').innerHTML=`
 render();
 
 },console.error,{enableHighAccuracy:true});
+}
+
+// ================= STOP =================
+function stopTracking(){
+navigator.geolocation.clearWatch(watchId);
+watchId=null;
+active=false;
 }
 
 // ================= UI =================
