@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Strava Engine v25 LIVE FIELD</title>
+<title>Strava Engine v25 FIELD PRO</title>
 
 <style>
 body{font-family:Arial}
@@ -16,21 +16,18 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 
 .startBtn{background:#2ecc71}
 .stopBtn{background:#e74c3c}
-.pauseBtn{background:#f39c12}
-.resumeBtn{background:#2ecc71}
 </style>
 </head>
 
 <body>
 
-<h1>GPX STRAVA ENGINE v25 LIVE</h1>
-<div class="version">v18.1 CORE + LIVE GPS FIELD MODE</div>
+<h1>GPX STRAVA ENGINE v25 FIELD PRO</h1>
+<div class="version">v18.1 CORE + SEGMENTS + STOP LOCK</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
 <div class="controls">
 <button id="startBtn" class="startBtn">▶️ Start</button>
-<button id="pauseBtn" class="pauseBtn" disabled>⏸️ Pauze</button>
 </div>
 
 <h2>Status</h2>
@@ -42,6 +39,7 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 <tr>
 <th>Status</th>
 <th>Naam</th>
+<th>Segment (m)</th>
 </tr>
 </thead>
 <tbody id="list"></tbody>
@@ -56,22 +54,22 @@ let cumDist=[];
 
 let watchId=null;
 let active=false;
-let paused=false;
 
+// core
 let maxRoutePos=0;
 
-// metrics
+// movement
 let gpsTrip=0;
 let lastLat=null;
 let lastLon=null;
-let lastTime=null;
+
+// lock system
+let isMoving=true;
 
 // ================= CONFIG =================
 const RADIUS=20;
 const TRACK_TOL=10;
-const STEP_LENGTH=0.67;
-const USER_WEIGHT=92;
-const MAX_SPEED=8; // wandel realistisch
+const MIN_SPEED=1; // km/h lock threshold
 
 // ================= DIST =================
 function dist(a,b,c,d){
@@ -134,7 +132,7 @@ if(d<best) best=d;
 return best;
 }
 
-// ================= LOAD GPX =================
+// ================= LOAD =================
 document.getElementById('gpxFile').onchange=e=>{
 const r=new FileReader();
 
@@ -151,9 +149,8 @@ gpsTrip=0;
 maxRoutePos=0;
 lastLat=null;
 lastLon=null;
-lastTime=null;
 
-// waypoints (v18.1 CORE)
+// waypoints
 waypoints=[...xml.getElementsByTagName('wpt')]
 .map(x=>({
 name:x.getElementsByTagName('name')[0]?.textContent||"WP",
@@ -161,16 +158,19 @@ lat:+x.getAttribute('lat'),
 lon:+x.getAttribute('lon'),
 routePos:0,
 passed:false,
-missed:false
+missed:false,
+segment:0
 }));
 
+// start/end
 waypoints.unshift({
 name:"Start",
 lat:track[0].lat,
 lon:track[0].lon,
 routePos:0,
 passed:true,
-missed:false
+missed:false,
+segment:0
 });
 
 waypoints.push({
@@ -179,14 +179,26 @@ lat:track.at(-1).lat,
 lon:track.at(-1).lon,
 routePos:0,
 passed:false,
-missed:false
+missed:false,
+segment:0
 });
 
+// route projection
 waypoints.forEach(w=>{
 w.routePos=projectOnRoute(w.lat,w.lon);
 });
-
 waypoints.sort((a,b)=>a.routePos-b.routePos);
+
+// SEGMENT FIX (BELANGRIJK)
+for(let i=0;i<waypoints.length;i++){
+if(i===0){
+waypoints[i].segment=0;
+continue;
+}
+
+const seg=waypoints[i].routePos-waypoints[i-1].routePos;
+waypoints[i].segment=(seg>0?seg:0);
+}
 
 render();
 };
@@ -194,14 +206,34 @@ render();
 r.readAsText(e.target.files[0]);
 };
 
-// ================= WAYPOINT ENGINE (UNCHANGED CORE) =================
-function process(lat,lon){
+// ================= CORE GPS =================
+function startTracking(){
 
-const pos=projectOnRoute(lat,lon);
+if(watchId) return;
 
-if(pos>maxRoutePos){
-maxRoutePos=pos;
+watchId=navigator.geolocation.watchPosition(p=>{
+
+if(!active) return;
+
+const lat=p.coords.latitude;
+const lon=p.coords.longitude;
+const speed=(p.coords.speed||0)*3.6;
+
+// ================= STOP LOCK =================
+isMoving = speed >= MIN_SPEED;
+
+// only add distance if moving
+let d=0;
+if(lastLat && isMoving){
+d=dist(lastLat,lastLon,lat,lon);
+if(d>0.3 && d<25){
+gpsTrip+=d;
 }
+}
+
+// waypoint engine
+const pos=projectOnRoute(lat,lon);
+if(pos>maxRoutePos) maxRoutePos=pos;
 
 for(let w of waypoints){
 
@@ -223,42 +255,15 @@ if(maxRoutePos>w.routePos+RADIUS){
 w.missed=true;
 }
 }
-}
 
-// ================= GPS LIVE =================
-function startTracking(){
-
-if(watchId) return;
-
-watchId=navigator.geolocation.watchPosition(p=>{
-
-if(!active||paused) return;
-
-const lat=p.coords.latitude;
-const lon=p.coords.longitude;
-const acc=p.coords.accuracy||999;
-const speed=Math.min((p.coords.speed||0)*3.6,MAX_SPEED);
-const now=p.timestamp||Date.now();
-
-let d=0;
-if(lastLat) d=dist(lastLat,lastLon,lat,lon);
-
-if(d>0.3 && d<25 && acc<30){
-gpsTrip+=d;
-}
-
-process(lat,lon);
-
-// time
-lastTime=now;
 lastLat=lat;
 lastLon=lon;
 
 // UI
 document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
-🧭 ${(gpsTrip/1000).toFixed(3)} km<br>
-🚶 ${(speed).toFixed(2)} km/u
+🚶 ${speed.toFixed(2)} km/u ${!isMoving?"(PAUSE LOCK)":""}<br>
+🧭 ${(gpsTrip/1000).toFixed(3)} km
 `;
 
 render();
@@ -266,15 +271,9 @@ render();
 },console.error,{enableHighAccuracy:true});
 }
 
-function stopTracking(){
-navigator.geolocation.clearWatch(watchId);
-watchId=null;
-active=false;
-paused=false;
-}
-
 // ================= UI =================
 function render(){
+
 const l=document.getElementById('list');
 l.innerHTML="";
 
@@ -287,20 +286,16 @@ l.innerHTML+=`
 <tr>
 <td>${s}</td>
 <td>${w.name}</td>
+<td>${w.segment.toFixed(1)} m</td>
 </tr>`;
 });
 }
 
-// ================= BUTTONS =================
+// ================= START =================
 document.getElementById('startBtn').onclick=()=>{
-
-if(!active){
-active=true;
+active=!active;
+if(active){
 startTracking();
-document.getElementById('startBtn').textContent="⏹️ Stop";
-}else{
-stopTracking();
-document.getElementById('startBtn').textContent="▶️ Start";
 }
 };
 
