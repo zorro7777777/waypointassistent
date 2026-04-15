@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Strava Engine v25 FINAL HYBRID</title>
+<title>Strava Engine v25 LIVE FIELD</title>
 
 <style>
 body{font-family:Arial}
@@ -23,8 +23,8 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 
 <body>
 
-<h1>GPX STRAVA ENGINE v25 FINAL</h1>
-<div class="version">v18.1 CORE + PRO METRICS (SAFE HYBRID)</div>
+<h1>GPX STRAVA ENGINE v25 LIVE</h1>
+<div class="version">v18.1 CORE + LIVE GPS FIELD MODE</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -52,26 +52,26 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 // ================= STATE =================
 let track=[];
 let waypoints=[];
-let simIndex=0;
-let simInterval=null;
+let cumDist=[];
+
+let watchId=null;
+let active=false;
+let paused=false;
 
 let maxRoutePos=0;
 
-// ================= PRO METRICS =================
+// metrics
 let gpsTrip=0;
 let lastLat=null;
 let lastLon=null;
 let lastTime=null;
-
-let stepHistory=[];
-let caloriesTotal=0;
 
 // ================= CONFIG =================
 const RADIUS=20;
 const TRACK_TOL=10;
 const STEP_LENGTH=0.67;
 const USER_WEIGHT=92;
-const MAX_SPEED=10;
+const MAX_SPEED=8; // wandel realistisch
 
 // ================= DIST =================
 function dist(a,b,c,d){
@@ -85,8 +85,6 @@ return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
 
 // ================= POLYLINE =================
-let cumDist=[];
-
 function buildPolyline(){
 cumDist=[0];
 for(let i=0;i<track.length-1;i++){
@@ -97,22 +95,22 @@ track[i+1].lat,track[i+1].lon
 }
 }
 
-// ================= CORE v18.1 =================
+// ================= PROJECT =================
 function projectOnRoute(lat,lon){
-let bestDist=Infinity;
+let best=Infinity;
 let bestPos=0;
 
 for(let i=0;i<track.length;i++){
 const d=dist(lat,lon,track[i].lat,track[i].lon);
-if(d<bestDist){
-bestDist=d;
+if(d<best){
+best=d;
 bestPos=cumDist[i];
 }
 }
 return bestPos;
 }
 
-// ================= TRACK DIST =================
+// ================= DIST TO TRACK =================
 function pointToSegment(px,py,ax,ay,bx,by){
 const A=px-ax,B=py-ay,C=bx-ax,D=by-ay;
 const dot=A*C+B*D;
@@ -136,7 +134,7 @@ if(d<best) best=d;
 return best;
 }
 
-// ================= LOAD =================
+// ================= LOAD GPX =================
 document.getElementById('gpxFile').onchange=e=>{
 const r=new FileReader();
 
@@ -148,19 +146,16 @@ track=[...xml.getElementsByTagName('trkpt')]
 
 buildPolyline();
 
-// RESET
-maxRoutePos=0;
+// reset
 gpsTrip=0;
-stepHistory=[];
-caloriesTotal=0;
+maxRoutePos=0;
 lastLat=null;
 lastLon=null;
 lastTime=null;
 
-// ================= WAYPOINTS (v18.1 CORE) =================
-const w=[...xml.getElementsByTagName('wpt')];
-
-waypoints=w.map(x=>({
+// waypoints (v18.1 CORE)
+waypoints=[...xml.getElementsByTagName('wpt')]
+.map(x=>({
 name:x.getElementsByTagName('name')[0]?.textContent||"WP",
 lat:+x.getAttribute('lat'),
 lon:+x.getAttribute('lon'),
@@ -169,7 +164,6 @@ passed:false,
 missed:false
 }));
 
-// START + END
 waypoints.unshift({
 name:"Start",
 lat:track[0].lat,
@@ -188,10 +182,10 @@ passed:false,
 missed:false
 });
 
-// SORT (CRITICAL CORE RULE)
 waypoints.forEach(w=>{
 w.routePos=projectOnRoute(w.lat,w.lon);
 });
+
 waypoints.sort((a,b)=>a.routePos-b.routePos);
 
 render();
@@ -200,21 +194,19 @@ render();
 r.readAsText(e.target.files[0]);
 };
 
-// ================= CORE ENGINE (v18.1 UNTOUCHED + SAFE EXTENSIONS) =================
+// ================= WAYPOINT ENGINE (UNCHANGED CORE) =================
 function process(lat,lon){
 
 const pos=projectOnRoute(lat,lon);
 
-// CORE PROGRESS
 if(pos>maxRoutePos){
 maxRoutePos=pos;
 }
 
 for(let w of waypoints){
 
-if(w.passed || w.missed) continue;
+if(w.passed||w.missed) continue;
 
-// ================= GEO LAYER =================
 const onTrack=minDistToTrack(w.lat,w.lon)<=TRACK_TOL;
 
 if(!onTrack){
@@ -222,85 +214,66 @@ w.missed=true;
 continue;
 }
 
-// ================= PASS LAYER =================
 if(pos>=w.routePos-RADIUS){
 w.passed=true;
 continue;
 }
 
-// ================= MISS LAYER =================
 if(maxRoutePos>w.routePos+RADIUS){
 w.missed=true;
 }
 }
 }
 
-// ================= SIM =================
-function startSim(){
-if(simInterval) return;
+// ================= GPS LIVE =================
+function startTracking(){
 
-simIndex=0;
-maxRoutePos=0;
+if(watchId) return;
 
-simInterval=setInterval(()=>{
+watchId=navigator.geolocation.watchPosition(p=>{
 
-if(simIndex>=track.length){
-clearInterval(simInterval);
-return;
+if(!active||paused) return;
+
+const lat=p.coords.latitude;
+const lon=p.coords.longitude;
+const acc=p.coords.accuracy||999;
+const speed=Math.min((p.coords.speed||0)*3.6,MAX_SPEED);
+const now=p.timestamp||Date.now();
+
+let d=0;
+if(lastLat) d=dist(lastLat,lastLon,lat,lon);
+
+if(d>0.3 && d<25 && acc<30){
+gpsTrip+=d;
 }
 
-const p=track[simIndex++];
-process(p.lat,p.lon);
+process(lat,lon);
 
-// ================= PRO METRICS =================
-const now=Date.now();
-let speed=0;
-
-if(lastLat){
-speed=Math.min(dist(lastLat,lastLon,p.lat,p.lon)*3.6,MAX_SPEED);
-gpsTrip+=dist(lastLat,lastLon,p.lat,p.lon);
-}
-
-const steps=gpsTrip/STEP_LENGTH;
-
-stepHistory.push({t:now/1000,s:steps});
-stepHistory=stepHistory.filter(x=>(now/1000-x.t)<=60);
-
-let cadence=0;
-if(stepHistory.length>1){
-const f=stepHistory[0];
-const l=stepHistory[stepHistory.length-1];
-const dt=(l.t-f.t)/60;
-const ds=l.s-f.s;
-cadence=dt>0?ds/dt:0;
-}
-
-if(lastTime){
-const dtSec=(now-lastTime)/1000;
-if(dtSec>0 && dtSec<10){
-caloriesTotal+=(speed/3.6)*USER_WEIGHT*0.9*(dtSec/3600);
-}
-}
-
+// time
 lastTime=now;
-lastLat=p.lat;
-lastLon=p.lon;
+lastLat=lat;
+lastLon=lon;
 
-// ================= UI =================
+// UI
 document.getElementById('info').innerHTML=`
-📍 ${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}<br>
+📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
 🧭 ${(gpsTrip/1000).toFixed(3)} km<br>
-👣 ${Math.round(steps)} steps<br>
-🚶 ${Math.round(cadence)} spm<br>
-🔥 ${caloriesTotal.toFixed(0)} kcal
+🚶 ${(speed).toFixed(2)} km/u
 `;
 
 render();
 
-},120);
+},console.error,{enableHighAccuracy:true});
 }
 
-// ================= RENDER =================
+function stopTracking(){
+navigator.geolocation.clearWatch(watchId);
+watchId=null;
+active=false;
+paused=false;
+}
+
+// ================= UI =================
 function render(){
 const l=document.getElementById('list');
 l.innerHTML="";
@@ -318,9 +291,17 @@ l.innerHTML+=`
 });
 }
 
-// ================= BUTTON =================
+// ================= BUTTONS =================
 document.getElementById('startBtn').onclick=()=>{
-startSim();
+
+if(!active){
+active=true;
+startTracking();
+document.getElementById('startBtn').textContent="⏹️ Stop";
+}else{
+stopTracking();
+document.getElementById('startBtn').textContent="▶️ Start";
+}
 };
 
 </script>
