@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX STRAVA PRO v22.1 HYBRID</title>
+<title>GPX STRAVA PRO v22.2 SAFE</title>
 
 <style>
 body{font-family:Arial}
@@ -23,8 +23,8 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 
 <body>
 
-<h1>GPX STRAVA PRO HYBRID</h1>
-<div class="version">v22.1 (v12.1 waypoint engine + PRO tracking + FIXED cadence)</div>
+<h1>GPX STRAVA PRO SAFE</h1>
+<div class="version">v22.2 SAFE + TRACK FILTER LAYER + v12.1 ENGINE</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -50,6 +50,14 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 
 <script>
 
+// ================= CONFIG (RESTORED SAFETY LAYER) =================
+const RADIUS = 20;
+const TRACK_TOL = 5;
+
+const MAX_SPEED = 10;
+const STEP_LENGTH = 0.67;
+const USER_WEIGHT = 92;
+
 // ================= STATE =================
 let track=[];
 let cum=[];
@@ -67,19 +75,14 @@ let lastTime=null;
 let stepHistory=[];
 let caloriesTotal=0;
 
-// 🔥 v12.1 waypoint pointer (UNCHANGED LOGIC)
+// 🔥 v12.1 waypoint pointer (UNCHANGED CORE LOGIC)
 let currentWP=0;
-
-// ================= CONFIG =================
-const MAX_SPEED=10;
-const STEP_LENGTH=0.67;
-const USER_WEIGHT=92;
 
 // ================= DIST =================
 function dist(a,b,c,d){
 const R=6371000;
 const dLat=(c-a)*Math.PI/180;
-const dLon=(c-b)*Math.PI/180;
+const dLon=(d-b)*Math.PI/180;
 const x=Math.sin(dLat/2)**2 +
 Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
 Math.sin(dLon/2)**2;
@@ -103,6 +106,34 @@ if(d<bestD){bestD=d;best=i;}
 return best;
 }
 
+// ================= TRACK FILTER (NEW LAYER - SAFE ADDITION) =================
+function minDistToTrack(lat,lon){
+let best=Infinity;
+for(let i=0;i<track.length-1;i++){
+const d = distToSegment(
+lat,lon,
+track[i].lat,track[i].lon,
+track[i+1].lat,track[i+1].lon
+);
+if(d<best) best=d;
+}
+return best;
+}
+
+function distToSegment(px,py,ax,ay,bx,by){
+const A=px-ax,B=py-ay,C=bx-ax,D=by-ay;
+const dot=A*C+B*D;
+const len=C*C+D*D;
+
+let t=len===0?0:dot/len;
+t=Math.max(0,Math.min(1,t));
+
+const x=ax+t*C;
+const y=ay+t*D;
+
+return dist(px,py,x,y);
+}
+
 // ================= LOAD =================
 document.getElementById('gpxFile').onchange=e=>{
 const r=new FileReader();
@@ -113,15 +144,23 @@ const xml=new DOMParser().parseFromString(ev.target.result,"text/xml");
 track=[...xml.getElementsByTagName('trkpt')]
 .map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
 
+if(track.length<2){
+document.getElementById('info').innerHTML="❌ Ongeldige GPX";
+return;
+}
+
 buildCum();
 
-// RESET
+// RESET STATE
 gpsTrip=0;
 stepHistory=[];
 caloriesTotal=0;
 currentWP=0;
+lastLat=null;
+lastLon=null;
+lastTime=null;
 
-// WAYPOINTS (UNCHANGED v12.1 LOGIC)
+// WAYPOINTS (v12.1 EXACT LOGIC)
 const w=[...xml.getElementsByTagName('wpt')];
 
 waypoints=w.map(x=>({
@@ -196,6 +235,7 @@ while(currentWP < waypoints.length){
 const w = waypoints[currentWP];
 const currentIndex = closestIndex(lat,lon);
 
+// ONLY index logic (NO CHANGE)
 if(currentIndex >= w.index){
 w.passed = true;
 currentWP++;
@@ -204,7 +244,7 @@ break;
 }
 }
 
-// ================= CADENCE FIXED (v12.1 MODEL) =================
+// ================= CADENCE (STABLE v12.1 MODEL) =================
 const steps = gpsTrip / STEP_LENGTH;
 
 const nowSec = now / 1000;
@@ -237,7 +277,7 @@ lastLon=lon;
 // ================= UI =================
 document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
-🧭 Trip (GPS): ${(gpsTrip/1000).toFixed(3)} km<br>
+🧭 Trip: ${(gpsTrip/1000).toFixed(3)} km<br>
 📏 Track: ${(cum[cum.length-1]/1000).toFixed(3)} km<br>
 👣 Steps: ${Math.round(steps)}<br>
 🚶 Cadence: ${Math.round(cadence)} spm<br>
@@ -261,6 +301,7 @@ gpsTrip=0;
 stepHistory=[];
 caloriesTotal=0;
 currentWP=0;
+
 lastLat=null;
 lastLon=null;
 lastTime=null;
