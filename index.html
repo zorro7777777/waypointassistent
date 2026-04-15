@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Strava Engine v27 FIELD</title>
+<title>Strava Engine v28 FORWARD</title>
 
 <style>
 body{font-family:Arial}
@@ -18,18 +18,14 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 .startBtn{background:#2ecc71}
 .resetBtn{background:#3498db}
 
-.slow{
-color:#e74c3c;
-font-weight:bold;
-margin-left:10px;
-}
+.slow{color:#e74c3c;font-weight:bold;margin-left:10px;}
 </style>
 </head>
 
 <body>
 
-<h1>GPX STRAVA ENGINE v27 FIELD</h1>
-<div class="version">TRUE PASS + ANTI-OMMETJE + STABLE GPS CORE</div>
+<h1>GPX STRAVA ENGINE v28</h1>
+<div class="version">FORWARD TRACKING + ANTI-CROSSING</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -68,6 +64,7 @@ let lastLat=null;
 let lastLon=null;
 
 let maxRoutePos=0;
+let lastIndex=0; // 🔥 NEW
 
 // ================= CONFIG =================
 const RADIUS=20;
@@ -96,19 +93,25 @@ track[i+1].lat,track[i+1].lon
 }
 }
 
-// ================= ROUTE POSITION =================
-function projectOnRoute(lat,lon){
-let best=Infinity;
-let bestPos=0;
+// ================= FORWARD PROJECT =================
+function projectForward(lat,lon){
 
-for(let i=0;i<track.length;i++){
+let bestDist=Infinity;
+let bestIndex=lastIndex;
+
+// 🔥 alleen vooruit zoeken
+for(let i=lastIndex;i<track.length;i++){
 const d=dist(lat,lon,track[i].lat,track[i].lon);
-if(d<best){
-best=d;
-bestPos=cumDist[i];
+if(d<bestDist){
+bestDist=d;
+bestIndex=i;
 }
 }
-return bestPos;
+
+// update index
+lastIndex=bestIndex;
+
+return cumDist[bestIndex];
 }
 
 // ================= DIST TO TRACK =================
@@ -151,6 +154,7 @@ gpsTrip=0;
 lastLat=null;
 lastLon=null;
 maxRoutePos=0;
+lastIndex=0;
 
 active=false;
 
@@ -175,6 +179,7 @@ gpsTrip=0;
 lastLat=null;
 lastLon=null;
 maxRoutePos=0;
+lastIndex=0;
 active=false;
 
 // WAYPOINTS
@@ -187,8 +192,6 @@ routePos:0,
 passed:false,
 missed:false,
 segment:0,
-
-// 🔥 TRUE PASS STATE
 touched:false,
 minDist:Infinity
 }));
@@ -219,17 +222,15 @@ minDist:Infinity
 
 // routePos
 waypoints.forEach(w=>{
-w.routePos=projectOnRoute(w.lat,w.lon);
+w.routePos=projectForward(w.lat,w.lon);
 });
 
+// sort
 waypoints.sort((a,b)=>a.routePos-b.routePos);
 
-// segments correct
+// segments
 for(let i=0;i<waypoints.length;i++){
-if(i===0){
-waypoints[i].segment=0;
-continue;
-}
+if(i===0){waypoints[i].segment=0;continue;}
 waypoints[i].segment=waypoints[i].routePos-waypoints[i-1].routePos;
 }
 
@@ -242,7 +243,7 @@ r.readAsText(e.target.files[0]);
 // ================= ENGINE =================
 function process(lat,lon){
 
-const pos=projectOnRoute(lat,lon);
+const pos=projectForward(lat,lon);
 
 if(pos>maxRoutePos){
 maxRoutePos=pos;
@@ -253,24 +254,18 @@ for(let w of waypoints){
 if(w.passed||w.missed) continue;
 
 const onTrack=minDistToTrack(w.lat,w.lon)<=TRACK_TOL;
-
-if(!onTrack){
-continue;
-}
+if(!onTrack) continue;
 
 const d=dist(lat,lon,w.lat,w.lon);
 
-// track best approach
 if(d<w.minDist){
 w.minDist=d;
 }
 
-// mark real contact
 if(d<=RADIUS){
 w.touched=true;
 }
 
-// PASS RULE (STRICT)
 const passedRoute=pos>=w.routePos-RADIUS;
 
 if(passedRoute && w.touched){
@@ -278,7 +273,6 @@ w.passed=true;
 continue;
 }
 
-// MISS RULE
 if(maxRoutePos>w.routePos+RADIUS && !w.passed){
 w.missed=true;
 }
@@ -300,11 +294,10 @@ const lat=p.coords.latitude;
 const lon=p.coords.longitude;
 const speed=(p.coords.speed||0)*3.6;
 
-// distance
 let d=0;
 if(lastLat){
 d=dist(lastLat,lastLon,lat,lon);
-if(d>0.3 && d<25){
+if(d>0.3 && d<25 && speed>=MIN_SPEED){
 gpsTrip+=d;
 }
 }
@@ -314,7 +307,6 @@ process(lat,lon);
 lastLat=lat;
 lastLon=lon;
 
-// SPEED WARNING
 let slow="";
 if(speed<MIN_SPEED){
 slow="⏸ STILSTAND";
@@ -329,13 +321,6 @@ document.getElementById('info').innerHTML=`
 render();
 
 },console.error,{enableHighAccuracy:true});
-}
-
-// ================= STOP =================
-function stopTracking(){
-navigator.geolocation.clearWatch(watchId);
-watchId=null;
-active=false;
 }
 
 // ================= UI =================
@@ -358,13 +343,8 @@ l.innerHTML+=`
 }
 
 // ================= BUTTONS =================
-document.getElementById('startBtn').onclick=()=>{
-startTracking();
-};
-
-document.getElementById('resetBtn').onclick=()=>{
-resetAll();
-};
+document.getElementById('startBtn').onclick=()=>startTracking();
+document.getElementById('resetBtn').onclick=()=>resetAll();
 
 </script>
 
