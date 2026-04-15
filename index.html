@@ -70,8 +70,8 @@ let lastLon=null;
 let maxRoutePos=0;
 
 // ================= CONFIG =================
-const RADIUS=20;
-const TRACK_TOL=10;
+const RADIUS=10;
+const TRACK_TOL=5;
 const MIN_SPEED=1;
 
 // ================= DIST =================
@@ -297,7 +297,7 @@ const speed=(p.coords.speed||0)*3.6;
 let d=0;
 if(lastLat){
 d=dist(lastLat,lastLon,lat,lon);
-if(d>0.3 && d<25){
+if(d>0.3 && d<11){
 gpsTrip+=d;
 }
 }
