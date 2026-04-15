@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Strava PRO Engine v21.1 FIX</title>
+<title>Strava WALK PRO v22 FIX</title>
 
 <style>
 body{font-family:Arial}
@@ -23,8 +23,8 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 
 <body>
 
-<h1>GPX Strava PRO Engine</h1>
-<div class="version">v21.1 FIX + Stable Load + Table Fix</div>
+<h1>GPX WALK STRAVA ENGINE</h1>
+<div class="version">v22 FIX + Segment Correctie + Walk Mode</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -61,29 +61,18 @@ let paused=false;
 
 let maxRoutePos=0;
 
-// GPS smoothing
-let buffer=[];
-
-// warmup
-let warmup=true;
-let fixCount=0;
-
-// metrics
 let gpsTrip=0;
 let lastLat=null;
 let lastLon=null;
 let lastTime=null;
 
-// ================= CONFIG =================
+// ================= CONFIG (WALK MODE) =================
 const RADIUS=20;
-const TRACK_TOL=7;
+const TRACK_TOL=10;
+const MAX_SPEED_KMH=8;
 
 const STEP_LENGTH=0.67;
 const USER_WEIGHT=75;
-
-const BUFFER_SIZE=5;
-const MAX_STEP_DISTANCE=30;
-const MAX_SPEED_KMH=12;
 
 // ================= DIST =================
 function dist(a,b,c,d){
@@ -105,19 +94,24 @@ cumDist[i+1]=(cumDist[i]||0)+d;
 }
 }
 
-// ================= PROJECT =================
+// ================= PROJECT (FIXED STABLE VERSION) =================
 function projectOnRoute(lat,lon){
 let bestDist=Infinity;
 let bestPos=0;
 
 for(let i=0;i<track.length;i++){
 const d=dist(lat,lon,track[i].lat,track[i].lon);
+
+// 🔥 FIX: ignore NaN / unstable jumps
+if(!isFinite(d)) continue;
+
 if(d<bestDist){
 bestDist=d;
 bestPos=cumDist[i];
 }
 }
-return bestPos;
+
+return bestPos || 0;
 }
 
 // ================= DIST TO TRACK =================
@@ -155,8 +149,7 @@ const xml=new DOMParser().parseFromString(ev.target.result,"text/xml");
 track=[...xml.getElementsByTagName('trkpt')]
 .map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
 
-// SAFETY CHECK
-if(!track || track.length<2){
+if(track.length<2){
 document.getElementById('info').innerHTML="❌ Ongeldige GPX";
 return;
 }
@@ -166,12 +159,9 @@ buildPolyline();
 // RESET
 maxRoutePos=0;
 gpsTrip=0;
-buffer=[];
 lastLat=null;
 lastLon=null;
 lastTime=null;
-warmup=true;
-fixCount=0;
 
 // WAYPOINTS
 waypoints=[...xml.getElementsByTagName('wpt')]
@@ -194,21 +184,37 @@ waypoints.push({
 name:"Einde",lat:track.at(-1).lat,lon:track.at(-1).lon,routePos:0,passed:false,missed:false,segment:0
 });
 
+// PROJECT
+waypoints.forEach(w=>{
+w.routePos=projectOnRoute(w.lat,w.lon);
+});
+
 // SORT
-waypoints.forEach(w=>w.routePos=projectOnRoute(w.lat,w.lon));
 waypoints.sort((a,b)=>a.routePos-b.routePos);
 
-// SEGMENTS
+// ================= SEGMENTS (FIXED) =================
 for(let i=0;i<waypoints.length;i++){
-if(i===0){waypoints[i].segment=0;continue;}
-waypoints[i].segment=Math.max(0,waypoints[i].routePos-waypoints[i-1].routePos);
+if(i===0){
+waypoints[i].segment=0;
+continue;
 }
 
-// FIXED UI UPDATE (NO CRASH)
+const prev=waypoints[i-1];
+const curr=waypoints[i];
+
+// 🔥 FIX: minimum segment voorkomt 0m bug
+let seg=curr.routePos-prev.routePos;
+
+if(!isFinite(seg) || seg<1){
+seg=1; // minimum 1 meter (anti overlap / rounding bug)
+}
+
+curr.segment=seg;
+}
+
 document.getElementById('info').innerHTML=
 `✅ GPX geladen<br>
-📏 ${(cumDist.at(-1)/1000).toFixed(2)} km<br>
-📌 Waypoints: ${waypoints.length}`;
+📏 ${(cumDist.at(-1)/1000).toFixed(2)} km`;
 
 render();
 };
@@ -227,42 +233,19 @@ if(!active || paused) return;
 
 const lat=p.coords.latitude;
 const lon=p.coords.longitude;
-const speed=(p.coords.speed||0)*3.6;
+const speed=Math.min((p.coords.speed||0)*3.6, MAX_SPEED_KMH);
 const now=p.timestamp||Date.now();
 
-// ================= WARMUP =================
-fixCount++;
-
-if(fixCount<5){
-document.getElementById('info').innerHTML=
-`📡 GPS stabilisatie (${fixCount}/5)`;
-return;
-}
-
-warmup=false;
-
-// ================= ANTI JUMP =================
-if(lastLat){
-const stepDist=dist(lastLat,lastLon,lat,lon);
-if(stepDist>MAX_STEP_DISTANCE) return;
-}
-
-if(speed>MAX_SPEED_KMH) return;
-
-// ================= SMOOTHING =================
 let d=0;
 if(lastLat){
 d=dist(lastLat,lastLon,lat,lon);
-buffer.push(d);
-if(buffer.length>BUFFER_SIZE) buffer.shift();
-d=buffer.reduce((a,b)=>a+b,0)/buffer.length;
-}
 gpsTrip+=d;
+}
 
 const pos=projectOnRoute(lat,lon);
 if(pos>maxRoutePos) maxRoutePos=pos;
 
-// ================= WAYPOINT ENGINE =================
+// WAYPOINT ENGINE
 for(let w of waypoints){
 
 if(w.passed||w.missed) continue;
@@ -276,7 +259,7 @@ if(pos>=w.routePos-RADIUS){w.passed=true;continue;}
 if(maxRoutePos>w.routePos+RADIUS){w.missed=true;}
 }
 
-// ================= METRICS =================
+// METRICS
 let dt=lastTime?(now-lastTime)/1000:1;
 lastTime=now;
 
@@ -289,7 +272,7 @@ const calories=(gpsTrip/1000)*USER_WEIGHT*MET;
 lastLat=lat;
 lastLon=lon;
 
-// ================= UI =================
+// UI
 document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(5)}, ${lon.toFixed(5)}<br>
 📏 Track: ${(cumDist.at(-1)/1000).toFixed(2)} km<br>
@@ -305,13 +288,6 @@ render();
 },console.error,{enableHighAccuracy:true});
 }
 
-function stopTracking(){
-navigator.geolocation.clearWatch(watchId);
-watchId=null;
-active=false;
-paused=false;
-}
-
 // ================= BUTTONS =================
 const startBtn=document.getElementById('startBtn');
 const pauseBtn=document.getElementById('pauseBtn');
@@ -324,10 +300,7 @@ startBtn.textContent="⏹️ Stop";
 startBtn.className="stopBtn";
 pauseBtn.disabled=false;
 }else{
-stopTracking();
-startBtn.textContent="▶️ Start";
-startBtn.className="startBtn";
-pauseBtn.disabled=true;
+location.reload(); // clean reset (BELANGRIJK voor veldtesten)
 }
 };
 
