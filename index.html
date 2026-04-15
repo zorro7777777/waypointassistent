@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX STRAVA PRO v22.2 SAFE</title>
+<title>Strava Engine v24 FINAL</title>
 
 <style>
 body{font-family:Arial}
@@ -23,8 +23,8 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 
 <body>
 
-<h1>GPX STRAVA PRO SAFE</h1>
-<div class="version">v22.2 SAFE + TRACK FILTER LAYER + v12.1 ENGINE</div>
+<h1>GPX STRAVA ENGINE v24 FINAL</h1>
+<div class="version">Stable Core + 3-layer waypoint system</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -50,9 +50,9 @@ button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:wh
 
 <script>
 
-// ================= CONFIG (RESTORED SAFETY LAYER) =================
+// ================= CONFIG =================
 const RADIUS = 20;
-const TRACK_TOL = 5;
+const TRACK_TOL = 10;
 
 const MAX_SPEED = 10;
 const STEP_LENGTH = 0.67;
@@ -75,7 +75,7 @@ let lastTime=null;
 let stepHistory=[];
 let caloriesTotal=0;
 
-// 🔥 v12.1 waypoint pointer (UNCHANGED CORE LOGIC)
+let maxRoutePos=0;
 let currentWP=0;
 
 // ================= DIST =================
@@ -106,20 +106,22 @@ if(d<bestD){bestD=d;best=i;}
 return best;
 }
 
-// ================= TRACK FILTER (NEW LAYER - SAFE ADDITION) =================
-function minDistToTrack(lat,lon){
+// ================= ROUTE PROJECTION =================
+function projectOnRoute(lat,lon){
 let best=Infinity;
-for(let i=0;i<track.length-1;i++){
-const d = distToSegment(
-lat,lon,
-track[i].lat,track[i].lon,
-track[i+1].lat,track[i+1].lon
-);
-if(d<best) best=d;
+let bestPos=0;
+
+for(let i=0;i<track.length;i++){
+const d=dist(lat,lon,track[i].lat,track[i].lon);
+if(d<best){
+best=d;
+bestPos=cum[i];
 }
-return best;
+}
+return bestPos || 0;
 }
 
+// ================= DIST TO TRACK =================
 function distToSegment(px,py,ax,ay,bx,by){
 const A=px-ax,B=py-ay,C=bx-ax,D=by-ay;
 const dot=A*C+B*D;
@@ -132,6 +134,15 @@ const x=ax+t*C;
 const y=ay+t*D;
 
 return dist(px,py,x,y);
+}
+
+function minDistToTrack(lat,lon){
+let best=Infinity;
+for(let i=0;i<track.length-1;i++){
+const d=distToSegment(lat,lon,track[i].lat,track[i].lon,track[i+1].lat,track[i+1].lon);
+if(d<best) best=d;
+}
+return best;
 }
 
 // ================= LOAD =================
@@ -151,33 +162,37 @@ return;
 
 buildCum();
 
-// RESET STATE
+// RESET
 gpsTrip=0;
 stepHistory=[];
 caloriesTotal=0;
+maxRoutePos=0;
 currentWP=0;
 lastLat=null;
 lastLon=null;
 lastTime=null;
 
-// WAYPOINTS (v12.1 EXACT LOGIC)
+// ================= WAYPOINTS (CORE ARCHITECTURE) =================
 const w=[...xml.getElementsByTagName('wpt')];
 
 waypoints=w.map(x=>({
 name:x.getElementsByTagName('name')[0]?.textContent||"WP",
 lat:+x.getAttribute('lat'),
 lon:+x.getAttribute('lon'),
-index:0,
+routePos:0,
 passed:false,
+missed:false,
 segment:0
 }));
 
+// START + END
 waypoints.unshift({
 name:"Start",
 lat:track[0].lat,
 lon:track[0].lon,
-index:0,
-passed:false,
+routePos:0,
+passed:true,
+missed:false,
 segment:0
 });
 
@@ -185,22 +200,25 @@ waypoints.push({
 name:"Einde",
 lat:track.at(-1).lat,
 lon:track.at(-1).lon,
-index:track.length-1,
+routePos:0,
 passed:false,
+missed:false,
 segment:0
 });
 
-// SORT (v12.1)
-waypoints.forEach(w=>w.index=closestIndex(w.lat,w.lon));
-waypoints.sort((a,b)=>a.index-b.index);
+// ================= SORT =================
+waypoints.forEach(w=>{
+w.routePos=projectOnRoute(w.lat,w.lon);
+});
+waypoints.sort((a,b)=>a.routePos-b.routePos);
 
-// SEGMENTS (v12.1 safe)
+// ================= SEGMENTS =================
 for(let i=0;i<waypoints.length;i++){
 if(i===0){waypoints[i].segment=0;continue;}
 const prev=waypoints[i-1];
 const curr=waypoints[i];
-const seg=cum[curr.index]-cum[prev.index];
-waypoints[i].segment=(seg>0 && isFinite(seg)) ? seg : 0;
+const seg=cum[curr.index||0]-cum[prev.index||0];
+curr.segment=(seg>0 && isFinite(seg))?seg:0;
 }
 
 render();
@@ -208,6 +226,40 @@ render();
 
 r.readAsText(e.target.files[0]);
 };
+
+// ================= CORE ENGINE (YOUR 3-LAYER SYSTEM) =================
+function process(lat,lon){
+
+const pos = projectOnRoute(lat,lon);
+
+if(pos > maxRoutePos){
+maxRoutePos = pos;
+}
+
+for(let w of waypoints){
+
+if(w.passed || w.missed) continue;
+
+// ================= LAYER 1: GEOMETRY =================
+const onTrack = minDistToTrack(w.lat,w.lon) <= TRACK_TOL;
+
+if(!onTrack){
+w.missed = true;
+continue;
+}
+
+// ================= LAYER 2: PASS =================
+if(pos >= w.routePos - RADIUS){
+w.passed = true;
+continue;
+}
+
+// ================= LAYER 3: OVERSHOOT MISS =================
+if(maxRoutePos > w.routePos + RADIUS){
+w.missed = true;
+}
+}
+}
 
 // ================= GPS =================
 function startTracking(){
@@ -219,10 +271,9 @@ if(!active||paused) return;
 const lat=p.coords.latitude;
 const lon=p.coords.longitude;
 const acc=p.coords.accuracy||999;
-const speed=Math.min((p.coords.speed||0)*3.6, MAX_SPEED);
+const speed=Math.min((p.coords.speed||0)*3.6,MAX_SPEED);
 const now=p.timestamp||Date.now();
 
-// ================= DIST =================
 let d=0;
 if(lastLat) d=dist(lastLat,lastLon,lat,lon);
 
@@ -230,21 +281,9 @@ if(d>0.3 && d<25 && acc<30){
 gpsTrip+=d;
 }
 
-// ================= WAYPOINT ENGINE (UNCHANGED v12.1) =================
-while(currentWP < waypoints.length){
-const w = waypoints[currentWP];
-const currentIndex = closestIndex(lat,lon);
+process(lat,lon);
 
-// ONLY index logic (NO CHANGE)
-if(currentIndex >= w.index){
-w.passed = true;
-currentWP++;
-}else{
-break;
-}
-}
-
-// ================= CADENCE (STABLE v12.1 MODEL) =================
+// ================= CADENCE (STABLE v12.1) =================
 const steps = gpsTrip / STEP_LENGTH;
 
 const nowSec = now / 1000;
@@ -255,19 +294,19 @@ stepHistory = stepHistory.filter(x => (nowSec - x.t) <= 60);
 let cadence=0;
 
 if(stepHistory.length>1){
-const first = stepHistory[0];
-const last = stepHistory[stepHistory.length-1];
+const first=stepHistory[0];
+const last=stepHistory[stepHistory.length-1];
 
-const dt = (last.t - first.t) / 60;
-const ds = last.s - first.s;
+const dt=(last.t-first.t)/60;
+const ds=last.s-first.s;
 
-cadence = dt>0 ? ds/dt : 0;
+cadence=dt>0?ds/dt:0;
 }
 
 // ================= CALORIES =================
 let dtSec = lastTime ? (now-lastTime)/1000 : 0;
 if(dtSec>0 && dtSec<10){
-caloriesTotal += (speed/3.6) * USER_WEIGHT * 0.9 * (dtSec/3600);
+caloriesTotal += (speed/3.6)*USER_WEIGHT*0.9*(dtSec/3600);
 }
 
 lastTime=now;
@@ -277,12 +316,12 @@ lastLon=lon;
 // ================= UI =================
 document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
-🧭 Trip: ${(gpsTrip/1000).toFixed(3)} km<br>
-📏 Track: ${(cum[cum.length-1]/1000).toFixed(3)} km<br>
-👣 Steps: ${Math.round(steps)}<br>
-🚶 Cadence: ${Math.round(cadence)} spm<br>
-🚶 Speed: ${speed.toFixed(2)} km/u<br>
-🔥 Calories: ${caloriesTotal.toFixed(0)} kcal
+🧭 Trip ${(gpsTrip/1000).toFixed(3)} km<br>
+📏 Track ${(cum[cum.length-1]/1000).toFixed(3)} km<br>
+👣 Steps ${Math.round(steps)}<br>
+🚶 Cadence ${Math.round(cadence)} spm<br>
+🚶 Speed ${speed.toFixed(2)} km/u<br>
+🔥 Calories ${caloriesTotal.toFixed(0)} kcal
 `;
 
 render();
@@ -323,7 +362,7 @@ l.innerHTML+=`
 <tr>
 <td>${w.passed?"✅":"⏳"}</td>
 <td class="${c}">${w.name}</td>
-<td>${w.segment.toFixed(1)}</td>
+<td>${(w.segment||0).toFixed(1)}</td>
 </tr>`;
 });
 }
