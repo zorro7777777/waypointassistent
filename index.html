@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Strava Engine v25.3 FINAL</title>
+<title>Strava Engine v26 FIELD</title>
 
 <style>
 body{font-family:Arial}
@@ -16,15 +16,20 @@ td,th{border:2px double black;padding:6px}
 button{flex:1;padding:12px;font-size:16px;border:none;border-radius:6px;color:white}
 
 .startBtn{background:#2ecc71}
-.stopBtn{background:#e74c3c}
 .resetBtn{background:#3498db}
+
+.slow{
+color:#e74c3c;
+font-weight:bold;
+margin-left:10px;
+}
 </style>
 </head>
 
 <body>
 
-<h1>GPX STRAVA ENGINE v25.3 FINAL</h1>
-<div class="version">RESET + AUTO END + SAFE GPX FLOW</div>
+<h1>GPX STRAVA ENGINE v26 FIELD</h1>
+<div class="version">SEGMENTS FIX + SPEED ALERT + STABLE CORE</div>
 
 <input type="file" id="gpxFile" accept=".gpx">
 
@@ -67,6 +72,7 @@ let maxRoutePos=0;
 // ================= CONFIG =================
 const RADIUS=20;
 const TRACK_TOL=10;
+const MIN_SPEED=1;
 
 // ================= DIST =================
 function dist(a,b,c,d){
@@ -76,7 +82,7 @@ const dLon=(d-b)*Math.PI/180;
 const x=Math.sin(dLat/2)**2 +
 Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
 Math.sin(dLon/2)**2;
-return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(x));
+return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
 
 // ================= POLYLINE =================
@@ -90,7 +96,7 @@ track[i+1].lat,track[i+1].lon
 }
 }
 
-// ================= ROUTE =================
+// ================= ROUTE POSITION =================
 function projectOnRoute(lat,lon){
 let best=Infinity;
 let bestPos=0;
@@ -105,7 +111,7 @@ bestPos=cumDist[i];
 return bestPos;
 }
 
-// ================= TRACK DIST =================
+// ================= DIST TO TRACK =================
 function pointToSegment(px,py,ax,ay,bx,by){
 const A=px-ax,B=py-ay,C=bx-ax,D=by-ay;
 const dot=A*C+B*D;
@@ -129,29 +135,6 @@ if(d<best) best=d;
 return best;
 }
 
-// ================= RESET (FIXED) =================
-function resetAll(){
-
-if(watchId){
-navigator.geolocation.clearWatch(watchId);
-watchId=null;
-}
-
-track=[];
-waypoints=[];
-cumDist=[];
-
-gpsTrip=0;
-lastLat=null;
-lastLon=null;
-maxRoutePos=0;
-
-active=false;
-
-document.getElementById('info').innerHTML="🔄 Reset klaar - nieuwe GPX kan geladen worden";
-document.getElementById('list').innerHTML="";
-}
-
 // ================= LOAD =================
 document.getElementById('gpxFile').onchange=e=>{
 const r=new FileReader();
@@ -164,11 +147,11 @@ track=[...xml.getElementsByTagName('trkpt')]
 
 buildPolyline();
 
-// SAFE RESET STATE
+// reset
 gpsTrip=0;
+maxRoutePos=0;
 lastLat=null;
 lastLon=null;
-maxRoutePos=0;
 active=false;
 
 // waypoints
@@ -203,15 +186,19 @@ missed:false,
 segment:0
 });
 
+// routePos
 waypoints.forEach(w=>{
 w.routePos=projectOnRoute(w.lat,w.lon);
 });
 
 waypoints.sort((a,b)=>a.routePos-b.routePos);
 
-// segments correct
+// SEGMENTS FIX (CORRECT)
 for(let i=0;i<waypoints.length;i++){
-if(i===0){waypoints[i].segment=0;continue;}
+if(i===0){
+waypoints[i].segment=0;
+continue;
+}
 waypoints[i].segment=waypoints[i].routePos-waypoints[i-1].routePos;
 }
 
@@ -251,13 +238,6 @@ if(maxRoutePos>w.routePos+RADIUS){
 w.missed=true;
 }
 }
-
-// ================= AUTO END STOP =================
-const end=waypoints[waypoints.length-1];
-if(end && end.passed && active){
-stopTracking();
-document.getElementById('info').innerHTML+="<br>🏁 Wandeling voltooid";
-}
 }
 
 // ================= GPS =================
@@ -275,6 +255,7 @@ const lat=p.coords.latitude;
 const lon=p.coords.longitude;
 const speed=(p.coords.speed||0)*3.6;
 
+// distance
 let d=0;
 if(lastLat){
 d=dist(lastLat,lastLon,lat,lon);
@@ -288,9 +269,15 @@ process(lat,lon);
 lastLat=lat;
 lastLon=lon;
 
+// 🚨 SPEED ALERT
+let slowWarning="";
+if(speed < MIN_SPEED){
+slowWarning="⏸ STILSTAND";
+}
+
 document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
-🚶 ${speed.toFixed(2)} km/u<br>
+🚶 ${speed.toFixed(2)} km/u <span class="slow">${slowWarning}</span><br>
 🧭 ${(gpsTrip/1000).toFixed(3)} km
 `;
 
@@ -331,7 +318,20 @@ startTracking();
 };
 
 document.getElementById('resetBtn').onclick=()=>{
-resetAll();
+if(watchId){
+navigator.geolocation.clearWatch(watchId);
+watchId=null;
+}
+track=[];
+waypoints=[];
+cumDist=[];
+gpsTrip=0;
+lastLat=null;
+lastLon=null;
+active=false;
+
+document.getElementById('info').innerHTML="Reset klaar";
+document.getElementById('list').innerHTML="";
 };
 
 </script>
