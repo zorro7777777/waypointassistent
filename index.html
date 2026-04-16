@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v61 - Voice & UI Fix</title>
+    <title>GPX Engine v62 - Audio Restored</title>
     <style>
         body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -27,7 +27,7 @@
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0;">GPX ENGINE v61</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0;">GPX ENGINE v62</h1>
     
     <div class="stats-grid">
         <div class="stat-box"><span id="unit-label" class="stat-label">Stappen</span><span id="stat-steps" class="stat-val">0</span></div>
@@ -50,10 +50,10 @@
             </select>
         </div>
         <div class="row">
-            <label><input type="checkbox" id="voiceActive" checked> 🔊 Audio AAN</label>
+            <label><input type="checkbox" id="audioToggle" checked> 🔊 Audio AAN</label>
             <div>
-                <input type="radio" name="vType" value="vrouw" checked> Vrouw 
-                <input type="radio" name="vType" value="man"> Man
+                <input type="radio" name="voiceType" value="vrouw" checked> Vrouw 
+                <input type="radio" name="voiceType" value="man"> Man
             </div>
         </div>
         <div class="row">
@@ -61,7 +61,7 @@
         </div>
     </div>
 
-    <button onclick="testVoice()" class="test-audio">KLIK HIER OM STEM TE TESTEN</button>
+    <button onclick="testVoice()" class="test-audio">TEST STEM</button>
     
     <input type="file" id="gpxInput" accept=".gpx" style="width:100%; margin-bottom:10px; border:1px solid #ccc; padding:5px; border-radius:5px;">
     
@@ -70,7 +70,7 @@
         <button onclick="location.reload()" class="reset">RESET</button>
     </div>
     
-    <div id="info">Selecteer profiel en laad GPX...</div>
+    <div id="info">Systeem v62 gereed.</div>
 
     <div id="tableCon">
         <div class="summary-bar" id="wp-summary">Punten: 0 | ✅ 0 | ❌ 0</div>
@@ -91,29 +91,35 @@ let P = PROFS.wandelen, track = [], waypoints = [], cumDist = [], watchId = null
 let tripDist = 0, lastPos = null, isOffRoute = false, alertTime = 0;
 let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
 
+// ================= AUDIO ENGINE (Hersteld) =================
+function speak(tekst) {
+    if (!document.getElementById('audioToggle').checked) return;
+    const msg = new SpeechSynthesisUtterance(tekst);
+    msg.lang = 'nl-NL';
+    const voices = window.speechSynthesis.getVoices();
+    const isMan = document.querySelector('input[name="voiceType"]:checked').value === 'man';
+    
+    const voice = voices.find(v => v.lang.includes('NL') && 
+        (isMan ? (v.name.includes('Male') || v.name.includes('David')) : 
+                 (v.name.includes('Female') || v.name.includes('vrouw'))));
+    
+    if (voice) msg.voice = voice;
+    window.speechSynthesis.speak(msg);
+}
+
+// Zorg dat stemmen geladen worden
+window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
+
+function testVoice() { speak("Test van de audio engine. Werkt dit?"); }
+
 function toggleTable() {
-    const show = document.getElementById('showTable').checked;
-    document.getElementById('tableCon').style.display = show ? 'block' : 'none';
+    document.getElementById('tableCon').style.display = document.getElementById('showTable').checked ? 'block' : 'none';
 }
 
 function updateProfile() {
     P = PROFS[document.getElementById('profile').value];
     document.getElementById('unit-label').innerText = P.unit;
     speak("Profiel gewijzigd.");
-}
-
-function testVoice() {
-    speak("De audio werkt correct. Veel plezier.");
-}
-
-function speak(t) {
-    if (!document.getElementById('voiceActive').checked) return;
-    window.speechSynthesis.cancel();
-    const m = new SpeechSynthesisUtterance(t);
-    m.lang = 'nl-NL';
-    const isMan = document.querySelector('input[name="vType"]:checked').value === 'man';
-    m.pitch = isMan ? 0.8 : 1.2;
-    window.speechSynthesis.speak(m);
 }
 
 function getDist(a,b,c,d){
@@ -133,8 +139,7 @@ document.getElementById('gpxInput').onchange = e => {
     reader.onload = ev => {
         const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
         const pts = [...xml.getElementsByTagName('trkpt')];
-        if(!pts.length) { alert("Geen track gevonden!"); return; }
-        
+        if(!pts.length) return;
         track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
         cumDist = [0]; 
         for(let i=0; i<track.length-1; i++) cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
@@ -149,22 +154,16 @@ document.getElementById('gpxInput').onchange = e => {
         tempWpts.push({ name: "FINISH", lat: track[track.length-1].lat, lon: track[track.length-1].lon, passed: false, skipped: false, routePos: cumDist[cumDist.length-1] });
 
         waypoints = tempWpts.sort((a,b) => a.routePos - b.routePos);
-
-        for(let i=0; i<waypoints.length; i++) {
-            waypoints[i].segment = i === 0 ? 0 : waypoints[i].routePos - (waypoints[i-1]?.routePos || 0);
-        }
+        for(let i=0; i<waypoints.length; i++) waypoints[i].segment = i === 0 ? 0 : waypoints[i].routePos - (waypoints[i-1]?.routePos || 0);
         
         updateWPUI();
-        document.getElementById('info').innerText = "Route geladen. Klik op START.";
     };
     reader.readAsText(e.target.files[0]);
 };
 
 function updateWPUI() {
-    const p = waypoints.filter(w => w.passed).length;
-    const s = waypoints.filter(w => w.skipped).length;
-    document.getElementById('wp-summary').innerText = `Punten: ${waypoints.length} | ✅ ${p} | ❌ ${s} | ⏳ ${waypoints.length-p-s}`;
-    
+    const p = waypoints.filter(w => w.passed).length, s = waypoints.filter(w => w.skipped).length;
+    document.getElementById('wp-summary').innerText = `Punten: ${waypoints.length} | ✅ ${p} | ❌ ${s}`;
     document.getElementById('list').innerHTML = waypoints.map(w => `
         <tr style="${w.passed ? 'color:#27ae60;' : (w.skipped ? 'color:#e74c3c;text-decoration:line-through;' : '')}">
             <td>${w.passed ? '✅' : (w.skipped ? '❌' : '⏳')}</td>
@@ -181,16 +180,12 @@ function startGPS() {
     
     watchId = navigator.geolocation.watchPosition(p => {
         const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = p.coords;
-        const speedKmh = (s || 0) * 3.6;
-        const now = Date.now();
-        const dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
-        const R = getRInfo(lat, lon);
-        const dMove = lastPos ? getDist(lastPos.lat, lastPos.lon, lat, lon) : 0;
+        const skmh = (s || 0) * 3.6, now = Date.now(), dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
+        const R = getRInfo(lat, lon), dMove = lastPos ? getDist(lastPos.lat, lastPos.lon, lat, lon) : 0;
 
-        const isM = speedKmh >= (P.ms * 3.6) || (dMove >= P.th && acc < 25);
+        const isM = skmh >= (P.ms * 3.6) || (dMove >= P.th && acc < 25);
         if (isM) {
-            sport.movingTime += dt;
-            sport.steps += (dMove / P.th);
+            sport.movingTime += dt; sport.steps += (dMove / P.th);
             sport.kcal += ((P.met * 3.5 * 92) / 12000) * dt;
             if (acc < 25) tripDist += dMove;
             lastPos = { lat, lon };
@@ -198,41 +193,36 @@ function startGPS() {
             sport.idleTime += dt;
         }
 
-        if (R.off > 100 && (now - alertTime > 45000)) {
-            speak(`Afwijking ${Math.round(R.off)} meter`);
-            alertTime = now; isOffRoute = true;
-        } else if (isOffRoute && R.off < 30) {
-            speak("Terug op route"); isOffRoute = false;
-        }
+        if (R.off > 100 && (now - alertTime > 45000)) { speak("Let op, afwijking"); alertTime = now; isOffRoute = true; }
+        else if (isOffRoute && R.off < 30) { speak("Terug op route"); isOffRoute = false; }
 
         waypoints.forEach((w, i) => {
-            if (w.passed || w.skipped) return;
-            if (getDist(lat, lon, w.lat, w.lon) <= 12) {
-                w.passed = true; speak(w.name);
-                for (let j=0; j<i; j++) if(!waypoints[j].passed) waypoints[j].skipped = true;
-                updateWPUI();
-            } else if (R.pos > w.routePos + 25) {
-                w.skipped = true; updateWPUI();
+            if (!w.passed && !w.skipped) {
+                if (getDist(lat, lon, w.lat, w.lon) <= 12) {
+                    w.passed = true; speak(w.name);
+                    for (let j=0; j<i; j++) if(!waypoints[j].passed) waypoints[j].skipped = true;
+                    updateWPUI();
+                } else if (R.pos > w.routePos + 25) { w.skipped = true; updateWPUI(); }
             }
         });
 
-        const formatT = (sec) => new Date(sec * 1000).toISOString().substr(11, 8);
+        const fT = (sec) => new Date(sec * 1000).toISOString().substr(11, 8);
         document.getElementById('stat-steps').innerText = Math.round(sport.steps);
         document.getElementById('stat-trip').innerText = (tripDist/1000).toFixed(2);
         document.getElementById('stat-kcal').innerText = Math.round(sport.kcal);
-        document.getElementById('stat-moving').innerText = formatT(sport.movingTime);
-        document.getElementById('stat-idle').innerText = formatT(sport.idleTime);
-        document.getElementById('stat-cadence').innerText = Math.round(isM ? ((speedKmh/3.6 || 1.1)/P.th*60) : 0);
+        document.getElementById('stat-moving').innerText = fT(sport.movingTime);
+        document.getElementById('stat-idle').innerText = fT(sport.idleTime);
+        document.getElementById('stat-cadence').innerText = Math.round(isM ? ((skmh/3.6 || 1.1)/P.th*60) : 0);
         
-        const nextWP = waypoints.find(w => !w.passed && !w.skipped);
-        const avgSpeed = sport.movingTime > 0 ? (tripDist / sport.movingTime) * 3.6 : 0;
+        const nWP = waypoints.find(w => !w.passed && !w.skipped);
+        const avgS = sport.movingTime > 0 ? (tripDist / sport.movingTime) * 3.6 : 0;
 
         document.getElementById('info').innerHTML = `
-            <b style="color:${isOffRoute?'#e74c3c':'#00ff00'}">DOEL:</b> <span class="highlight">${nextWP ? nextWP.name : 'FINISH'}</span><br>
-            <b>AFSTAND:</b> <span class="highlight">${nextWP ? Math.max(0, Math.round(nextWP.routePos - R.pos)) : 0}m</span><br>
-            <b>GEM. SNELHEID:</b> ${avgSpeed.toFixed(1)} km/u<br>
+            <b style="color:${isOffRoute?'#e74c3c':'#00ff00'}">DOEL:</b> <span class="highlight">${nWP ? nWP.name : 'FINISH'}</span><br>
+            <b>AFSTAND:</b> <span class="highlight">${nWP ? Math.max(0, Math.round(nWP.routePos - R.pos)) : 0}m</span><br>
+            <b>GEM. SNELHEID:</b> ${avgS.toFixed(1)} km/u<br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <b>OFF-TRACK:</b> ${Math.round(R.off)}m | <b>GPS:</b> ${acc.toFixed(0)}m
+            <b>OFF-TRACK:</b> ${Math.round(R.off)}m | <b>GPS ACC:</b> ${acc.toFixed(0)}m
         `;
         sport.lastTick = now;
     }, null, { enableHighAccuracy: true });
