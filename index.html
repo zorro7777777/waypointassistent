@@ -83,7 +83,7 @@
 
 <script>
 const PROFS = {
-    wandelen: { ms: 0.42, th: 0.67, met: 3.5, unit: "Stappen" },
+    wandelen: { ms: 0.35, th: 0.67, met: 3.5, unit: "Stappen" },
     fietsen: { ms: 1.95, th: 2.10, met: 8.0, unit: "Omwentelingen" }
 };
 
@@ -187,12 +187,12 @@ function startGPS() {
         const R = getRInfo(lat, lon);
         const dMove = lastPos ? getDist(lastPos.lat, lastPos.lon, lat, lon) : 0;
 
-        const isM = speedKmh >= (P.ms * 3.6) || (dMove >= P.th && acc < 25);
+        const isM = speedKmh >= (P.ms * 3.6) || (dMove >= P.th && acc < 11);
         if (isM) {
             sport.movingTime += dt;
             sport.steps += (dMove / P.th);
             sport.kcal += ((P.met * 3.5 * 92) / 12000) * dt;
-            if (acc < 25) tripDist += dMove;
+            if (acc < 11) tripDist += dMove;
             lastPos = { lat, lon };
         } else if (sport.lastTick) {
             sport.idleTime += dt;
@@ -207,11 +207,11 @@ function startGPS() {
 
         waypoints.forEach((w, i) => {
             if (w.passed || w.skipped) return;
-            if (getDist(lat, lon, w.lat, w.lon) <= 12) {
+            if (getDist(lat, lon, w.lat, w.lon) <= 10) {
                 w.passed = true; speak(w.name);
                 for (let j=0; j<i; j++) if(!waypoints[j].passed) waypoints[j].skipped = true;
                 updateWPUI();
-            } else if (R.pos > w.routePos + 25) {
+            } else if (R.pos > w.routePos + 5) {
                 w.skipped = true; updateWPUI();
             }
         });
