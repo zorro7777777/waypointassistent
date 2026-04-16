@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v44 - Dual Voice Samsung</title>
+    <title>GPX Engine v45 - Field Master</title>
     <style>
         body { font-family: sans-serif; line-height: 1.5; padding: 10px; background: #f0f3f5; color: #2c3e50; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -28,7 +28,7 @@
 <body>
 
 <div class="card">
-    <h1>GPX ENGINE v44 PRO</h1>
+    <h1>GPX ENGINE v45 PRO</h1>
     <div class="stats-grid">
         <div class="stat-box"><span class="stat-label">Stappen</span><span id="stat-steps" class="stat-val">0</span></div>
         <div class="stat-box"><span class="stat-label">Act. Cadans</span><span id="stat-cadence" class="stat-val">0</span></div>
@@ -81,55 +81,26 @@ function toggleTable() { document.getElementById('tableContainer').style.display
 
 function speak(t) {
     if (!document.getElementById('audioToggle').checked) return;
-    
-    // Stop alle lopende spraak
     window.speechSynthesis.cancel();
-
     const m = new SpeechSynthesisUtterance(t);
     m.lang = 'nl-NL';
-    
-    // Verkrijg alle stemmen en filter op Nederlands
     let v = window.speechSynthesis.getVoices();
     let nlVoices = v.filter(x => x.lang.toLowerCase().includes('nl'));
-
     const isM = document.querySelector('input[name="voiceType"]:checked').value === 'man';
 
     if (isM) {
-        // PROBEER 1: Zoek op naam (Samsung/Google identifiers)
-        let man = nlVoices.find(x => 
-            x.name.toLowerCase().includes('male') || 
-            x.name.toLowerCase().includes('man') || 
-            x.name.toLowerCase().includes('dfz') || 
-            x.name.toLowerCase().includes('rle')
-        );
-
-        // PROBEER 2: Als geen 'man' gevonden, pak de tweede NL stem in de lijst
-        if (!man && nlVoices.length > 1) {
-            man = nlVoices[1];
-        }
-
-        if (man) {
-            m.voice = man;
-            m.pitch = 0.8; // Normale mannelijke toon
-        } else {
-            // PROBEER 3: Fail-safe - Forceer de enige stem naar een heel lage toon
-            m.pitch = 0.5; // Extreem laag, maakt van een vrouwenstem een mannenstem
-        }
+        let man = nlVoices.find(x => x.name.toLowerCase().includes('male') || x.name.toLowerCase().includes('man') || x.name.toLowerCase().includes('dfz') || x.name.toLowerCase().includes('rle'));
+        if (!man && nlVoices.length > 1) man = nlVoices[1];
+        if (man) { m.voice = man; m.pitch = 0.8; } else { m.pitch = 0.5; }
     } else {
-        // Vrouwenstem (altijd de eerste of standaard)
         m.voice = nlVoices[0];
         m.pitch = 1.0;
     }
-
     m.rate = 1.0;
     window.speechSynthesis.speak(m);
 }
 
-// Belangrijk voor Samsung/Chrome: Forceer herladen van stemmen
-window.speechSynthesis.onvoiceschanged = () => {
-    console.log("Voices geladen: ", window.speechSynthesis.getVoices().length);
-};
-// Extra trigger voor mobiel
+window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
 setTimeout(() => window.speechSynthesis.getVoices(), 500);
 
 function dist(a,b,c,d){
@@ -191,7 +162,7 @@ function startTracking() {
 
         if (!waypoints[0].passed) {
             const dS = dist(lat, lon, waypoints[0].lat, waypoints[0].lon);
-            document.getElementById('info').innerHTML = `<b style="color:#ffaa00;">GA NAAR START...</b><br>AFSTAND: <span class="highlight">${dS.toFixed(0)}m</span>`;
+            document.getElementById('info').innerHTML = `<b style="color:#ffaa00;">GA NAAR START...</b><br>AFSTAND: <span class="highlight">${dS.toFixed(0)}m</span><br><br><b>GPS:</b> ${acc.toFixed(1)}m`;
             if (dS <= CONFIG.radius) { waypoints[0].passed = true; sportData.lastTick = now; speak("Start bereikt"); render(); }
             return;
         }
@@ -220,13 +191,18 @@ function startTracking() {
             if (dist(lat, lon, w.lat, w.lon) <= CONFIG.radius) w.touched = true;
             if (curPos >= w.routePos - CONFIG.radius && w.touched) {
                 w.passed = true; speak(w.name + " bereikt");
-                if (i === waypoints.length - 1) { finished = true; navigator.geolocation.clearWatch(watchId); speak("Route voltooid"); }
+                if (i === waypoints.length - 1) { 
+                    finished = true; navigator.geolocation.clearWatch(watchId); speak("Route voltooid"); 
+                }
             }
         });
 
         const pC = waypoints.filter(w => w.passed).length;
+        const totalWPs = waypoints.length;
+        const currentWPDisplay = Math.min(pC + 1, totalWPs);
+
         document.getElementById('info').innerHTML = `
-            <b>WP:</b> <span class="highlight">${pC}/${waypoints.length}</span><br>
+            <b>WP:</b> <span class="highlight">${currentWPDisplay}/${totalWPs}</span> (OK:${pC})<br>
             <b>DOEL:</b> <span class="highlight">${nWP ? nWP.name : 'FINISH'}</span><br>
             <b>REST:</b> <span class="highlight">${Math.max(0, (nWP ? nWP.routePos - curPos : 0)).toFixed(0)}m</span><br>
             <b>GEM. CADANS:</b> <span class="highlight">${Math.round(sportData.movingTime > 0 ? sportData.totalSteps/(sportData.movingTime/60) : 0)} spm</span><br>
@@ -238,10 +214,6 @@ function startTracking() {
 }
 document.getElementById('startBtn').onclick = startTracking;
 document.getElementById('resetBtn').onclick = () => location.reload();
-
-// Browser trigger voor voices
-window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
-window.speechSynthesis.getVoices();
 </script>
 </body>
 </html>
