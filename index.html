@@ -252,57 +252,54 @@ function startTracking() {
         if (sportData.lastTick && !finished) {
             const deltaTime = (now - sportData.lastTick) / 1000;
             const isMoving = speedKmh >= CONFIG.minSpeed;
-            
             updateSportStats(speedKmh, isMoving, deltaTime);
 
             if (lastLat !== null && acc <= CONFIG.maxAcc && isMoving) {
                 const d = dist(lastLat, lastLon, lat, lon);
                 if (d > 0.2 && d < CONFIG.maxD) gpsTrip += d;
             }
-            
-            // Cadans berekening (stappen per minuut op basis van huidige snelheid)
-            const cadence = isMoving ? Math.round((speedKmh / 3.6 / sportData.stepLength) * 60) : 0;
-            
-            // UI Updates
-            document.getElementById('stat-steps').innerText = Math.round(sportData.totalSteps);
-            document.getElementById('stat-cadence').innerText = cadence;
-            document.getElementById('stat-kcal').innerText = Math.round(sportData.calories);
-            document.getElementById('stat-moving').innerText = formatDuration(sportData.movingTime);
-            document.getElementById('stat-idle').innerText = formatDuration(sportData.idleTime);
-            document.getElementById('stat-trip').innerText = (gpsTrip/1000).toFixed(2);
-            document.getElementById('stat-passed').innerText = waypoints.filter(w => w.passed).length;
-            document.getElementById('stat-missed').innerText = waypoints.filter(w => w.missed).length;
-            document.getElementById('stat-acc').innerText = acc.toFixed(0) + 'm';
         }
 
         process(lat, lon, acc);
         lastLat = lat; lastLon = lon;
         sportData.lastTick = now;
 
-        document.getElementById('info').innerHTML = `
-            ${speedKmh < CONFIG.minSpeed ? '⏸ PAUZE' : '▶ BEWEGING'}<br>
-            SNELHEID: ${speedKmh.toFixed(1)} km/u | ACC: ${acc.toFixed(1)}m
-        `;
+        // --- UPDATE DASHBOARD TELLER ---
+        const ok = waypoints.filter(w => w.passed).length;
+        const mis = waypoints.filter(w => w.missed).length;
+        
+        document.getElementById('stat-passed').innerText = ok;
+        document.getElementById('stat-missed').innerText = mis;
+        document.getElementById('stat-trip').innerText = (gpsTrip/1000).toFixed(2);
+        document.getElementById('stat-acc').innerText = acc.toFixed(0) + 'm';
+        
+        // Sport UI
+        document.getElementById('stat-steps').innerText = Math.round(sportData.totalSteps);
+        document.getElementById('stat-cadence').innerText = isMoving ? Math.round((speedKmh / 3.6 / sportData.stepLength) * 60) : 0;
+        document.getElementById('stat-kcal').innerText = Math.round(sportData.calories);
+        document.getElementById('stat-moving').innerText = formatDuration(sportData.movingTime);
+        document.getElementById('stat-idle').innerText = formatDuration(sportData.idleTime);
+
         render();
     }, null, { enableHighAccuracy: true });
 }
 
 function stopTracking(reason) {
     if (watchId) navigator.geolocation.clearWatch(watchId);
-    watchId = null; finished = true; active = false;
-    document.getElementById('info').innerHTML = `🏁 ${reason}<br>AFSTAND: ${(gpsTrip/1000).toFixed(3)} km`;
-    speak("Track beëindigd.");
-}
+    watchId = null; 
+    finished = true; 
+    active = false;
 
-function render() {
-    const tbody = document.getElementById('list');
-    tbody.innerHTML = waypoints.map(w => `
-        <tr style="${w.passed ? 'color:#27ae60; font-weight:bold;' : w.missed ? 'color:#e74c3c' : ''}">
-            <td>${w.passed ? '✅' : w.missed ? '❌' : '⏳'}</td>
-            <td>${w.name}</td>
-            <td class="dist-col">${w.segment.toFixed(0)} m</td>
-        </tr>
-    `).join('');
+    // Forceer alle resterende punten op 'missed' voor een kloppende eindstand
+    waypoints.forEach(w => {
+        if (!w.passed && !w.missed) w.missed = true;
+    });
+
+    render();
+    
+    const finaalOK = waypoints.filter(w => w.passed).length;
+    document.getElementById('info').innerHTML = `🏁 ${reason}<br>Eindscore: ${finaalOK} / ${waypoints.length} OK`;
+    speak("Wandeling voltooid.");
 }
 
 document.getElementById('startBtn').onclick = startTracking;
