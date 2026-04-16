@@ -202,27 +202,40 @@ document.getElementById('gpxFile').onchange = e => {
 
 function process(lat, lon, acc) {
     if (acc > CONFIG.maxAcc || finished) return;
+
     const curPos = projectOnRoute(lat, lon);
+    
+    // Alleen de maxRoutePos bijwerken als we een betrouwbaar signaal hebben
+    // We trekken de onnauwkeurigheid af van de huidige positie voor de 'missed' check
     if (curPos > maxRoutePos) maxRoutePos = curPos;
 
     waypoints.forEach((w, index) => {
         if (w.passed || w.missed) return;
         const d = dist(lat, lon, w.lat, w.lon);
+        
         if (d < w.minDist) w.minDist = d;
         if (d <= CONFIG.radius) w.touched = true;
+        
+        // Waypoint bereikt
         if (curPos >= w.routePos - CONFIG.radius && w.touched) {
             w.passed = true;
             speak(`${w.name} bereikt.`);
             if (index === waypoints.length - 1) stopTracking("FINISH BEREIKT");
         }
-        const missedMarge = CONFIG.radius * 3;
-        if (maxRoutePos > w.routePos + missedMarge && !w.passed) {
+
+        /* VERBETERDE MISSED LOGICA:
+           We markeren een punt pas als 'missed' als we er echt ver voorbij zijn.
+           Marge = Radius + de huidige GPS afwijking + een buffer van 10 meter.
+        */
+        const dynamicMissedMarge = CONFIG.radius + acc + 10; 
+        
+        if (maxRoutePos > w.routePos + dynamicMissedMarge && !w.passed) {
             w.missed = true;
             speak(`${w.name} gemist.`);
         }
     });
 }
-
+    
 function startTracking() {
     if (watchId || track.length === 0) return;
     active = true; finished = false;
