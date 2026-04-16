@@ -81,30 +81,56 @@ function toggleTable() { document.getElementById('tableContainer').style.display
 
 function speak(t) {
     if (!document.getElementById('audioToggle').checked) return;
+    
+    // Stop alle lopende spraak
     window.speechSynthesis.cancel();
+
     const m = new SpeechSynthesisUtterance(t);
     m.lang = 'nl-NL';
     
-    // Samsung dual-voice finder
-    const v = window.speechSynthesis.getVoices();
-    const nlVoices = v.filter(x => x.lang.toLowerCase().includes('nl'));
+    // Verkrijg alle stemmen en filter op Nederlands
+    let v = window.speechSynthesis.getVoices();
+    let nlVoices = v.filter(x => x.lang.toLowerCase().includes('nl'));
+
     const isM = document.querySelector('input[name="voiceType"]:checked').value === 'man';
-    
-    if (nlVoices.length > 0) {
-        if (isM) {
-            // Zoek naar de man-index. Bij Samsung is dit vaak de 2e NL stem (index 1)
-            let man = nlVoices.find(x => x.name.toLowerCase().includes('male') || x.name.toLowerCase().includes('man') || x.name.toLowerCase().includes('dfz') || x.name.toLowerCase().includes('rle'));
-            m.voice = man || (nlVoices.length > 1 ? nlVoices[1] : nlVoices[0]);
-            m.pitch = 0.85; 
-        } else {
-            // Vrouw is meestal de 1e (index 0)
-            m.voice = nlVoices[0];
-            m.pitch = 1.0;
+
+    if (isM) {
+        // PROBEER 1: Zoek op naam (Samsung/Google identifiers)
+        let man = nlVoices.find(x => 
+            x.name.toLowerCase().includes('male') || 
+            x.name.toLowerCase().includes('man') || 
+            x.name.toLowerCase().includes('dfz') || 
+            x.name.toLowerCase().includes('rle')
+        );
+
+        // PROBEER 2: Als geen 'man' gevonden, pak de tweede NL stem in de lijst
+        if (!man && nlVoices.length > 1) {
+            man = nlVoices[1];
         }
+
+        if (man) {
+            m.voice = man;
+            m.pitch = 0.8; // Normale mannelijke toon
+        } else {
+            // PROBEER 3: Fail-safe - Forceer de enige stem naar een heel lage toon
+            m.pitch = 0.5; // Extreem laag, maakt van een vrouwenstem een mannenstem
+        }
+    } else {
+        // Vrouwenstem (altijd de eerste of standaard)
+        m.voice = nlVoices[0];
+        m.pitch = 1.0;
     }
+
     m.rate = 1.0;
     window.speechSynthesis.speak(m);
 }
+
+// Belangrijk voor Samsung/Chrome: Forceer herladen van stemmen
+window.speechSynthesis.onvoiceschanged = () => {
+    console.log("Voices geladen: ", window.speechSynthesis.getVoices().length);
+};
+// Extra trigger voor mobiel
+setTimeout(() => window.speechSynthesis.getVoices(), 500);
 
 function dist(a,b,c,d){
     const R=6371000;
