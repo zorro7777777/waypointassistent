@@ -208,7 +208,7 @@ function startTracking() {
         if (lastLat !== null) {
             const d = dist(lastLat, lastLon, lat, lon);
             // Alleen tellen als snelheid > 1 km/u
-            if (speed >= MIN_SPEED && d > 0.3 && d < 9) {
+            if (speed >= MIN_SPEED && d > 1 && d < 5001) {
                 gpsTrip += d;
             }
         }
