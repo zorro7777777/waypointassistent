@@ -188,28 +188,37 @@ function startGPS() {
         } else if (sport.lastTick) { sport.idleTime += dt; }
 
         // Waypoint Logica v36 (Touched + Dynamic Skip)
-        waypoints.forEach((w, i) => {
+       waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             const d = getDist(lat, lon, w.lat, w.lon);
-            
-            // 1. Markeer als "aangeraakt" als je in de buurt bent
             if (d <= CONFIG.radius) w.touched = true;
 
-            // 2. Bevestig als PASSED als je touched bent EN op het juiste route-segment zit
-            if (curRoutePos >= w.routePos - CONFIG.radius && w.touched) {
+            const isFinish = (i === waypoints.length - 1);
+
+            // BEREIKT (✅)
+            if (curPos >= w.routePos - CONFIG.radius && w.touched) {
                 w.passed = true;
-                speak(w.name);
+                if (isFinish) {
+                    finished = true; // STOP tellers: Doel gehaald
+                    speak("Gefeliciteerd, je hebt de finish bereikt.");
+                } else {
+                    speak("Je hebt " + w.name + " bereikt.");
+                }
                 updateWPUI();
             }
-
-            // 3. Markeer als MISSED alleen als je er ECHT voorbij bent
-            // We gebruiken hier: marge (10m) + GPS onnauwkeurigheid (acc)
-            if (maxRoutePos > w.routePos + CONFIG.radius + acc + 10) {
+            // GEMIST (❌)
+            else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 10) {
                 w.missed = true;
+                speak("Je hebt " + w.name + " overgeslagen.");
+                
+                if (isFinish) {
+                    finished = true; // STOP tellers: Je bent de finish voorbij gelopen
+                }
+                // Als het GEEN finish is, gebeurt er niets met 'finished' en loopt alles door!
                 updateWPUI();
             }
         });
-
+        
         // UI Update
         const fT = (sec) => new Date(sec * 1000).toISOString().substr(11, 8);
         document.getElementById('stat-steps').innerText = Math.round(sport.steps);
