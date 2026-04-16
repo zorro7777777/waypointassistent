@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v46 - WakeLock Edition</title>
+    <title>GPX Engine v47 - Speed Edition</title>
     <style>
         body { font-family: sans-serif; line-height: 1.5; padding: 10px; background: #f0f3f5; color: #2c3e50; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -28,7 +28,7 @@
 <body>
 
 <div class="card">
-    <h1>GPX ENGINE v46 PRO</h1>
+    <h1>GPX ENGINE v47 PRO</h1>
     <div class="stats-grid">
         <div class="stat-box"><span class="stat-label">Stappen</span><span id="stat-steps" class="stat-val">0</span></div>
         <div class="stat-box"><span class="stat-label">Act. Cadans</span><span id="stat-cadence" class="stat-val">0</span></div>
@@ -79,7 +79,6 @@ let sportData = { weight: 92, stepLength: 0.67, totalSteps: 0, movingTime: 0, id
 
 function toggleTable() { document.getElementById('tableContainer').style.display = document.getElementById('showTable').checked ? 'block' : 'none'; }
 
-// Scherm wakker houden API
 async function requestWakeLock() {
     try {
         if ('wakeLock' in navigator) {
@@ -163,17 +162,18 @@ function render() {
 function startTracking() {
     if (watchId || !track.length) return;
     active = true; finished = false;
-    requestWakeLock(); // Activeer scherm-lock
+    requestWakeLock();
     
     watchId = navigator.geolocation.watchPosition(p => {
         if (finished) return;
         const lat = p.coords.latitude, lon = p.coords.longitude, acc = p.coords.accuracy;
-        const speed = (p.coords.speed || 0) * 3.6, now = Date.now(), curPos = projectOnRoute(lat, lon);
+        const speedKmh = (p.coords.speed || 0) * 3.6;
+        const now = Date.now(), curPos = projectOnRoute(lat, lon);
         if (curPos > maxRoutePos) maxRoutePos = curPos;
 
         if (!waypoints[0].passed) {
             const dS = dist(lat, lon, waypoints[0].lat, waypoints[0].lon);
-            document.getElementById('info').innerHTML = `<b style="color:#ffaa00;">GA NAAR START...</b><br>AFSTAND: <span class="highlight">${dS.toFixed(0)}m</span><br><br><b>GPS:</b> ${acc.toFixed(1)}m`;
+            document.getElementById('info').innerHTML = `<b style="color:#ffaa00;">GA NAAR START...</b><br>AFSTAND: <span class="highlight">${dS.toFixed(0)}m</span><br>SNELHEID: <span class="highlight">${speedKmh.toFixed(1)} km/u</span><br><br><b>GPS:</b> ${acc.toFixed(1)}m`;
             if (dS <= CONFIG.radius) { 
                 waypoints[0].passed = true; 
                 sportData.lastTick = now; 
@@ -184,16 +184,16 @@ function startTracking() {
         }
 
         const dt = (now - sportData.lastTick) / 1000;
-        const isM = speed >= CONFIG.minSpeed;
+        const isM = speedKmh >= (CONFIG.minSpeed * 3.6);
         if (isM) {
             sportData.movingTime += dt;
-            sportData.totalSteps += ((speed/3.6)*dt / sportData.stepLength);
-            sportData.calories += (((speed > 5 ? 4.5 : 3.0) * 3.5 * sportData.weight) / 12000) * dt;
+            sportData.totalSteps += ((speedKmh/3.6)*dt / sportData.stepLength);
+            sportData.calories += (((speedKmh > 5 ? 4.5 : 3.0) * 3.5 * sportData.weight) / 12000) * dt;
             if (lastLat && acc <= CONFIG.maxAcc) gpsTrip += dist(lastLat, lastLon, lat, lon);
         } else { sportData.idleTime += dt; }
 
         document.getElementById('stat-steps').innerText = Math.round(sportData.totalSteps);
-        document.getElementById('stat-cadence').innerText = Math.round(isM ? (speed/3.6/sportData.stepLength*60) : 0);
+        document.getElementById('stat-cadence').innerText = Math.round(isM ? (speedKmh/3.6/sportData.stepLength*60) : 0);
         document.getElementById('stat-kcal').innerText = Math.round(sportData.calories);
         document.getElementById('stat-trip').innerText = (gpsTrip/1000).toFixed(2);
         document.getElementById('stat-moving').innerText = new Date(sportData.movingTime * 1000).toISOString().substr(11, 8);
@@ -224,8 +224,8 @@ function startTracking() {
             <b>WP:</b> <span class="highlight">${currentWPDisplay}/${totalWPs}</span> (OK:${pC})<br>
             <b>DOEL:</b> <span class="highlight">${nWP ? nWP.name : 'FINISH'}</span><br>
             <b>REST:</b> <span class="highlight">${Math.max(0, (nWP ? nWP.routePos - curPos : 0)).toFixed(0)}m</span><br>
-            <b>CADANS:</b> <span class="highlight">${Math.round(isM ? (speed/3.6/sportData.stepLength*60) : 0)} spm</span><br>
-            <b>VOLGENDE:</b> ${fWP ? fWP.name : '-'}<br>
+            <b>SNELHEID:</b> <span class="highlight">${speedKmh.toFixed(1)} km/u</span><br>
+            <b>CADANS:</b> <span class="highlight">${Math.round(isM ? (speedKmh/3.6/sportData.stepLength*60) : 0)} spm</span><br>
             <b>GPS:</b> ${acc.toFixed(1)}m
         `;
         lastLat = lat; lastLon = lon; sportData.lastTick = now; render();
