@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v45 - Field Master</title>
+    <title>GPX Engine v46 - WakeLock Edition</title>
     <style>
         body { font-family: sans-serif; line-height: 1.5; padding: 10px; background: #f0f3f5; color: #2c3e50; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -28,7 +28,7 @@
 <body>
 
 <div class="card">
-    <h1>GPX ENGINE v45 PRO</h1>
+    <h1>GPX ENGINE v46 PRO</h1>
     <div class="stats-grid">
         <div class="stat-box"><span class="stat-label">Stappen</span><span id="stat-steps" class="stat-val">0</span></div>
         <div class="stat-box"><span class="stat-label">Act. Cadans</span><span id="stat-cadence" class="stat-val">0</span></div>
@@ -74,10 +74,19 @@
 <script>
 let CONFIG = { minSpeed: 0.65, radius: 10, maxD: 8.0, maxAcc: 10 };
 let track = [], waypoints = [], cumDist = [], watchId = null, active = false, finished = false;
-let gpsTrip = 0, lastLat = null, lastLon = null, maxRoutePos = 0;
+let gpsTrip = 0, lastLat = null, lastLon = null, maxRoutePos = 0, wakeLock = null;
 let sportData = { weight: 92, stepLength: 0.67, totalSteps: 0, movingTime: 0, idleTime: 0, calories: 0, lastTick: null };
 
 function toggleTable() { document.getElementById('tableContainer').style.display = document.getElementById('showTable').checked ? 'block' : 'none'; }
+
+// Scherm wakker houden API
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+        }
+    } catch (err) { console.log("WakeLock error: " + err.message); }
+}
 
 function speak(t) {
     if (!document.getElementById('audioToggle').checked) return;
@@ -154,6 +163,8 @@ function render() {
 function startTracking() {
     if (watchId || !track.length) return;
     active = true; finished = false;
+    requestWakeLock(); // Activeer scherm-lock
+    
     watchId = navigator.geolocation.watchPosition(p => {
         if (finished) return;
         const lat = p.coords.latitude, lon = p.coords.longitude, acc = p.coords.accuracy;
@@ -163,7 +174,12 @@ function startTracking() {
         if (!waypoints[0].passed) {
             const dS = dist(lat, lon, waypoints[0].lat, waypoints[0].lon);
             document.getElementById('info').innerHTML = `<b style="color:#ffaa00;">GA NAAR START...</b><br>AFSTAND: <span class="highlight">${dS.toFixed(0)}m</span><br><br><b>GPS:</b> ${acc.toFixed(1)}m`;
-            if (dS <= CONFIG.radius) { waypoints[0].passed = true; sportData.lastTick = now; speak("Start bereikt"); render(); }
+            if (dS <= CONFIG.radius) { 
+                waypoints[0].passed = true; 
+                sportData.lastTick = now; 
+                speak("Start bereikt"); 
+                render(); 
+            }
             return;
         }
 
@@ -192,7 +208,10 @@ function startTracking() {
             if (curPos >= w.routePos - CONFIG.radius && w.touched) {
                 w.passed = true; speak(w.name + " bereikt");
                 if (i === waypoints.length - 1) { 
-                    finished = true; navigator.geolocation.clearWatch(watchId); speak("Route voltooid"); 
+                    finished = true; 
+                    navigator.geolocation.clearWatch(watchId); 
+                    speak("Route voltooid"); 
+                    if(wakeLock) wakeLock.release();
                 }
             }
         });
@@ -205,7 +224,7 @@ function startTracking() {
             <b>WP:</b> <span class="highlight">${currentWPDisplay}/${totalWPs}</span> (OK:${pC})<br>
             <b>DOEL:</b> <span class="highlight">${nWP ? nWP.name : 'FINISH'}</span><br>
             <b>REST:</b> <span class="highlight">${Math.max(0, (nWP ? nWP.routePos - curPos : 0)).toFixed(0)}m</span><br>
-            <b>GEM. CADANS:</b> <span class="highlight">${Math.round(sportData.movingTime > 0 ? sportData.totalSteps/(sportData.movingTime/60) : 0)} spm</span><br>
+            <b>CADANS:</b> <span class="highlight">${Math.round(isM ? (speed/3.6/sportData.stepLength*60) : 0)} spm</span><br>
             <b>VOLGENDE:</b> ${fWP ? fWP.name : '-'}<br>
             <b>GPS:</b> ${acc.toFixed(1)}m
         `;
