@@ -1,328 +1,185 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPX Engine v29 - Full Meters</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.5; padding: 15px; background: #f0f3f5; color: #2c3e50; }
+        .card { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
+        h1 { font-size: 1.1rem; color: #e67e22; text-align: center; margin-bottom: 15px; text-transform: uppercase; }
+        #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin-bottom: 20px; font-size: 1rem; line-height: 1.4; }
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; }
+        .startBtn { background: #27ae60; }
+        .resetBtn { background: #7f8c8d; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; font-size: 0.75rem; color: #95a5a6; text-transform: uppercase; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+        td { padding: 10px 0; border-bottom: 1px solid #f9f9f9; font-size: 0.9rem; }
+        .status-col { width: 35px; text-align: center; }
+        .dist-col { text-align: right; font-weight: bold; color: #34495e; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>GPX ENGINE v29 FIELD</h1>
+    
+    <input type="file" id="gpxFile" accept=".gpx" style="margin-bottom: 15px; width: 100%;">
+
+    <div class="controls">
+        <button id="startBtn" class="startBtn">▶ START</button>
+        <button id="resetBtn" class="resetBtn">🔄 RESET</button>
+    </div>
+
+    <div id="info">Systeem stand-by...</div>
+
+    <table>
+        <thead>
+            <tr>
+                <th class="status-col">ST</th>
+                <th>WAYPOINT</th>
+                <th class="dist-col">SEGMENT</th>
+            </tr>
+        </thead>
+        <tbody id="list"></tbody>
+    </table>
+</div>
+
 <script>
+// ================= CONFIG (WANDEL-OPTIMALISATIE) =================
+const MIN_SPEED = 1.0;    // Stilstand < 1 km/u
+const RADIUS = 20;        // Hit radius 20m
+const MIN_D = 0.3;        // Filter jitter < 30cm
+const MAX_D = 8.0;        // Filter sprong > 8m (jouw wandel-lock)
 
-// ================= STATE =================
-let track=[];
-let waypoints=[];
-let cumDist=[];
+let track = [], waypoints = [], cumDist = [];
+let watchId = null, active = false;
+let gpsTrip = 0, lastLat = null, lastLon = null, maxRoutePos = 0;
 
-let watchId=null;
-let active=false;
-
-let gpsTrip=0;
-let lastLat=null;
-let lastLon=null;
-
-let maxRoutePos=0;
-
-// ================= CONFIG =================
-const RADIUS=20;
-const TRACK_TOL=10;
-const MIN_SPEED=1;
-
-// ================= DIST =================
 function dist(a,b,c,d){
-const R=6371000;
-const dLat=(c-a)*Math.PI/180;
-const dLon=(d-b)*Math.PI/180;
-const x=Math.sin(dLat/2)**2 +
-Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
-Math.sin(dLon/2)**2;
-return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+    const R=6371000;
+    const dLat=(c-a)*Math.PI/180;
+    const dLon=(d-b)*Math.PI/180;
+    const x=Math.sin(dLat/2)**2 + Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;
+    return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
 
-// ================= GPS QUALITY =================
-function getGPSQuality(accuracy){
-if(accuracy<=5) return `🟢 TOP (${accuracy.toFixed(1)}m)`;
-if(accuracy<=10) return `🟡 GOED (${accuracy.toFixed(1)}m)`;
-if(accuracy<=20) return `🟠 MATIG (${accuracy.toFixed(1)}m)`;
-return `🔴 SLECHT (${accuracy.toFixed(1)}m)`;
+function projectOnRoute(lat, lon) {
+    let bestDist = Infinity, bestPos = 0;
+    for (let i = 0; i < track.length; i++) {
+        const d = dist(lat, lon, track[i].lat, track[i].lon);
+        if (d < bestDist) { bestDist = d; bestPos = cumDist[i]; }
+    }
+    return bestPos;
 }
 
-// ================= POLYLINE =================
-function buildPolyline(){
-cumDist=[0];
-for(let i=0;i<track.length-1;i++){
-cumDist[i+1]=cumDist[i]+dist(
-track[i].lat,track[i].lon,
-track[i+1].lat,track[i+1].lon
-);
-}
-}
+document.getElementById('gpxFile').onchange = e => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+        const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
+        track = [...xml.getElementsByTagName('trkpt')].map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
+        
+        // Polyline afstanden
+        cumDist = [0];
+        for (let i=0; i<track.length-1; i++) {
+            cumDist[i+1] = cumDist[i] + dist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
+        }
 
-// ================= 🔥 TRUE SEGMENT PROJECTION =================
-// project point onto segment (A->B)
-function projectOnSegment(px,py,ax,ay,bx,by){
+        // Waypoints verzamelen
+        let rawWpts = [...xml.getElementsByTagName('wpt')].map(x => ({
+            name: x.getElementsByTagName('name')[0]?.textContent || "Waypoint",
+            lat: +x.getAttribute('lat'), lon: +x.getAttribute('lon'),
+            passed: false, missed: false, touched: false, minDist: Infinity
+        }));
 
-const A = px-ax;
-const B = py-ay;
-const C = bx-ax;
-const D = by-ay;
+        // START & EINDE toevoegen
+        rawWpts.unshift({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: true, touched: true, minDist: 0 });
+        rawWpts.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, touched: false, minDist: Infinity });
 
-const dot = A*C + B*D;
-const len2 = C*C + D*D;
+        // Route posities berekenen en sorteren
+        rawWpts.forEach(w => w.routePos = projectOnRoute(w.lat, w.lon));
+        waypoints = rawWpts.sort((a,b) => a.routePos - b.routePos);
 
-let t = len2 === 0 ? 0 : dot / len2;
-t = Math.max(0, Math.min(1, t));
+        // Segmenten in meters berekenen
+        for(let i=0; i<waypoints.length; i++) {
+            waypoints[i].segment = (i === 0) ? 0 : waypoints[i].routePos - waypoints[i-1].routePos;
+        }
 
-const projLat = ax + t*C;
-const projLon = ay + t*D;
-
-// distance from start of segment in meters (approx along polyline)
-const segLen = dist(ax,ay,bx,by);
-const offset = segLen * t;
-
-return {offset, distToLine: dist(px,py,projLat,projLon)};
-}
-
-// ================= ROUTE POSITION (IMPROVED) =================
-function projectOnRoute(lat,lon){
-
-let best = Infinity;
-let bestPos = 0;
-
-for(let i=0;i<track.length-1;i++){
-
-const a = track[i];
-const b = track[i+1];
-
-const p = projectOnSegment(lat,lon,a.lat,a.lon,b.lat,b.lon);
-
-const globalPos = cumDist[i] + p.offset;
-
-if(p.distToLine < best){
-best = p.distToLine;
-bestPos = globalPos;
-}
-}
-
-return bestPos;
-}
-
-// ================= DIST TO TRACK =================
-function minDistToTrack(lat,lon){
-let best=Infinity;
-
-for(let i=0;i<track.length-1;i++){
-const d = dist(lat,lon,track[i].lat,track[i].lon);
-if(d<best) best=d;
-}
-return best;
-}
-
-// ================= RESET =================
-function resetAll(){
-
-if(watchId){
-navigator.geolocation.clearWatch(watchId);
-watchId=null;
-}
-
-track=[];
-waypoints=[];
-cumDist=[];
-
-gpsTrip=0;
-lastLat=null;
-lastLon=null;
-maxRoutePos=0;
-
-active=false;
-
-document.getElementById('info').innerHTML="🔄 Reset klaar";
-document.getElementById('list').innerHTML="";
-}
-
-// ================= LOAD =================
-document.getElementById('gpxFile').onchange=e=>{
-const r=new FileReader();
-
-r.onload=ev=>{
-const xml=new DOMParser().parseFromString(ev.target.result,"text/xml");
-
-track=[...xml.getElementsByTagName('trkpt')]
-.map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
-
-buildPolyline();
-
-gpsTrip=0;
-lastLat=null;
-lastLon=null;
-maxRoutePos=0;
-active=false;
-
-waypoints=[...xml.getElementsByTagName('wpt')]
-.map(x=>({
-name:x.getElementsByTagName('name')[0]?.textContent||"WP",
-lat:+x.getAttribute('lat'),
-lon:+x.getAttribute('lon'),
-routePos:0,
-passed:false,
-missed:false,
-segment:0,
-touched:false,
-minDist:Infinity
-}));
-
-waypoints.unshift({
-name:"Start",
-lat:track[0].lat,
-lon:track[0].lon,
-routePos:0,
-passed:true,
-missed:false,
-segment:0,
-touched:true,
-minDist:0
-});
-
-waypoints.push({
-name:"Einde",
-lat:track.at(-1).lat,
-lon:track.at(-1).lon,
-routePos:0,
-passed:false,
-missed:false,
-segment:0,
-touched:false,
-minDist:Infinity
-});
-
-// routePos (NOW ACCURATE)
-waypoints.forEach(w=>{
-w.routePos = projectOnRoute(w.lat,w.lon);
-});
-
-// sort correct route order
-waypoints.sort((a,b)=>a.routePos-b.routePos);
-
-// segments in meters (TRUE DISTANCE ALONG ROUTE)
-for(let i=0;i<waypoints.length;i++){
-if(i===0){
-waypoints[i].segment=0;
-continue;
-}
-waypoints[i].segment = waypoints[i].routePos - waypoints[i-1].routePos;
-
-if(waypoints[i].segment < 0) waypoints[i].segment = 0;
-}
-
-render();
+        document.getElementById('info').innerHTML = "GPX INLADEN GELUKT.<br>Druk op START.";
+        render();
+    };
+    reader.readAsText(e.target.files[0]);
 };
 
-r.readAsText(e.target.files[0]);
-};
+function process(lat, lon, acc) {
+    // Als de GPS-nauwkeurigheid slechter is dan 30m, negeren we de meting 
+    // om te voorkomen dat waypoints onterecht op 'gemist' springen.
+    if (acc > 30) return; 
 
-// ================= ENGINE =================
-function process(lat,lon){
+    const curPos = projectOnRoute(lat, lon);
+    if (curPos > maxRoutePos) maxRoutePos = curPos;
 
-const pos=projectOnRoute(lat,lon);
+    waypoints.forEach(w => {
+        if (w.passed || w.missed) return;
+        const d = dist(lat, lon, w.lat, w.lon);
+        
+        if (d < w.minDist) w.minDist = d;
+        if (d <= RADIUS) w.touched = true;
 
-if(pos>maxRoutePos){
-maxRoutePos=pos;
+        if (curPos >= w.routePos - RADIUS && w.touched) {
+            w.passed = true;
+        }
+
+        // We maken de 'Missed' regel ruimer: pas als je 50m voorbij het punt bent
+        // EN de accuratie goed is, rekenen we het rekenkundig fout.
+        if (maxRoutePos > w.routePos + 50 && !w.passed) {
+            w.missed = true;
+        }
+    });
 }
 
-for(let w of waypoints){
+function startTracking() {
+    if (watchId || track.length === 0) return;
+    active = true;
+    watchId = navigator.geolocation.watchPosition(p => {
+        const lat = p.coords.latitude, lon = p.coords.longitude;
+        const speed = (p.coords.speed || 0) * 3.6;
+        const acc = p.coords.accuracy;
 
-if(w.passed||w.missed) continue;
+        if (lastLat !== null) {
+            const d = dist(lastLat, lastLon, lat, lon);
+            // De 8 meter / 1 km/u Filter
+            if (speed >= MIN_SPEED && d > MIN_D && d < MAX_D) {
+                gpsTrip += d;
+            }
+        }
+        process(lat, lon);
+        lastLat = lat; lastLon = lon;
 
-const d=dist(lat,lon,w.lat,w.lon);
-
-if(d<w.minDist){
-w.minDist=d;
+        document.getElementById('info').innerHTML = `
+            STATUS: ${speed < MIN_SPEED ? '⏸ RUSTEND' : '🚶 WANDELEN'}<br>
+            SPEED : ${speed.toFixed(1)} km/u<br>
+            TRIP  : ${(gpsTrip/1000).toFixed(3)} km<br>
+            ACC   : ${acc.toFixed(0)} m
+        `;
+        render();
+    }, null, { enableHighAccuracy: true });
 }
 
-if(d<=RADIUS){
-w.touched=true;
+function render() {
+    const tbody = document.getElementById('list');
+    tbody.innerHTML = waypoints.map(w => `
+        <tr style="${w.passed ? 'color:#27ae60' : w.missed ? 'color:#e74c3c' : ''}">
+            <td class="status-col">${w.passed ? '✅' : w.missed ? '❌' : '⏳'}</td>
+            <td>${w.name}</td>
+            <td class="dist-col">${w.segment.toFixed(0)} m</td>
+        </tr>
+    `).join('');
 }
 
-const passedRoute=pos>=w.routePos-RADIUS;
-
-if(passedRoute && w.touched){
-w.passed=true;
-continue;
-}
-
-if(maxRoutePos>w.routePos+RADIUS && !w.passed){
-w.missed=true;
-}
-}
-}
-
-// ================= GPS =================
-function startTracking(){
-
-if(watchId) return;
-
-active=true;
-
-watchId=navigator.geolocation.watchPosition(p=>{
-
-if(!active) return;
-
-const lat=p.coords.latitude;
-const lon=p.coords.longitude;
-const speed=(p.coords.speed||0)*3.6;
-
-const accuracy=p.coords.accuracy||0;
-const gpsQuality=getGPSQuality(accuracy);
-
-// distance
-let d=0;
-if(lastLat){
-d=dist(lastLat,lastLon,lat,lon);
-if(d>0.3 && d<25){
-gpsTrip+=d;
-}
-}
-
-process(lat,lon);
-
-lastLat=lat;
-lastLon=lon;
-
-let slow="";
-if(speed<MIN_SPEED) slow="⏸ STILSTAND";
-
-document.getElementById('info').innerHTML=`
-📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
-🚶 ${speed.toFixed(2)} km/u <span class="slow">${slow}</span><br>
-🧭 ${(gpsTrip/1000).toFixed(3)} km<br>
-🎯 GPS: ${gpsQuality}
-`;
-
-render();
-
-},console.error,{enableHighAccuracy:true});
-}
-
-// ================= STOP =================
-function stopTracking(){
-navigator.geolocation.clearWatch(watchId);
-watchId=null;
-active=false;
-}
-
-// ================= UI =================
-function render(){
-const l=document.getElementById('list');
-l.innerHTML="";
-
-waypoints.forEach(w=>{
-let s="⏳";
-if(w.passed) s="✅";
-else if(w.missed) s="❌";
-
-l.innerHTML+=`
-<tr>
-<td>${s}</td>
-<td>${w.name}</td>
-<td>${w.segment.toFixed(1)} m</td>
-</tr>`;
-});
-}
-
-// ================= BUTTONS =================
-document.getElementById('startBtn').onclick=startTracking;
-document.getElementById('resetBtn').onclick=resetAll;
-
+document.getElementById('startBtn').onclick = startTracking;
+document.getElementById('resetBtn').onclick = () => location.reload();
 </script>
+</body>
+</html>
