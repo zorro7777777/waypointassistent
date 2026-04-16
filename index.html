@@ -73,7 +73,7 @@
 
 <script>
 // CONFIG: Snelheid verlaagd naar ~1.5 km/u voor betere registratie bij wandelen
-let CONFIG = { minSpeed: 0.42, radius: 10, maxAcc: 12 };
+let CONFIG = { minSpeed: 0.35, radius: 10, maxAcc: 10 };
 let track = [], waypoints = [], cumDist = [], watchId = null, active = false, finished = false;
 let gpsTrip = 0, lastLat = null, lastLon = null, maxRoutePos = 0, wakeLock = null;
 let sportData = { weight: 92, stepLength: 0.67, totalSteps: 0, movingTime: 0, idleTime: 0, calories: 0, lastTick: null };
