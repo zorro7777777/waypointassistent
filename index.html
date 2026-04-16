@@ -77,8 +77,8 @@ let lastLon = null;
 let maxRoutePos = 0;
 
 // ================= CONFIG =================
-const RADIUS = 20;       
-const TRACK_TOL = 15;    
+const RADIUS = 10;       
+const TRACK_TOL = 5;    
 const MIN_SPEED = 1.0;   
 
 // ================= MATH =================
@@ -208,7 +208,7 @@ function startTracking() {
         if (lastLat !== null) {
             const d = dist(lastLat, lastLon, lat, lon);
             // Alleen tellen als snelheid > 1 km/u
-            if (speed >= MIN_SPEED && d > 0.5 && d < 25) {
+            if (speed >= MIN_SPEED && d > 0.3 && d < 9) {
                 gpsTrip += d;
             }
         }
