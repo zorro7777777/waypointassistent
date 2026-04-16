@@ -3,39 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v31 - Multi-Profile Edition</title>
+    <title>GPX Engine v33 - Pro Sport & Inspectie</title>
     <style>
         body { font-family: sans-serif; line-height: 1.5; padding: 15px; background: #f0f3f5; color: #2c3e50; }
         .card { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
         h1 { font-size: 1.1rem; color: #e67e22; text-align: center; text-transform: uppercase; margin-bottom: 10px; }
         
-        /* Profiel Selector Styling */
+        /* Stats Dashboards */
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; text-align: center; }
+        .stat-box { background: #fff; border: 1px solid #ddd; padding: 6px; border-radius: 8px; }
+        .stat-label { font-size: 0.6rem; color: #7f8c8d; display: block; text-transform: uppercase; }
+        .stat-val { font-weight: bold; font-size: 1rem; }
+
         .profile-box { background: #ecf0f1; padding: 10px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; }
         select { padding: 8px; border-radius: 5px; border: 1px solid #bdc3c7; font-weight: bold; cursor: pointer; }
-
-        #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin-bottom: 20px; }
+        #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin-bottom: 20px; min-height: 50px; font-size: 0.85rem; }
+        
         .controls { display: flex; gap: 10px; margin-bottom: 20px; }
         button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; }
         .startBtn { background: #27ae60; }
         .resetBtn { background: #7f8c8d; }
         
         table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; font-size: 0.75rem; color: #95a5a6; border-bottom: 2px solid #eee; }
-        td { padding: 10px 0; border-bottom: 1px solid #f9f9f9; font-size: 0.9rem; }
+        th { text-align: left; font-size: 0.7rem; color: #95a5a6; border-bottom: 2px solid #eee; }
+        td { padding: 8px 0; border-bottom: 1px solid #f9f9f9; font-size: 0.85rem; }
         .dist-col { text-align: right; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1>GPX ENGINE v31 FIELD</h1>
+    <h1>GPX ENGINE v33 FIELD</h1>
+
+    <div class="stats-grid">
+        <div class="stat-box"><span class="stat-label">Stappen</span><span id="stat-steps" class="stat-val">0</span></div>
+        <div class="stat-box"><span class="stat-label">Cadans</span><span id="stat-cadence" class="stat-val">0</span></div>
+        <div class="stat-box"><span class="stat-label">Kcal</span><span id="stat-kcal" class="stat-val">0</span></div>
+        <div class="stat-box"><span class="stat-label">Km</span><span id="stat-trip" class="stat-val">0.00</span></div>
+    </div>
+
+    <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="stat-box"><span class="stat-label">Bewogen Tijd</span><span id="stat-moving" class="stat-val">00:00:00</span></div>
+        <div class="stat-box"><span class="stat-label">Pauze Tijd</span><span id="stat-idle" class="stat-val">00:00:00</span></div>
+    </div>
+
+    <div class="stats-grid" style="margin-top: 10px;">
+        <div class="stat-box" style="color:#27ae60"><span class="stat-label">✅ OK</span><span id="stat-passed" class="stat-val">0</span></div>
+        <div class="stat-box" style="color:#e74c3c"><span class="stat-label">❌ MIS</span><span id="stat-missed" class="stat-val">0</span></div>
+        <div class="stat-box"><span class="stat-label">Totaal WP</span><span id="stat-total" class="stat-val">0</span></div>
+        <div class="stat-box"><span class="stat-label">Acc</span><span id="stat-acc" class="stat-val">0m</span></div>
+    </div>
 
     <div class="profile-box">
-        <span>⚙️ Gebruiksprofiel:</span>
+        <span>⚙️ Profiel:</span>
         <select id="profileSelect">
-            <option value="wandelaar">🚶 Wandelaar (4-7 km/u)</option>
-            <option value="fietser">🚲 Fietser (tot 30 km/u)</option>
-            <option value="koerier">🚚 Koerier/Auto (tot 80 km/u)</option>
+            <option value="wandelaar">🚶 Wandelaar</option>
+            <option value="fietser">🚲 Fietser</option>
+            <option value="koerier">🚚 Koerier</option>
         </select>
     </div>
     
@@ -61,30 +85,44 @@
 </div>
 
 <script>
-// ================= DYNAMISCHE CONFIG =================
-let CONFIG = {
-    minSpeed: 1.0,
-    radius: 20,
-    maxD: 8.0,
-    maxAcc: 25.0
-};
+// ================= CONFIG & STATE =================
+let CONFIG = { minSpeed: 0.5, radius: 2.5, maxD: 8.0, maxAcc: 5.0 };
 
 const PROFILES = {
-    wandelaar: { minSpeed: 1.0, radius: 20, maxD: 8.0, maxAcc: 25 },
-    fietser:   { minSpeed: 5.0, radius: 35, maxD: 18.0, maxAcc: 30 },
-    koerier:   { minSpeed: 5.0, radius: 50, maxD: 30.0, maxAcc: 40 }
-};
-
-// Update config bij profielwissel
-document.getElementById('profileSelect').onchange = (e) => {
-    CONFIG = PROFILES[e.target.value];
-    document.getElementById('info').innerHTML = `Profiel aangepast: ${e.target.value.toUpperCase()}`;
+    wandelaar: { minSpeed: 0.5, radius: 2.5, maxD: 8.0, maxAcc: 5.0 },
+    fietser:   { minSpeed: 5.0, radius: 15, maxD: 18.0, maxAcc: 10.0 },
+    koerier:   { minSpeed: 5.0, radius: 30, maxD: 40.0, maxAcc: 15.0 }
 };
 
 let track = [], waypoints = [], cumDist = [];
-let watchId = null, active = false;
+let watchId = null, active = false, finished = false;
 let gpsTrip = 0, lastLat = null, lastLon = null, maxRoutePos = 0;
 
+// Sport parameters
+let sportData = {
+    weight: 92,
+    stepLength: 0.67,
+    totalSteps: 0,
+    movingTime: 0, 
+    idleTime: 0,
+    calories: 0,
+    lastTick: null
+};
+
+// ================= AUDIO ENGINE =================
+function speak(tekst) {
+    const msg = new SpeechSynthesisUtterance(tekst);
+    msg.lang = 'nl-NL';
+    msg.pitch = 1.1;
+    msg.rate = 1.0;
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find(v => v.lang.includes('NL') && (v.name.includes('Female') || v.name.includes('vrouw')));
+    if (femaleVoice) msg.voice = femaleVoice;
+    window.speechSynthesis.speak(msg);
+}
+window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+
+// ================= CORE UTILS =================
 function dist(a,b,c,d){
     const R=6371000;
     const dLat=(c-a)*Math.PI/180;
@@ -102,93 +140,151 @@ function projectOnRoute(lat, lon) {
     return bestPos;
 }
 
+function formatDuration(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+}
+
+// ================= CALCULATION ENGINE =================
+function updateSportStats(speedKmh, isMoving, deltaTime) {
+    if (isMoving) {
+        sportData.movingTime += deltaTime;
+        const metersThisTick = (speedKmh / 3.6) * deltaTime;
+        sportData.totalSteps += (metersThisTick / sportData.stepLength);
+        
+        // MET formule voor kcal
+        let met = 1.0;
+        if (speedKmh > 0.5) met = 2.5;
+        if (speedKmh > 4.0) met = 3.8;
+        if (speedKmh > 6.0) met = 5.0;
+        
+        const kcalPerMin = (met * 3.5 * sportData.weight) / 200;
+        sportData.calories += (kcalPerMin / 60) * deltaTime;
+    } else {
+        sportData.idleTime += deltaTime;
+    }
+}
+
+document.getElementById('profileSelect').onchange = (e) => {
+    CONFIG = PROFILES[e.target.value];
+    document.getElementById('info').innerHTML = `PROFIEL: ${e.target.value.toUpperCase()}`;
+};
+
 document.getElementById('gpxFile').onchange = e => {
     const reader = new FileReader();
     reader.onload = ev => {
         const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
         track = [...xml.getElementsByTagName('trkpt')].map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
-        
         cumDist = [0];
         for (let i=0; i<track.length-1; i++) {
             cumDist[i+1] = cumDist[i] + dist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
         }
-
         let rawWpts = [...xml.getElementsByTagName('wpt')].map(x => ({
             name: x.getElementsByTagName('name')[0]?.textContent || "WP",
             lat: +x.getAttribute('lat'), lon: +x.getAttribute('lon'),
             passed: false, missed: false, touched: false, minDist: Infinity
         }));
-
         rawWpts.unshift({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: true, touched: true, minDist: 0 });
         rawWpts.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, touched: false, minDist: Infinity });
-
         rawWpts.forEach(w => w.routePos = projectOnRoute(w.lat, w.lon));
         waypoints = rawWpts.sort((a,b) => a.routePos - b.routePos);
-
         for(let i=0; i<waypoints.length; i++) {
             waypoints[i].segment = (i === 0) ? 0 : waypoints[i].routePos - waypoints[i-1].routePos;
         }
-
-        document.getElementById('info').innerHTML = "GPX GELADEN. SELECTEER PROFIEL EN START.";
+        document.getElementById('stat-total').innerText = waypoints.length;
+        document.getElementById('info').innerHTML = "GPX OK. DRUK START.";
         render();
     };
     reader.readAsText(e.target.files[0]);
 };
 
 function process(lat, lon, acc) {
-    if (acc > CONFIG.maxAcc) return;
-
+    if (acc > CONFIG.maxAcc || finished) return;
     const curPos = projectOnRoute(lat, lon);
     if (curPos > maxRoutePos) maxRoutePos = curPos;
 
-    waypoints.forEach(w => {
+    waypoints.forEach((w, index) => {
         if (w.passed || w.missed) return;
         const d = dist(lat, lon, w.lat, w.lon);
         if (d < w.minDist) w.minDist = d;
         if (d <= CONFIG.radius) w.touched = true;
-        
-        if (curPos >= w.routePos - CONFIG.radius && w.touched) w.passed = true;
-
-        // Ruimere 'missed' marge naarmate de radius groter wordt
-        const missedMarge = CONFIG.radius * 2;
-        if (maxRoutePos > w.routePos + missedMarge && !w.passed) w.missed = true;
+        if (curPos >= w.routePos - CONFIG.radius && w.touched) {
+            w.passed = true;
+            speak(`${w.name} bereikt.`);
+            if (index === waypoints.length - 1) stopTracking("FINISH BEREIKT");
+        }
+        const missedMarge = CONFIG.radius * 3;
+        if (maxRoutePos > w.routePos + missedMarge && !w.passed) {
+            w.missed = true;
+            speak(`${w.name} gemist.`);
+        }
     });
 }
 
 function startTracking() {
     if (watchId || track.length === 0) return;
-    active = true;
-    // Blokkeer profielwissel tijdens tracking
+    active = true; finished = false;
     document.getElementById('profileSelect').disabled = true;
+    sportData.lastTick = Date.now();
+    speak("Systeem actief.");
 
     watchId = navigator.geolocation.watchPosition(p => {
         const lat = p.coords.latitude, lon = p.coords.longitude;
-        const speed = (p.coords.speed || 0) * 3.6;
+        const speedKmh = (p.coords.speed || 0) * 3.6;
         const acc = p.coords.accuracy;
+        const now = Date.now();
 
-        if (lastLat !== null && acc <= CONFIG.maxAcc) {
-            const d = dist(lastLat, lastLon, lat, lon);
-            // Gebruik dynamische CONFIG waarden
-            if (speed >= CONFIG.minSpeed && d > 0.3 && d < CONFIG.maxD) {
-                gpsTrip += d;
+        if (sportData.lastTick && !finished) {
+            const deltaTime = (now - sportData.lastTick) / 1000;
+            const isMoving = speedKmh >= CONFIG.minSpeed;
+            
+            updateSportStats(speedKmh, isMoving, deltaTime);
+
+            if (lastLat !== null && acc <= CONFIG.maxAcc && isMoving) {
+                const d = dist(lastLat, lastLon, lat, lon);
+                if (d > 0.2 && d < CONFIG.maxD) gpsTrip += d;
             }
+            
+            // Cadans berekening (stappen per minuut op basis van huidige snelheid)
+            const cadence = isMoving ? Math.round((speedKmh / 3.6 / sportData.stepLength) * 60) : 0;
+            
+            // UI Updates
+            document.getElementById('stat-steps').innerText = Math.round(sportData.totalSteps);
+            document.getElementById('stat-cadence').innerText = cadence;
+            document.getElementById('stat-kcal').innerText = Math.round(sportData.calories);
+            document.getElementById('stat-moving').innerText = formatDuration(sportData.movingTime);
+            document.getElementById('stat-idle').innerText = formatDuration(sportData.idleTime);
+            document.getElementById('stat-trip').innerText = (gpsTrip/1000).toFixed(2);
+            document.getElementById('stat-passed').innerText = waypoints.filter(w => w.passed).length;
+            document.getElementById('stat-missed').innerText = waypoints.filter(w => w.missed).length;
+            document.getElementById('stat-acc').innerText = acc.toFixed(0) + 'm';
         }
+
         process(lat, lon, acc);
         lastLat = lat; lastLon = lon;
+        sportData.lastTick = now;
 
         document.getElementById('info').innerHTML = `
-            STATUS: ${speed < CONFIG.minSpeed ? '⏸ RUST' : '▶ ACTIEF'} | ACC: ${acc.toFixed(0)}m<br>
-            SPEED : ${speed.toFixed(1)} km/u<br>
-            TRIP  : ${(gpsTrip/1000).toFixed(3)} km
+            ${speedKmh < CONFIG.minSpeed ? '⏸ PAUZE' : '▶ BEWEGING'}<br>
+            SNELHEID: ${speedKmh.toFixed(1)} km/u | ACC: ${acc.toFixed(1)}m
         `;
         render();
     }, null, { enableHighAccuracy: true });
 }
 
+function stopTracking(reason) {
+    if (watchId) navigator.geolocation.clearWatch(watchId);
+    watchId = null; finished = true; active = false;
+    document.getElementById('info').innerHTML = `🏁 ${reason}<br>AFSTAND: ${(gpsTrip/1000).toFixed(3)} km`;
+    speak("Track beëindigd.");
+}
+
 function render() {
     const tbody = document.getElementById('list');
     tbody.innerHTML = waypoints.map(w => `
-        <tr style="${w.passed ? 'color:#27ae60' : w.missed ? 'color:#e74c3c' : ''}">
+        <tr style="${w.passed ? 'color:#27ae60; font-weight:bold;' : w.missed ? 'color:#e74c3c' : ''}">
             <td>${w.passed ? '✅' : w.missed ? '❌' : '⏳'}</td>
             <td>${w.name}</td>
             <td class="dist-col">${w.segment.toFixed(0)} m</td>
