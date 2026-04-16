@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v48 - Time Fix</title>
+    <title>GPX Engine v50 - Averages Edition</title>
     <style>
         body { font-family: sans-serif; line-height: 1.5; padding: 10px; background: #f0f3f5; color: #2c3e50; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -28,7 +28,7 @@
 <body>
 
 <div class="card">
-    <h1>GPX ENGINE v48 PRO</h1>
+    <h1>GPX ENGINE v50 PRO</h1>
     <div class="stats-grid">
         <div class="stat-box"><span class="stat-label">Stappen</span><span id="stat-steps" class="stat-val">0</span></div>
         <div class="stat-box"><span class="stat-label">Act. Cadans</span><span id="stat-cadence" class="stat-val">0</span></div>
@@ -72,8 +72,7 @@
 </div>
 
 <script>
-// CONFIG: Snelheid verlaagd naar ~1.5 km/u voor betere registratie bij wandelen
-let CONFIG = { minSpeed: 0.35, radius: 10, maxAcc: 10 };
+let CONFIG = { minSpeed: 0.42, radius: 10, maxAcc: 12 };
 let track = [], waypoints = [], cumDist = [], watchId = null, active = false, finished = false;
 let gpsTrip = 0, lastLat = null, lastLon = null, maxRoutePos = 0, wakeLock = null;
 let sportData = { weight: 92, stepLength: 0.67, totalSteps: 0, movingTime: 0, idleTime: 0, calories: 0, lastTick: null };
@@ -135,7 +134,7 @@ document.getElementById('gpxFile').onchange = e => {
         let wpts = [...xml.getElementsByTagName('wpt')].map(x => ({
             name: x.getElementsByTagName('name')[0]?.textContent || "WP",
             lat: +x.getAttribute('lat'), lon: +x.getAttribute('lon'),
-            passed: false, touched: false
+            passed: false, touched: false, skipped: false
         }));
         wpts.unshift({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false });
         wpts.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false });
@@ -149,8 +148,8 @@ document.getElementById('gpxFile').onchange = e => {
 
 function render() {
     document.getElementById('list').innerHTML = waypoints.map(w => `
-        <tr style="${w.passed ? 'color:#27ae60;' : ''}">
-            <td>${w.passed ? '✅' : '⏳'}</td>
+        <tr style="${w.passed ? 'color:#27ae60;' : (w.skipped ? 'color:#7f8c8d;text-decoration:line-through;' : '')}">
+            <td>${w.passed ? '✅' : (w.skipped ? '❌' : '⏳')}</td>
             <td>${w.name}</td>
             <td style="text-align:right"><b>${w.segment ? w.segment.toFixed(0) : 0} m</b></td>
         </tr>
@@ -182,11 +181,8 @@ function startTracking() {
         }
 
         const dt = (now - sportData.lastTick) / 1000;
-        
-        // Verbeterde bewegingsdetectie: snelheid > 1.5km/u OF afgelegde afstand > 0.5m sinds laatste tick
         let moveDist = 0;
         if (lastLat) moveDist = dist(lastLat, lastLon, lat, lon);
-        
         const isM = speedKmh >= (CONFIG.minSpeed * 3.6) || (moveDist > 0.5 && acc < CONFIG.maxAcc);
         
         if (isM) {
@@ -198,21 +194,14 @@ function startTracking() {
             sportData.idleTime += dt; 
         }
 
-        document.getElementById('stat-steps').innerText = Math.round(sportData.totalSteps);
-        document.getElementById('stat-cadence').innerText = Math.round(isM ? ((speedKmh/3.6 || 1.2)/sportData.stepLength*60) : 0);
-        document.getElementById('stat-kcal').innerText = Math.round(sportData.calories);
-        document.getElementById('stat-trip').innerText = (gpsTrip/1000).toFixed(2);
-        document.getElementById('stat-moving').innerText = new Date(sportData.movingTime * 1000).toISOString().substr(11, 8);
-        document.getElementById('stat-idle').innerText = new Date(sportData.idleTime * 1000).toISOString().substr(11, 8);
-
-        let nIdx = waypoints.findIndex(w => !w.passed);
-        let nWP = waypoints[nIdx], fWP = waypoints[nIdx + 1];
-
+        // --- Waypoint Logica ---
         waypoints.forEach((w, i) => {
-            if (w.passed) return;
+            if (w.passed || w.skipped) return;
             if (dist(lat, lon, w.lat, w.lon) <= CONFIG.radius) w.touched = true;
-            if (curPos >= w.routePos - CONFIG.radius && w.touched) {
-                w.passed = true; speak(w.name + " bereikt");
+            if (curPos >= w.routePos - CONFIG.radius && (w.touched || curPos > w.routePos + 5)) {
+                w.passed = true;
+                speak(w.name + " bereikt");
+                for (let j = 0; j < i; j++) { if (!waypoints[j].passed) waypoints[j].skipped = true; }
                 if (i === waypoints.length - 1) { 
                     finished = true; 
                     navigator.geolocation.clearWatch(watchId); 
@@ -222,16 +211,29 @@ function startTracking() {
             }
         });
 
+        // Berekeningen voor gemiddelden
+        const avgSpeed = sportData.movingTime > 0 ? (gpsTrip / sportData.movingTime) * 3.6 : 0;
+        const avgCadence = sportData.movingTime > 0 ? (sportData.totalSteps / (sportData.movingTime / 60)) : 0;
+        const actCadence = isM ? ((speedKmh/3.6 || 1.2)/sportData.stepLength*60) : 0;
+
+        // UI Updates
+        document.getElementById('stat-steps').innerText = Math.round(sportData.totalSteps);
+        document.getElementById('stat-cadence').innerText = Math.round(actCadence);
+        document.getElementById('stat-kcal').innerText = Math.round(sportData.calories);
+        document.getElementById('stat-trip').innerText = (gpsTrip/1000).toFixed(2);
+        document.getElementById('stat-moving').innerText = new Date(sportData.movingTime * 1000).toISOString().substr(11, 8);
+        document.getElementById('stat-idle').innerText = new Date(sportData.idleTime * 1000).toISOString().substr(11, 8);
+
+        let nIdx = waypoints.findIndex(w => !w.passed && !w.skipped);
+        let nWP = waypoints[nIdx];
         const pC = waypoints.filter(w => w.passed).length;
-        const totalWPs = waypoints.length;
-        const currentWPDisplay = Math.min(pC + 1, totalWPs);
 
         document.getElementById('info').innerHTML = `
-            <b>WP:</b> <span class="highlight">${currentWPDisplay}/${totalWPs}</span> (OK:${pC})<br>
+            <b>WP:</b> <span class="highlight">${nIdx + 1}/${waypoints.length}</span> (OK:${pC})<br>
             <b>DOEL:</b> <span class="highlight">${nWP ? nWP.name : 'FINISH'}</span><br>
             <b>REST:</b> <span class="highlight">${Math.max(0, (nWP ? nWP.routePos - curPos : 0)).toFixed(0)}m</span><br>
-            <b>SNELHEID:</b> <span class="highlight">${speedKmh.toFixed(1)} km/u</span><br>
-            <b>CADANS:</b> <span class="highlight">${Math.round(isM ? ((speedKmh/3.6 || 1.2)/sportData.stepLength*60) : 0)} spm</span><br>
+            <b>SNELHEID (ACT/GEM):</b> <br><span class="highlight">${speedKmh.toFixed(1)} / ${avgSpeed.toFixed(1)} km/u</span><br>
+            <b>CADANS (GEM):</b> <span class="highlight">${Math.round(avgCadence)} spm</span><br>
             <b>GPS:</b> ${acc.toFixed(1)}m
         `;
         lastLat = lat; lastLon = lon; sportData.lastTick = now; render();
