@@ -183,7 +183,7 @@ function startTracking() {
         const dt = (now - sportData.lastTick) / 1000;
         let moveDist = 0;
         if (lastLat) moveDist = dist(lastLat, lastLon, lat, lon);
-        const isM = speedKmh >= (CONFIG.minSpeed * 3.6) || (moveDist > 0.5 && acc < CONFIG.maxAcc);
+        const isM = speedKmh >= (CONFIG.minSpeed * 3.6) || (moveDist > 0.34 && acc < CONFIG.maxAcc);
         
         if (isM) {
             sportData.movingTime += dt;
