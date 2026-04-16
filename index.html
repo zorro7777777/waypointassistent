@@ -85,6 +85,32 @@ Math.sin(dLon/2)**2;
 return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
 
+// ================= GPS QUALITY =================
+function getGPSQuality(accuracy){
+
+let status="";
+let icon="";
+
+if(accuracy<=5){
+status="TOP";
+icon="🟢";
+}
+else if(accuracy<=10){
+status="GOED";
+icon="🟡";
+}
+else if(accuracy<=20){
+status="MATIG";
+icon="🟠";
+}
+else{
+status="SLECHT";
+icon="🔴";
+}
+
+return `${icon} ${status} (${accuracy.toFixed(1)} m)`;
+}
+
 // ================= POLYLINE =================
 function buildPolyline(){
 cumDist=[0];
@@ -170,14 +196,12 @@ track=[...xml.getElementsByTagName('trkpt')]
 
 buildPolyline();
 
-// reset state
 gpsTrip=0;
 lastLat=null;
 lastLon=null;
 maxRoutePos=0;
 active=false;
 
-// WAYPOINTS
 waypoints=[...xml.getElementsByTagName('wpt')]
 .map(x=>({
 name:x.getElementsByTagName('name')[0]?.textContent||"WP",
@@ -187,8 +211,6 @@ routePos:0,
 passed:false,
 missed:false,
 segment:0,
-
-// 🔥 TRUE PASS STATE
 touched:false,
 minDist:Infinity
 }));
@@ -217,14 +239,12 @@ touched:false,
 minDist:Infinity
 });
 
-// routePos
 waypoints.forEach(w=>{
 w.routePos=projectOnRoute(w.lat,w.lon);
 });
 
 waypoints.sort((a,b)=>a.routePos-b.routePos);
 
-// segments correct
 for(let i=0;i<waypoints.length;i++){
 if(i===0){
 waypoints[i].segment=0;
@@ -253,24 +273,18 @@ for(let w of waypoints){
 if(w.passed||w.missed) continue;
 
 const onTrack=minDistToTrack(w.lat,w.lon)<=TRACK_TOL;
-
-if(!onTrack){
-continue;
-}
+if(!onTrack) continue;
 
 const d=dist(lat,lon,w.lat,w.lon);
 
-// track best approach
 if(d<w.minDist){
 w.minDist=d;
 }
 
-// mark real contact
 if(d<=RADIUS){
 w.touched=true;
 }
 
-// PASS RULE (STRICT)
 const passedRoute=pos>=w.routePos-RADIUS;
 
 if(passedRoute && w.touched){
@@ -278,7 +292,6 @@ w.passed=true;
 continue;
 }
 
-// MISS RULE
 if(maxRoutePos>w.routePos+RADIUS && !w.passed){
 w.missed=true;
 }
@@ -300,6 +313,10 @@ const lat=p.coords.latitude;
 const lon=p.coords.longitude;
 const speed=(p.coords.speed||0)*3.6;
 
+// ⭐ GPS ACCURACY
+const accuracy=p.coords.accuracy||0;
+const gpsQuality=getGPSQuality(accuracy);
+
 // distance
 let d=0;
 if(lastLat){
@@ -314,7 +331,6 @@ process(lat,lon);
 lastLat=lat;
 lastLon=lon;
 
-// SPEED WARNING
 let slow="";
 if(speed<MIN_SPEED){
 slow="⏸ STILSTAND";
@@ -323,7 +339,8 @@ slow="⏸ STILSTAND";
 document.getElementById('info').innerHTML=`
 📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}<br>
 🚶 ${speed.toFixed(2)} km/u <span class="slow">${slow}</span><br>
-🧭 ${(gpsTrip/1000).toFixed(3)} km
+🧭 ${(gpsTrip/1000).toFixed(3)} km<br>
+🎯 GPS: ${gpsQuality}
 `;
 
 render();
