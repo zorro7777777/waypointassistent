@@ -144,24 +144,64 @@ function toggleTable() {
 }
 
 document.getElementById('gpxInput').onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
     const r = new FileReader();
     r.onload = ev => {
-        const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
-        const pts = [...xml.getElementsByTagName('trkpt')];
-        if(!pts.length) return;
-        track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
-        cumDist = [0]; 
-        for(let i=0; i<track.length-1; i++) cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
-        let wpts = [...xml.getElementsByTagName('wpt')].map(w => ({ name: w.getElementsByTagName('name')[0]?.textContent || "WP", lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'), passed: false, missed: false, touched: false }));
-        wpts.push({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false, missed: false, touched: false });
-        wpts.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false, touched: false });
-        waypoints = wpts.map(w => { w.routePos = getRInfo(w.lat, w.lon).pos; return w; }).sort((a,b) => a.routePos - b.routePos);
-        for(let i=0; i<waypoints.length; i++) waypoints[i].segment = i === 0 ? 0 : waypoints[i].routePos - waypoints[i-1].routePos;
-        updateWPUI();
-    };
-    r.readAsText(e.target.files[0]);
-};
+        try {
+            const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
+            const pts = [...xml.getElementsByTagName('trkpt')];
+            
+            // FOUTCONTROLE: Bevat de file wel trackpunten?
+            if(!pts || pts.length === 0) {
+                alert("Fout: Ongeldig GPX bestand. Geen trackpunten gevonden.");
+                e.target.value = ""; // Reset de input knop
+                return;
+            }
 
+            // SCHONE START: Wis alle oude data van een vorige upload
+            track = []; 
+            waypoints = []; 
+            cumDist = [0]; 
+            tripDist = 0;
+            maxRoutePos = 0;
+
+            // Verwerk nieuwe data
+            track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
+            for(let i=0; i<track.length-1; i++) {
+                cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
+            }
+            
+            let wpts = [...xml.getElementsByTagName('wpt')].map(w => ({ 
+                name: w.getElementsByTagName('name')[0]?.textContent || "WP", 
+                lat: +w.getAttribute('lat'), 
+                lon: +w.getAttribute('lon'), 
+                passed: false, missed: false, touched: false 
+            }));
+            
+            wpts.push({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false, missed: false, touched: false });
+            wpts.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false, touched: false });
+            
+            waypoints = wpts.map(w => { 
+                w.routePos = getRInfo(w.lat, w.lon).pos; 
+                return w; 
+            }).sort((a,b) => a.routePos - b.routePos);
+
+            // Verberg de knop pas als alles succesvol is geladen
+            document.getElementById('gpxInput').style.display = 'none';
+            document.getElementById('display-content').innerText = "GPX succesvol geladen. Klaar voor start.";
+            updateWPUI();
+            speak("Bestand geladen.");
+
+        } catch (err) {
+            alert("Systeemfout: Kan bestand niet lezen. Is het een geldig XML/GPX bestand?");
+            e.target.value = "";
+        }
+    };
+    r.readAsText(file);
+};
+    
 function updateWPUI() {
     const p = waypoints.filter(w => w.passed).length, m = waypoints.filter(w => w.missed).length, t = waypoints.length;
     document.getElementById('wp-summary').innerText = `Punten: ${t} | ✅ ${p} | ❌ ${m} | ⏳ ${t-p-m}`;
