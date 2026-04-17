@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v67 - Diamond Edition</title>
+    <title>GPX Engine v69 - Platina Edition</title>
     <style>
         body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -11,25 +11,24 @@
         .stat-box { background: #fff; border: 1px solid #ddd; padding: 8px 2px; border-radius: 8px; text-align: center; }
         .stat-label { font-size: 0.55rem; color: #7f8c8d; text-transform: uppercase; display: block; }
         .stat-val { font-weight: bold; font-size: 0.95rem; }
-        #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin: 10px 0; min-height: 220px; line-height: 1.4; border-left: 5px solid #27ae60; font-size: 0.82rem; position: relative; }
+        #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin: 10px 0; min-height: 250px; line-height: 1.4; border-left: 5px solid #27ae60; font-size: 0.82rem; }
         .highlight { color: #fff; font-weight: bold; font-size: 0.95rem; }
-        .field-yellow { color: #ffff00; font-weight: bold; font-size: 0.85rem; }
+        .field-yellow { color: #ffff00; font-weight: bold; font-size: 0.85rem; display: block; margin-top: 2px; }
         .config-section { background: #ecf0f1; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #dcdde1; }
         .summary-bar { font-size: 0.75rem; font-weight: bold; padding: 10px; background: #dfe6e9; border-radius: 5px; margin-top: 10px; display: flex; justify-content: space-around; border: 1px solid #bdc3c7; }
         .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
         button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; color: white; cursor: pointer; }
         .start { background: #27ae60; width: 65%; } .reset { background: #e74c3c; width: 30%; }
-        .copy-btn { background: #34495e; padding: 6px 10px; font-size: 0.7rem; margin-top: 8px; border: 1px solid #5d6d7e; display: inline-block; }
+        .copy-btn { background: #34495e; padding: 8px; font-size: 0.75rem; margin-top: 10px; border: 1px solid #5d6d7e; width: 100%; color: #bdc3c7; }
         .test-audio { background: #3498db; width: 100%; margin-bottom: 10px; font-size: 0.8rem; padding: 8px; }
         table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.8rem; }
-        th { text-align: left; color: #95a5a6; border-bottom: 2px solid #eee; padding: 5px 0; }
         td { padding: 10px 0; border-bottom: 1px solid #f1f1f1; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0; color:#2980b9;">💎 GPX DIAMOND ENGINE v67</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0; color:#2c3e50;">💿 PLATINA ENGINE v69</h1>
     
     <div class="stats-grid">
         <div class="stat-box"><span id="unit-label" class="stat-label">Stappen</span><span id="stat-steps" class="stat-val">0</span></div>
@@ -43,27 +42,24 @@
         <div class="stat-box"><span class="stat-label">Pauze Tijd</span><span id="stat-idle" class="stat-val">00:00:00</span></div>
     </div>
 
-    <div class="config-section">
+    <div class="config-section" id="configArea">
         <div class="row">
-            <label><b>Activiteit:</b></label>
+            <label><b>Profiel:</b></label>
             <select id="profile" onchange="updateProfile()" style="padding:4px; border-radius:4px;">
-                <option value="wandelen">🚶 Wandelen</option>
-                <option value="fietsen">🚲 Fietsen</option>
+                <option value="wandelen">🚶 Wandelen (Max 7km/u)</option>
+                <option value="fietsen">🚲 Fietsen (Max 45km/u)</option>
             </select>
         </div>
         <div class="row">
-            <label><input type="checkbox" id="audioToggle" checked> 🔊 Audio Begeleiding</label>
+            <label><input type="checkbox" id="audioToggle" checked> 🔊 Spraak</label>
             <div>
                 <input type="radio" name="voiceType" value="vrouw" checked> Vrouw 
                 <input type="radio" name="voiceType" value="man"> Man
             </div>
         </div>
-        <div class="row">
-            <label><input type="checkbox" id="showTable" checked onchange="toggleTable()"> 📑 Toon Waypoint Lijst</label>
-        </div>
+        <button onclick="testVoice()" class="test-audio">🔊 TEST STEM</button>
     </div>
 
-    <button onclick="testVoice()" class="test-audio">🔊 TEST STEM GELUID</button>
     <input type="file" id="gpxInput" accept=".gpx" style="width:100%; margin-bottom:10px; border:1px solid #ccc; padding:5px; border-radius:5px; box-sizing: border-box;">
     
     <div class="row">
@@ -71,12 +67,12 @@
         <button onclick="location.reload()" class="reset">🔄 RESET</button>
     </div>
     
-    <div id="info">Diamond Engine stand-by...<br>Upload GPX om de missie te starten.</div>
+    <div id="info">Systeem gereed.<br>Laad een GPX bestand voor start.</div>
 
     <div id="tableCon">
         <div class="summary-bar" id="wp-summary">Punten: 0 | ✅ 0 | ❌ 0 | ⏳ 0</div>
         <table>
-            <thead><tr><th>ST</th><th>WAYPOINT</th><th style="text-align:right">SEGMENT</th></tr></thead>
+            <thead><tr><th style="text-align:left">ST</th><th style="text-align:left">WAYPOINT</th><th style="text-align:right">SEGMENT</th></tr></thead>
             <tbody id="list"></tbody>
         </table>
     </div>
@@ -84,10 +80,10 @@
 
 <script>
 // --- CONFIGURATIE ---
-let CONFIG = { ms: 0.35, th: 0.67, radius: 12, met: 3.5 };
+let CONFIG = { ms: 0.35, max: 7, th: 0.67, radius: 12, met: 3.5 };
 const PROFS = {
-    wandelen: { ms: 0.35, th: 0.67, radius: 12, met: 3.5, unit: "Stappen" },
-    fietsen: { ms: 1.95, th: 2.10, radius: 20, met: 8.0, unit: "Omwentelingen" }
+    wandelen: { ms: 0.35, max: 7, th: 0.67, radius: 12, met: 3.5, unit: "Stappen" },
+    fietsen: { ms: 1.95, max: 45, th: 2.10, radius: 20, met: 8.0, unit: "Omwentelingen" }
 };
 
 let track = [], waypoints = [], cumDist = [];
@@ -95,7 +91,6 @@ let watchId = null, lastPos = null, maxRoutePos = 0, tripDist = 0, finished = fa
 let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
 let alertTime = 0, isOffRoute = false;
 
-// --- AUDIO ENGINE ---
 function speak(t) {
     if (!document.getElementById('audioToggle').checked) return;
     const m = new SpeechSynthesisUtterance(t);
@@ -107,7 +102,6 @@ function speak(t) {
     window.speechSynthesis.speak(m);
 }
 
-// --- GEOMETRIE ---
 function getDist(a,b,c,d){
     const R=6371000, rL=(c-a)*Math.PI/180, rO=(d-b)*Math.PI/180;
     const x = Math.sin(rL/2)**2 + Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(rO/2)**2;
@@ -123,46 +117,36 @@ function getRInfo(lat, lon) {
     return { pos: bP, off: bD };
 }
 
-// --- UTILS ---
 function copyCoords(lat, lon) {
     const txt = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
     navigator.clipboard.writeText(txt).then(() => {
         const b = document.getElementById('copyBtn');
         b.innerText = "COÖRDINATEN GEKOPIEERD!";
-        setTimeout(() => b.innerText = "KOPIEER COÖRDINATEN", 2000);
+        setTimeout(() => b.innerText = "📍 KOPIEER HUIDIGE LOCATIE", 2000);
     });
 }
 
-// --- GPX PARSER ---
 document.getElementById('gpxInput').onchange = e => {
     const r = new FileReader();
     r.onload = ev => {
         const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
         const pts = [...xml.getElementsByTagName('trkpt')];
-        if(!pts.length) { alert("Geen track gevonden in GPX!"); return; }
-        
+        if(!pts.length) return;
         track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
         cumDist = [0]; 
         for(let i=0; i<track.length-1; i++) cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
         
         let wpts = [...xml.getElementsByTagName('wpt')].map(w => ({
-            name: w.getElementsByTagName('name')[0]?.textContent || "Waypoint",
+            name: w.getElementsByTagName('name')[0]?.textContent || "WP",
             lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'),
             passed: false, missed: false, touched: false
         }));
-
         wpts.push({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false, missed: false, touched: false });
         wpts.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false, touched: false });
 
-        waypoints = wpts.map(w => { 
-            w.routePos = getRInfo(w.lat, w.lon).pos; 
-            return w; 
-        }).sort((a,b) => a.routePos - b.routePos);
-
+        waypoints = wpts.map(w => { w.routePos = getRInfo(w.lat, w.lon).pos; return w; }).sort((a,b) => a.routePos - b.routePos);
         for(let i=0; i<waypoints.length; i++) waypoints[i].segment = i === 0 ? 0 : waypoints[i].routePos - waypoints[i-1].routePos;
-        
         updateWPUI();
-        document.getElementById('info').innerHTML = "Route succesvol geladen.<br>Druk op START om te beginnen.";
     };
     r.readAsText(e.target.files[0]);
 };
@@ -178,10 +162,10 @@ function updateWPUI() {
         </tr>`).join('');
 }
 
-// --- CORE GPS LUS ---
 function startGPS() {
     if (watchId || !track.length) return;
-    speak("Diamond Engine gestart. Volg de route.");
+    document.getElementById('configArea').style.display = 'none';
+    speak("Platina Engine actief. Goede reis.");
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen');
     
     watchId = navigator.geolocation.watchPosition(p => {
@@ -193,7 +177,7 @@ function startGPS() {
         const R = getRInfo(lat, lon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        // Dynamische Off-Route Monitoring
+        // Off-Route Logica met dynamische afstandsafkondiging
         if (R.off > 100) {
             if (now - alertTime > 45000) { 
                 speak(`Let op, je bent nu ${Math.round(R.off)} meter van de route afgeweken.`);
@@ -205,8 +189,8 @@ function startGPS() {
             isOffRoute = false;
         }
 
-        // Bewegingsdetectie & Stats
-        const isM = skmh >= (CONFIG.ms * 3.6);
+        // Bewegingsdetectie met MENSELIJKE LIMIET (max 7 km/u voor wandelen)
+        const isM = skmh >= (CONFIG.ms * 3.6) && skmh <= CONFIG.max;
         if (isM) {
             sport.movingTime += dt;
             sport.steps += ((skmh/3.6 * dt) / CONFIG.th);
@@ -222,34 +206,24 @@ function startGPS() {
             if (dW <= CONFIG.radius) w.touched = true;
             const isFinish = (i === waypoints.length - 1);
 
-            // BEREIKT
             if (R.pos >= w.routePos - CONFIG.radius && w.touched) {
                 w.passed = true;
-                if (isFinish) {
-                    finished = true;
-                    speak("Gefeliciteerd, je hebt de finish bereikt.");
-                } else {
-                    speak("Je hebt " + w.name + " bereikt.");
-                }
+                speak(isFinish ? "Gefeliciteerd, finish bereikt" : "Je hebt " + w.name + " bereikt.");
+                if (isFinish) { finished = true; document.getElementById('configArea').style.display = 'block'; }
                 updateWPUI();
-            } 
-            // GEMIST (alleen stoppen als het de finish is)
-            else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 10) {
+            } else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 10) {
                 w.missed = true;
                 speak("Je hebt " + w.name + " overgeslagen.");
-                if (isFinish) finished = true;
+                if (isFinish) { finished = true; document.getElementById('configArea').style.display = 'block'; }
                 updateWPUI();
             }
         });
 
-        // UI Update
+        // UI RENDER
         const avgS = (sport.movingTime > 0) ? (tripDist / 1000) / (sport.movingTime / 3600) : 0;
         const avgC = (sport.movingTime > 0) ? (sport.steps / (sport.movingTime / 60)) : 0;
         const next = waypoints.find(w => !w.passed && !w.missed);
         
-        const latLetter = lat >= 0 ? "N" : "Z";
-        const lonLetter = lon >= 0 ? "O" : "W";
-
         document.getElementById('stat-steps').innerText = Math.round(sport.steps);
         document.getElementById('stat-trip').innerText = (tripDist/1000).toFixed(2);
         document.getElementById('stat-kcal').innerText = Math.round(sport.kcal);
@@ -264,11 +238,12 @@ function startGPS() {
             <b>SNELHEID:</b> ${skmh.toFixed(1)} km/u (Realtime)<br>
             <b>GEM. SNELHEID:</b> ${avgS.toFixed(2)} km/u | <b>CADANS:</b> ${Math.round(avgC)}<br>
             <b>OFF-TRACK:</b> <span style="color:${isOffRoute?'#e74c3c':'#00ff00'}">${Math.round(R.off)}m</span> | <b>GPS:</b> ${acc.toFixed(0)}m<br>
-            <span class="field-yellow">COÖRD: ${Math.abs(lat).toFixed(6)}° ${latLetter} | ${Math.abs(lon).toFixed(6)}° ${lonLetter}</span><br>
-            <button id="copyBtn" class="copy-btn" onclick="copyCoords(${lat},${lon})">📍 KOPIEER COÖRDINATEN</button>
+            <span class="field-yellow">LATITUDE:  ${Math.abs(lat).toFixed(6)}° ${lat >= 0 ? "N" : "Z"}</span>
+            <span class="field-yellow">LONGITUDE: ${Math.abs(lon).toFixed(6)}° ${lon >= 0 ? "O" : "W"}</span>
+            <button id="copyBtn" class="copy-btn" onclick="copyCoords(${lat},${lon})">📍 KOPIEER HUIDIGE LOCATIE</button>
         `;
         sport.lastTick = now;
-    }, e => console.error(e), { enableHighAccuracy: true });
+    }, null, { enableHighAccuracy: true });
 }
 
 function updateProfile() {
@@ -276,9 +251,8 @@ function updateProfile() {
     document.getElementById('unit-label').innerText = CONFIG.unit;
     speak("Profiel gewijzigd.");
 }
-function testVoice() { speak("Systeemtest: De Diamond Engine stembegeleiding is nu actief."); }
+function testVoice() { speak("Test van het platina spraaksysteem."); }
 function toggleTable() { document.getElementById('tableCon').style.display = document.getElementById('showTable').checked ? 'block' : 'none'; }
-window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
 </script>
 </body>
 </html>
