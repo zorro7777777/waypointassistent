@@ -105,15 +105,15 @@ const PROFILES = {
         met: 3.5, 
         tolerance: 50, 
         repeatInterval: 20000,
-        minSpeed: 1.5, // Onder 1.5 km/u = stilstand/ruis
-        maxSpeed: 8.5  // Boven 8.5 km/u = ongeldig voor wandelen
+        minSpeed: 0.35, // Onder 0.35 km/u = stilstand/ruis
+        maxSpeed: 6.50  // Boven 6.50 km/u = ongeldig voor wandelen
     },
     fietsen: { 
         met: 8.0, 
         tolerance: 100, 
         repeatInterval: 15000,
         minSpeed: 4.0, // Onder 4.0 km/u = stilstaan op de trappers
-        maxSpeed: 48.0 // Boven 48 km/u = waarschijnlijk gemotoriseerd
+        maxSpeed: 45.0 // Boven 45 km/u = waarschijnlijk gemotoriseerd
     }
 };
 
@@ -127,7 +127,7 @@ const AudioService = {
         if (priority) window.speechSynthesis.cancel();
         const msg = new SpeechSynthesisUtterance(text);
         msg.lang = 'nl-NL';
-        msg.rate = 0.95;
+        msg.rate = 0.90;
         window.speechSynthesis.speak(msg);
     }
 };
