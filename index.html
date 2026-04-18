@@ -3,84 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Platina Engine v96 - Field Master</title>
+    <title>Platina Engine v98 - Loop Master</title>
     <style>
         :root { 
-            --bg: #f4f7f6; 
-            --dark: #101010; 
-            --accent: #00ff00; 
-            --green: #00b894; 
-            --red: #d63031; 
-            --white: #ffffff; 
-            --panel: #2d3436;
+            --bg: #f4f7f6; --dark: #101010; --accent: #00ff00; --green: #00b894; 
+            --red: #d63031; --white: #ffffff; --panel: #2d3436;
         }
-        
         body { font-family: -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 10px; color: #2d3436; }
-        
-        .card { 
-            max-width: 500px; 
-            margin: auto; 
-            background: white; 
-            border-radius: 16px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1); 
-            overflow: hidden; 
-        }
-
-        /* Dashboard Stats */
-        .stats-bar { 
-            display: grid; 
-            grid-template-columns: repeat(4, 1fr); 
-            background: var(--panel); 
-            color: white; 
-            padding: 12px 5px; 
-            gap: 5px; 
-        }
+        .card { max-width: 500px; margin: auto; background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; }
+        .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--panel); color: white; padding: 12px 5px; gap: 5px; }
         .stat { text-align: center; }
         .stat-l { font-size: 0.6rem; text-transform: uppercase; opacity: 0.7; display: block; margin-bottom: 2px; }
         .stat-v { font-weight: bold; font-size: 1.1rem; }
-
-        /* Console Window (High Contrast) */
-        #console { 
-            background: var(--dark); 
-            color: var(--white); 
-            padding: 25px 20px; 
-            font-family: 'Courier New', monospace; 
-            min-height: 220px; 
-            position: relative; 
-            border-bottom: 5px solid var(--green); 
-        }
+        #console { background: var(--dark); color: var(--white); padding: 25px 20px; font-family: 'Courier New', monospace; min-height: 220px; position: relative; border-bottom: 5px solid var(--green); }
         .gear { position: absolute; top: 12px; right: 12px; cursor: pointer; font-size: 1.5rem; opacity: 0.5; z-index: 10; }
         .next-label { color: var(--accent); font-size: 1rem; font-weight: bold; margin-bottom: 5px; }
         .main-val { font-size: 2.2rem; font-weight: bold; margin: 8px 0; line-height: 1.1; }
         .sub-val { font-size: 1.2rem; opacity: 0.9; margin-top: 5px; }
-        .status-line { margin-top: 20px; font-size: 0.9rem; border-top: 1px solid #333; padding-top: 12px; line-height: 1.5; }
-
-        /* Controls */
+        .status-line { margin-top: 20px; font-size: 0.9rem; border-top: 1px solid #333; padding-top: 12px; }
         .p10 { padding: 15px; }
         .btn-row { display: flex; gap: 10px; margin-top: 10px; }
-        button { padding: 16px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; flex: 1; font-size: 1rem; transition: transform 0.1s; }
-        button:active { transform: scale(0.98); }
+        button { padding: 16px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; flex: 1; font-size: 1rem; }
         .btn-main { background: var(--green); color: white; }
         .btn-stop { background: #636e72; color: white; display: none; }
-        .btn-reset { background: #fab1a0; color: var(--red); flex: 0.5; }
-
-        #config { background: #dfe6e9; padding: 15px; display: none; border-radius: 10px; margin-bottom: 15px; border: 1px solid #ccc; }
-        
-        /* Waypoint List */
+        .btn-reset { background: #fab1a0; color: var(--red); flex: 0.4; }
+        #config { background: #dfe6e9; padding: 15px; display: none; border-radius: 10px; margin-bottom: 15px; }
         #wp-list { margin-top: 20px; border-radius: 10px; overflow: hidden; border: 1px solid #eee; }
-        .wp-item { 
-            display: flex; 
-            justify-content: space-between; 
-            padding: 14px 12px; 
-            border-bottom: 1px solid #eee; 
-            font-size: 0.95rem; 
-            cursor: pointer; 
-            background: #fff;
-        }
-        .wp-item:last-child { border-bottom: none; }
+        .wp-item { display: flex; justify-content: space-between; padding: 14px 12px; border-bottom: 1px solid #eee; font-size: 0.95rem; cursor: pointer; background: #fff; }
         .passed { color: var(--green); background: #e6fffb !important; font-weight: bold; }
         .missed { color: var(--red); text-decoration: line-through; background: #fff1f0 !important; }
-        
         input[type="file"] { width: 100%; padding: 10px; border: 2px dashed #ccc; border-radius: 10px; box-sizing: border-box; margin-bottom: 10px; }
     </style>
 </head>
@@ -96,21 +47,17 @@
 
     <div id="console">
         <div class="gear" onclick="UI.toggleConfig()">⚙️</div>
-        <div id="display">
-            <div style="margin-top:50px; text-align:center; opacity:0.6;">Selecteer een GPX bestand om te starten.</div>
-        </div>
+        <div id="display">Laad GPX bestand...</div>
     </div>
 
     <div class="p10">
         <div id="config">
-            <label style="font-weight:bold; display:block; margin-bottom:5px;">Activiteit:</label>
             <select id="p-select" onchange="UI.updateProfile()" style="width:100%; padding:12px; margin-bottom:15px; border-radius:5px;">
-                <option value="wandelen">🚶 Wandelen (Tolerantie: 50m)</option>
-                <option value="fietsen">🚲 Fietsen (Tolerantie: 100m)</option>
+                <option value="wandelen">🚶 Wandelen (50m afwijking)</option>
+                <option value="fietsen">🚲 Fietsen (100m afwijking)</option>
             </select>
             <label style="display:flex; align-items:center; cursor:pointer;">
-                <input type="checkbox" id="audio-on" checked style="width:20px; height:20px; margin-right:10px;"> 
-                Audio Feedback Inschakelen
+                <input type="checkbox" id="audio-on" checked style="width:20px; height:20px; margin-right:10px;"> Audio aan
             </label>
         </div>
 
@@ -121,36 +68,27 @@
             <button class="btn-stop" id="btn-stop" onclick="Controller.stop()">⏸ STOP</button>
             <button class="btn-reset" onclick="location.reload()">🔄</button>
         </div>
-
         <div id="wp-list"></div>
     </div>
 </div>
 
 <script>
-/** * DOMAIN RULES & PROFILES
- */
 const PROFILES = {
     wandelen: { met: 3.5, stride: 0.75, tolerance: 50 },
     fietsen: { met: 8.0, stride: 2.10, tolerance: 100 }
 };
 
-/**
- * AUDIO SERVICE (With Guide Mode)
- */
 const AudioService = {
     speak(text, priority = false) {
         if (!document.getElementById('audio-on').checked) return;
         if (priority) window.speechSynthesis.cancel();
         const msg = new SpeechSynthesisUtterance(text);
         msg.lang = 'nl-NL';
-        msg.rate = 0.9; // Rustig tempo voor gids-ervaring
+        msg.rate = 0.9;
         window.speechSynthesis.speak(msg);
     }
 };
 
-/**
- * CORE ENGINES (Pure Logic)
- */
 const GpxEngine = {
     calcDist(p1, p2) {
         const R = 6371000;
@@ -159,13 +97,11 @@ const GpxEngine = {
         const a = Math.sin(dLat/2)**2 + Math.cos(p1.lat*Math.PI/180)*Math.cos(p2.lat*Math.PI/180)*Math.sin(dLon/2)**2;
         return 2 * R * Math.asin(Math.sqrt(a));
     },
-
     findNearest(pos, track, cumDist, lastIdx) {
         let best = { dist: Infinity, idx: lastIdx };
-        const win = 150; // Zoekvenster voor performance
+        const win = 150;
         const start = Math.max(0, lastIdx - win);
         const end = Math.min(track.length, lastIdx + win);
-        
         for (let i = (lastIdx === 0 ? 0 : start); i < (lastIdx === 0 ? track.length : end); i++) {
             const d = this.calcDist(pos, track[i]);
             if (d < best.dist) best = { dist: d, idx: i };
@@ -174,9 +110,6 @@ const GpxEngine = {
     }
 };
 
-/**
- * UI CONTROLLER (Presentation)
- */
 const UI = {
     dom: {},
     init() {
@@ -192,12 +125,11 @@ const UI = {
     renderConsole(nextWp, dist, offRoute, acc) {
         const profile = PROFILES[this.dom['p-select'].value];
         this.dom['display'].innerHTML = `
-            <div class="next-label">VOLGEND DOEL:</div>
-            <div class="main-val">${nextWp ? nextWp.name : 'FINISH'}</div>
-            <div class="sub-val">AFSTAND: ${nextWp ? Math.round(dist) + 'm' : '0m'}</div>
+            <div class="next-label">VOLGEND:</div>
+            <div class="main-val">${nextWp ? nextWp.name : 'ROUTE VOLTOOID'}</div>
+            <div class="sub-val">${nextWp ? Math.round(dist) + 'm tot doel' : 'Finish bereikt'}</div>
             <div class="status-line">
-                AFWIJKING: <span style="color:${offRoute > profile.tolerance ? '#ff4757' : 'var(--accent)'}">${Math.round(offRoute)}m</span><br>
-                GPS ACC: ${Math.round(acc)}m
+                AFW: <span style="color:${offRoute > profile.tolerance ? '#ff4757' : 'var(--accent)'}">${Math.round(offRoute)}m</span> | GPS: ${Math.round(acc)}m
             </div>
         `;
     },
@@ -214,18 +146,16 @@ const UI = {
         c.style.display = c.style.display === 'block' ? 'none' : 'block';
     },
     updateProfile() {
-        this.dom['unit-label'].innerText = this.dom['p-select'].value === 'wandelen' ? 'Stappen' : 'Omwentelingen';
+        this.dom['unit-label'].innerText = this.dom['p-select'].value === 'wandelen' ? 'Stappen' : 'Omw.';
     }
 };
 
-/**
- * MAIN CONTROLLER (Orchestrator)
- */
 const Controller = {
     data: { track: [], waypoints: [], cumDist: [] },
     state: { 
         active: false, watchId: null, lastTrackIdx: 0, currentWpIdx: 0, maxDist: 0,
-        steps: 0, speed: 0, kcal: 0, trip: 0, lastTick: null, offRouteAlerted: false
+        steps: 0, speed: 0, kcal: 0, trip: 0, lastTick: null, offRouteAlerted: false,
+        totalRouteLen: 0
     },
 
     init() {
@@ -236,61 +166,45 @@ const Controller = {
     handleFile(e) {
         const reader = new FileReader();
         reader.onload = (ev) => {
-            try {
-                const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
-                const pts = [...xml.getElementsByTagName('trkpt')].map(p => ({
-                    lat: +p.getAttribute('lat'), 
-                    lon: +p.getAttribute('lon')
-                }));
-                
-                if (pts.length === 0) throw "Geen trackpunten gevonden in GPX.";
+            const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
+            const pts = [...xml.getElementsByTagName('trkpt')].map(p => ({lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon')}));
+            this.data.cumDist = [0];
+            for(let i=0; i<pts.length-1; i++) this.data.cumDist[i+1] = this.data.cumDist[i] + GpxEngine.calcDist(pts[i], pts[i+1]);
+            this.data.track = pts;
+            this.state.totalRouteLen = this.data.cumDist.at(-1);
 
-                // Cumulatieve afstand berekenen
-                this.data.cumDist = [0];
-                for(let i=0; i<pts.length-1; i++) {
-                    this.data.cumDist[i+1] = this.data.cumDist[i] + GpxEngine.calcDist(pts[i], pts[i+1]);
-                }
-                this.data.track = pts;
+            // Virtuele Start toevoegen
+            const wpts = [{
+                name: "START", desc: "Startpunt van uw route.", lat: pts[0].lat, lon: pts[0].lon, status: 'pending', routePos: 0
+            }];
 
-                // Waypoints met Desc support
-                this.data.waypoints = [...xml.getElementsByTagName('wpt')].map(w => ({
-                    name: w.getElementsByTagName('name')[0]?.textContent || "Punt",
-                    desc: w.getElementsByTagName('desc')[0]?.textContent || "",
-                    lat: +w.getAttribute('lat'), 
-                    lon: +w.getAttribute('lon'),
-                    status: 'pending'
-                })).map(w => {
-                    w.routePos = GpxEngine.findNearest(w, this.data.track, this.data.cumDist, 0).pos;
-                    return w;
-                }).sort((a,b) => a.routePos - b.routePos);
-                
-                // Finish toevoegen
-                this.data.waypoints.push({
-                    name: "FINISH", 
-                    desc: "U heeft het eindpunt van de route bereikt.", 
-                    lat: pts.at(-1).lat, 
-                    lon: pts.at(-1).lon, 
-                    status: 'pending', 
-                    routePos: this.data.cumDist.at(-1)
-                });
+            // GPX Waypoints
+            const gpxWpts = [...xml.getElementsByTagName('wpt')].map(w => ({
+                name: w.getElementsByTagName('name')[0]?.textContent || "Knooppunt",
+                desc: w.getElementsByTagName('desc')[0]?.textContent || "",
+                lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'), status: 'pending'
+            })).map(w => {
+                w.routePos = GpxEngine.findNearest(w, this.data.track, this.data.cumDist, 0).pos;
+                return w;
+            });
 
-                UI.renderWpList(this.data.waypoints);
-                UI.dom['display'].innerHTML = `<div style="text-align:center; font-weight:bold; color:var(--green); margin-top:50px;">GPX GEACCEPTEERD.<br>Druk op START om te beginnen.</div>`;
-                AudioService.speak("Route succesvol geladen.");
-            } catch (err) {
-                alert("Fout bij laden GPX: " + err);
-            }
+            this.data.waypoints = wpts.concat(gpxWpts).sort((a,b) => a.routePos - b.routePos);
+            
+            // Virtuele Finish toevoegen
+            this.data.waypoints.push({
+                name: "FINISH", desc: "Eindpunt van de route.", lat: pts.at(-1).lat, lon: pts.at(-1).lon, status: 'pending', routePos: this.state.totalRouteLen
+            });
+
+            UI.renderWpList(this.data.waypoints);
+            UI.dom['display'].innerText = "GPX geladen. Druk op START.";
+            AudioService.speak("Bestand geladen.");
         };
         reader.readAsText(e.target.files[0]);
     },
 
     describeWp(idx) {
         const wp = this.data.waypoints[idx];
-        if (!wp.desc || wp.desc.trim() === "") {
-            AudioService.speak("Geen extra informatie beschikbaar voor dit knooppunt.", true);
-        } else {
-            AudioService.speak(wp.desc, true);
-        }
+        AudioService.speak(wp.desc || "Geen extra informatie.", true);
     },
 
     start() {
@@ -301,14 +215,10 @@ const Controller = {
         UI.dom['btn-stop'].style.display = 'block';
         UI.dom['file-in'].style.display = 'none';
         
-        this.state.watchId = navigator.geolocation.watchPosition(
-            (p) => this.tick(p), 
-            (err) => console.error("GPS Error:", err), 
-            { enableHighAccuracy: true }
-        );
+        this.state.watchId = navigator.geolocation.watchPosition((p) => this.tick(p), null, {enableHighAccuracy:true});
         
-        const first = this.data.waypoints[0];
-        AudioService.speak("Tracking geactiveerd. Ga nu naar " + first.name, true);
+        // Directe check op Startpunt
+        AudioService.speak("Systeem actief. Vertrek vanaf " + this.data.waypoints[0].name, true);
     },
 
     stop() {
@@ -316,7 +226,7 @@ const Controller = {
         this.state.active = false;
         UI.dom['btn-stop'].style.display = 'none';
         UI.dom['btn-start'].style.display = 'block';
-        AudioService.speak("Tracking gepauzeerd.");
+        AudioService.speak("Gepauzeerd.");
     },
 
     tick(p) {
@@ -325,45 +235,41 @@ const Controller = {
         const now = Date.now();
         const dt = (now - this.state.lastTick) / 1000;
         const profile = PROFILES[UI.dom['p-select'].value];
-        
         const pos = { lat, lon };
+        
         const R = GpxEngine.findNearest(pos, this.data.track, this.data.cumDist, this.state.lastTrackIdx);
         this.state.lastTrackIdx = R.idx;
-        
         if (R.pos > this.state.maxDist) this.state.maxDist = R.pos;
 
-        // AFWIJKINGSDETECTIE (Met cooldown)
-        if (R.dist > profile.tolerance) {
-            if (!this.state.offRouteAlerted) {
-                AudioService.speak("Let op, u wijkt af van de route.");
-                this.state.offRouteAlerted = true;
-            }
-        } else {
+        // Off-route check
+        if (R.dist > profile.tolerance && !this.state.offRouteAlerted) {
+            AudioService.speak("U wijkt af van de route.");
+            this.state.offRouteAlerted = true;
+        } else if (R.dist <= profile.tolerance) {
             this.state.offRouteAlerted = false;
         }
 
-        // SPORT ENGINE (Telt altijd door zolang we niet bij de FINISH zijn)
+        // Stats
         this.state.speed = (speed || 0) * 3.6;
-        const distInTick = (speed || 0) * dt;
-        
-        // Filter ruis bij stilstand
-        if (this.state.speed > 1.5) {
+        if (this.state.speed > 1.2) {
+            const distInTick = (speed || 0) * dt;
             this.state.trip += distInTick;
             this.state.steps += distInTick / profile.stride;
             this.state.kcal += ((profile.met * 3.5 * 85) / 12000) * dt;
         }
 
-        // WAYPOINT POINTER LOGICA
+        // WAYPOINT POINTER LOGIC (O(1))
         const nextWp = this.data.waypoints[this.state.currentWpIdx];
         if (nextWp) {
             const dToWp = GpxEngine.calcDist(pos, nextWp);
             
-            // Waypoint bereikt
-            if (dToWp < 20) {
+            // LUS-VEILIGHEID: Finish kan pas na 10% van de route getriggerd worden
+            const isFinish = (nextWp.name === "FINISH");
+            const finishLocked = isFinish && (this.state.maxDist < this.state.totalRouteLen * 0.1);
+
+            if (dToWp < 20 && !finishLocked) {
                 this.handleWpPass(nextWp, false);
-            } 
-            // Waypoint gemist (overschreden op de route)
-            else if (this.state.maxDist > nextWp.routePos + 35) {
+            } else if (this.state.maxDist > nextWp.routePos + 35 && !isFinish) {
                 this.handleWpPass(nextWp, true);
             }
         }
@@ -378,24 +284,15 @@ const Controller = {
         this.state.currentWpIdx++;
         UI.renderWpList(this.data.waypoints);
         
-        const isFinish = wp.name === "FINISH";
-
-        if (isFinish) {
-            AudioService.speak(missed ? "De finish is gepasseerd. De tracking is nu gestopt." : "Gefeliciteerd, u heeft de bestemming bereikt.", true);
-            this.stop(); 
+        if (wp.name === "FINISH") {
+            AudioService.speak("Bestemming bereikt. Einde route.", true);
+            this.stop();
             return;
         }
 
-        // Melding voor huidig punt
         AudioService.speak(missed ? wp.name + " overgeslagen." : wp.name + " bereikt.", true);
-        
-        // Directe aankondiging volgend punt
         const next = this.data.waypoints[this.state.currentWpIdx];
-        if (next) {
-            setTimeout(() => {
-                AudioService.speak("Ga nu naar " + next.name);
-            }, 2500);
-        }
+        if (next) setTimeout(() => AudioService.speak("Volgend doel: " + next.name), 2500);
     }
 };
 
