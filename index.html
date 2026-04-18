@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Platina Engine v99 - Field Commander</title>
+    <title>Platina Engine v99.1 - Field Commander</title>
     <style>
         :root { --bg: #f4f7f6; --dark: #101010; --accent: #00ff00; --green: #00b894; --red: #d63031; --white: #ffffff; --panel: #2d3436; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 10px; color: #2d3436; }
@@ -13,12 +13,11 @@
         .stat-l { font-size: 0.6rem; text-transform: uppercase; opacity: 0.7; display: block; }
         .stat-v { font-weight: bold; font-size: 1.1rem; }
         #console { background: var(--dark); color: var(--white); padding: 25px 20px; font-family: 'Courier New', monospace; min-height: 240px; position: relative; border-bottom: 5px solid var(--green); }
-        .gear { position: absolute; top: 12px; right: 12px; cursor: pointer; font-size: 1.6rem; z-index: 100; }
+        .gear { position: absolute; top: 12px; right: 12px; cursor: pointer; font-size: 1.6rem; z-index: 100; text-shadow: 0 0 10px rgba(0,0,0,0.5); }
         .next-label { color: var(--accent); font-size: 1rem; font-weight: bold; }
         .main-val { font-size: 2.2rem; font-weight: bold; margin: 8px 0; }
         .sub-val { font-size: 1.3rem; opacity: 0.9; }
-        /* Grotere leesbaarheid laatste regel */
-        .status-line { margin-top: 25px; font-size: 1.1rem; border-top: 1px solid #333; padding-top: 15px; font-weight: bold; }
+        .status-line { margin-top: 25px; font-size: 1.15rem; border-top: 1px solid #333; padding-top: 15px; font-weight: bold; color: var(--white); }
         .p10 { padding: 15px; }
         .btn-row { display: flex; gap: 10px; margin-top: 10px; }
         button { padding: 16px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; flex: 1; font-size: 1rem; }
@@ -26,12 +25,14 @@
         .btn-stop { background: var(--red); color: white; display: none; }
         .btn-reset { background: #636e72; color: white; }
         #config { background: #dfe6e9; padding: 15px; display: none; border-radius: 10px; margin-bottom: 15px; border: 1px solid #b2bec3; }
-        #wp-list { margin-top: 20px; border-radius: 10px; overflow: hidden; border: 1px solid #eee; display: block; }
+        #wp-list { margin-top: 20px; border-radius: 10px; overflow: hidden; border: 1px solid #eee; }
         .wp-item { display: flex; justify-content: space-between; padding: 14px 12px; border-bottom: 1px solid #eee; font-size: 1rem; cursor: pointer; background: #fff; }
         .passed { color: var(--green); background: #e6fffb !important; }
         .missed { color: var(--red); text-decoration: line-through; background: #fff1f0 !important; }
         input[type="file"] { width: 100%; padding: 10px; margin-bottom: 10px; }
         .hidden { display: none !important; }
+        .settings-label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; cursor: pointer; font-weight: 500; }
+        .settings-label input { width: 20px; height: 20px; }
     </style>
 </head>
 <body>
@@ -46,19 +47,31 @@
 
     <div id="console">
         <div class="gear" onclick="UI.toggleConfig()">⚙️</div>
-        <div id="display">Laad GPX...</div>
+        <div id="display">Selecteer GPX bestand...</div>
     </div>
 
     <div class="p10">
         <div id="config">
-            <h4 style="margin:0 0 10px 0;">Instellingen</h4>
-            <select id="p-select" onchange="UI.updateProfile()" style="width:100%; padding:12px; margin-bottom:10px;">
+            <h3 style="margin:0 0 15px 0; font-size:1.1rem;">Beheer & Instellingen</h3>
+            
+            <label style="display:block; margin-bottom:5px; font-size:0.8rem; text-transform:uppercase; color:#636e72;">Activiteitsprofiel</label>
+            <select id="p-select" onchange="UI.updateProfile()" style="width:100%; padding:12px; margin-bottom:15px; border-radius:8px;">
                 <option value="wandelen">🚶 Wandelen (50m - herhaal 20s)</option>
                 <option value="fietsen">🚲 Fietsen (100m - herhaal 15s)</option>
             </select>
-            <label style="display:block; margin-bottom:10px;"><input type="checkbox" id="audio-on" checked> Audio Feedback</label>
-            <label style="display:block; margin-bottom:10px;"><input type="checkbox" id="show-list-check" checked onchange="UI.toggleList()"> Toon Knooppuntenlijst</label>
-            <div id="escape-tools" class="hidden" style="border-top:1px solid #ccc; padding-top:10px;">
+
+            <label class="settings-label">
+                <span>Audio Feedback</span>
+                <input type="checkbox" id="audio-on" checked>
+            </label>
+
+            <label class="settings-label">
+                <span>Knooppuntenlijst tonen</span>
+                <input type="checkbox" id="show-list-check" checked onchange="UI.toggleList()">
+            </label>
+
+            <div id="escape-tools" class="hidden" style="border-top:1px solid #b2bec3; padding-top:15px; margin-top:5px;">
+                <p style="font-size:0.75rem; color:#d63031; margin-bottom:10px;">⚠️ Let op: Reset stopt de huidige sessie volledig.</p>
                 <button class="btn-reset" onclick="location.reload()" style="width:100%;">VOLLEDIGE RESET</button>
             </div>
         </div>
@@ -75,6 +88,8 @@
 </div>
 
 <script>
+/** * CONFIG & SERVICES 
+ */
 const PROFILES = {
     wandelen: { met: 3.5, stride: 0.75, tolerance: 50, repeatInterval: 20000 },
     fietsen: { met: 8.0, stride: 2.10, tolerance: 100, repeatInterval: 15000 }
@@ -115,7 +130,7 @@ const GpxEngine = {
 const UI = {
     dom: {},
     init() {
-        const ids = ['v-steps','v-speed','v-kcal','v-trip','display','wp-list','unit-label','p-select','btn-start','btn-stop','file-in','main-controls','escape-tools','show-list-check'];
+        const ids = ['v-steps','v-speed','v-kcal','v-trip','display','wp-list','unit-label','p-select','btn-start','btn-stop','file-in','main-controls','escape-tools','show-list-check','config'];
         ids.forEach(id => this.dom[id] = document.getElementById(id));
     },
     renderStats(s) {
@@ -144,14 +159,13 @@ const UI = {
         `).join('');
     },
     toggleConfig() {
-        const c = document.getElementById('config');
-        const isOpen = c.style.display === 'block';
-        c.style.display = isOpen ? 'none' : 'block';
-        // Toon escape tools alleen als config open is
+        const isOpen = this.dom['config'].style.display === 'block';
+        this.dom['config'].style.display = isOpen ? 'none' : 'block';
+        // Toon/verberg de reset knop alleen in het tandwiel-menu
         this.dom['escape-tools'].classList.toggle('hidden', isOpen);
     },
     toggleList() {
-        this.dom['wp-list'].style.display = this.dom['show-list-check'].checked ? 'block' : 'none';
+        this.dom['wp-list'].classList.toggle('hidden', !this.dom['show-list-check'].checked);
     },
     updateProfile() {
         this.dom['unit-label'].innerText = this.dom['p-select'].value === 'wandelen' ? 'Stappen' : 'Omw.';
@@ -195,8 +209,8 @@ const Controller = {
             this.data.waypoints.push({name: "FINISH", desc: "Eindpunt", lat: pts.at(-1).lat, lon: pts.at(-1).lon, status: 'pending', routePos: this.state.totalRouteLen});
 
             UI.renderWpList(this.data.waypoints);
-            UI.dom['display'].innerText = "Route OK. Tik START.";
-            AudioService.speak("Route geladen.");
+            UI.dom['display'].innerText = "GPX geladen. Tik START.";
+            AudioService.speak("Bestand geladen.");
         };
         reader.readAsText(e.target.files[0]);
     },
@@ -218,7 +232,7 @@ const Controller = {
         this.state.active = false;
         UI.dom['btn-stop'].style.display = 'none';
         UI.dom['btn-start'].classList.remove('hidden');
-        AudioService.speak("Gestopt.");
+        AudioService.speak("Sessie gestopt.");
     },
 
     tick(p) {
@@ -233,22 +247,19 @@ const Controller = {
         this.state.lastTrackIdx = R.idx;
         if (R.pos > this.state.maxDist) this.state.maxDist = R.pos;
 
-        // AFWIJKINGS-LOGICA
         if (R.dist > profile.tolerance) {
             this.state.isOnRoute = false;
             if (now - this.state.lastOffRouteTime > profile.repeatInterval) {
-                AudioService.speak(`Let op, u wijkt ${Math.round(R.dist)} meter af van de route.`);
+                AudioService.speak(`U wijkt ${Math.round(R.dist)} meter af.`);
                 this.state.lastOffRouteTime = now;
             }
         } else {
-            // TERUG OP ROUTE (5 meter marge)
             if (!this.state.isOnRoute && R.dist < 5) {
-                AudioService.speak("U bent terug op de route. Ga zo door.", true);
+                AudioService.speak("U bent terug op de route.", true);
                 this.state.isOnRoute = true;
             }
         }
 
-        // STATS
         this.state.speed = (speed || 0) * 3.6;
         if (this.state.speed > 1.2) {
             const dTick = (speed || 0) * dt;
@@ -288,7 +299,7 @@ const Controller = {
 
         AudioService.speak(missed ? `${wp.name} overgeslagen.` : `${wp.name} bereikt.`, true);
         const next = this.data.waypoints[this.state.currentWpIdx];
-        if (next) setTimeout(() => AudioService.speak(`Volgend knooppunt: ${next.name}`), 2500);
+        if (next) setTimeout(() => AudioService.speak(`Volgend doel: ${next.name}`), 2500);
     },
 
     describeWp(idx) {
