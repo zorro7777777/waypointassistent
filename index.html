@@ -47,8 +47,8 @@
     <div class="config-section" id="configArea">
         <div class="row">
             <select id="profile" onchange="updateProfile()" style="padding:4px; flex: 1;">
-                <option value="wandelen">🚶 Wandelen (Max 7km/u)</option>
-                <option value="fietsen">🚲 Fietsen (Max 45km/u)</option>
+                <option value="wandelen">🚶 Wandelen </option>
+                <option value="fietsen">🚲 Fietsen </option>
             </select>
         </div>
         <div class="row" style="justify-content: space-between;">
@@ -63,8 +63,8 @@
     <input type="file" id="gpxInput" accept=".gpx">
     
     <div class="row" id="mainControls">
-        <button onclick="startGPS()" id="startBtn" class="start">▶ START</button>
-        <button onclick="toggleTable()" id="listBtn" class="toggle-list">📑 LIJST</button>
+        <button onclick="startGPS()" id="startBtn" class="start">▶</button>
+        <button onclick="toggleTable()" id="listBtn" class="toggle-list">📑</button>
         <button onclick="location.reload()" id="resetBtn" class="reset">🔄</button>
     </div>
     
@@ -81,7 +81,7 @@
 
 <script>
 const PROFS = {
-    wandelen: { ms: 0.35, max: 7, th: 0.67, radius: 12, met: 3.5, unit: "Stappen" },
+    wandelen: { ms: 1.25, max: 7, th: 0.67, radius: 12, met: 3.5, unit: "Stappen" },
     fietsen: { ms: 1.95, max: 45, th: 2.10, radius: 20, met: 8.0, unit: "Omwentelingen" }
 };
 let CONFIG = { ...PROFS.wandelen };
@@ -174,8 +174,8 @@ function startGPS() {
         const R = getRInfo(lat, lon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        if (R.off > 100 && now - alertTime > 45000) { speak(`${Math.round(R.off)} meter afgeweken.`); alertTime = now; isOffRoute = true; }
-        else if (isOffRoute && R.off < 30) { speak("Terug op route."); isOffRoute = false; }
+        if (R.off > 49 && now - alertTime > 15000) { speak(`${Math.round(R.off)} meter afgeweken.`); alertTime = now; isOffRoute = true; }
+        else if (isOffRoute && R.off < 6) { speak("Terug op route."); isOffRoute = false; }
 
         const isM = skmh >= (CONFIG.ms * 3.6) && skmh <= CONFIG.max;
         if (isM) { sport.movingTime += dt; sport.steps += ((skmh/3.6 * dt) / CONFIG.th); sport.kcal += ((CONFIG.met * 3.5 * 92) / 12000) * dt; if (lastPos && acc < 25) tripDist += getDist(lastPos.lat, lastPos.lon, lat, lon); lastPos = { lat, lon }; } 
@@ -214,21 +214,52 @@ function startGPS() {
         document.getElementById('stat-idle').innerText = new Date(sport.idleTime * 1000).toISOString().substr(11, 8);
         document.getElementById('stat-cadence').innerText = Math.round(isM ? ((skmh/3.6)/CONFIG.th*60) : 0);
         
-        document.getElementById('display-content').innerHTML = `
-            <b style="color:#ffff00">VOLGEND DOEL:</b><br>
-            <span class="highlight" style="font-size:1.1rem; color:#00ff00;">${next ? next.name : 'FINISH'}</span><br>
-            <b>AFSTAND:</b> <span class="highlight">${next ? Math.max(0, Math.round(next.routePos - R.pos)) : 0}m</span><br>
-            <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <b>SNELHEID:</b> ${skmh.toFixed(1)} km/u<br>
-            <b>GEMIDDELD:</b> ${((tripDist/1000)/(sport.movingTime/3600 || 1)).toFixed(2)} km/u<br>
-            <b>OFF-TRACK:</b> <span style="color:${isOffRoute?'#e74c3c':'#00ff00'}">${Math.round(R.off)}m</span> | <b>GPS:</b> ${acc.toFixed(0)}m<br>
-            <span class="field-yellow">LAT: ${Math.abs(lat).toFixed(6)}° ${lat >= 0 ? 'N' : 'Z'}</span>
-            <span class="field-yellow">LON: ${Math.abs(lon).toFixed(6)}° ${lon >= 0 ? 'O' : 'W'}</span>
-            <button class="copy-btn" onclick="navigator.clipboard.writeText('${lat.toFixed(6)}, ${lon.toFixed(6)}')">📍 KOPIEER COÖRDINATEN</button>
-        `;
-        sport.lastTick = now;
-    }, null, { enableHighAccuracy: true });
-}
+document.getElementById('display-content').innerHTML = `
+    <b style="color:#ffff00; font-size:1.2rem;">VOLGEND DOEL:</b><br>
+
+    <span style="font-size:2rem; color:#00ff00; font-weight:bold;">
+        ${next ? next.name : 'FINISH'}
+    </span><br>
+
+    <b style="font-size:1.1rem;">AFSTAND:</b> 
+    <span style="font-size:1.1rem;">
+        ${next ? Math.max(0, Math.round(next.routePos - R.pos)) : 0}m
+    </span><br>
+
+    <hr style="border:0; border-top:1px solid #444; margin:6px 0;">
+
+    <b style="font-size:1.1rem;">SNELHEID:</b> 
+    <span style="font-size:1.1rem;">
+        ${skmh.toFixed(1)} km/u
+    </span><br>
+
+    <b style="font-size:1.1rem;">GEMIDDELD:</b> 
+    <span style="font-size:1.1rem;">
+        ${((tripDist/1000)/(sport.movingTime/3600 || 1)).toFixed(2)} km/u
+    </span><br>
+
+    <b style="font-size:1.1rem;">OFF-TRACK:</b> 
+    <span style="font-size:1.1rem; color:${isOffRoute ? '#e74c3c' : '#00ff00'}">
+        ${Math.round(R.off)}m
+    </span> 
+    | 
+    <b style="font-size:1.1rem;">GPS:</b> 
+    <span style="font-size:1.1rem;">
+        ${acc.toFixed(0)}m
+    </span><br>
+
+    <span style="font-size:1.1rem; color:#ffff00;">
+        LAT: ${Math.abs(lat).toFixed(6)}° ${lat >= 0 ? 'N' : 'Z'}
+    </span><br>
+
+    <span style="font-size:1.1rem; color:#ffff00;">
+        LON: ${Math.abs(lon).toFixed(6)}° ${lon >= 0 ? 'O' : 'W'}
+    </span><br>
+
+    <button style="font-size:1.1rem; padding:6px 10px;" onclick="navigator.clipboard.writeText('${lat.toFixed(6)}, ${lon.toFixed(6)}')">
+        📍 KOPIEER COÖRDINATEN
+    </button>
+`;
 
 function updateProfile() { CONFIG = { ...PROFS[document.getElementById('profile').value] }; document.getElementById('unit-label').innerText = CONFIG.unit; }
 </script>
