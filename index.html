@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v81 - Platina Precision</title>
+    <title>GPX Engine v82 - Platina Route-Logic</title>
    <style>
         body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -11,7 +11,7 @@
         .stat-box { background: #fff; border: 1px solid #ddd; padding: 8px 2px; border-radius: 8px; text-align: center; }
         .stat-label { font-size: 0.55rem; color: #7f8c8d; text-transform: uppercase; display: block; }
         .stat-val { font-weight: bold; font-size: 0.95rem; }
-        #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin: 10px 0; min-height: 320px; line-height: 1.4; border-left: 5px solid #27ae60; font-size: 1.1rem; position: relative; }
+        #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin: 10px 0; min-height: 340px; line-height: 1.4; border-left: 5px solid #27ae60; font-size: 1.1rem; position: relative; }
         .gear-icon { position: absolute; top: 10px; right: 10px; font-size: 1.2rem; cursor: pointer; opacity: 0.7; z-index: 10; }
         .highlight { color: #fff; font-weight: bold; font-size: 1.1rem; }
         .field-yellow { color: #ffff00; font-weight: bold; font-size: 0.95rem; display: block; margin-top: 2px; }
@@ -31,7 +31,7 @@
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0; color:#2c3e50;">💿 PLATINA ENGINE v81</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0; color:#2c3e50;">💿 PLATINA ENGINE v82</h1>
     
     <div class="stats-grid">
         <div class="stat-box"><span id="unit-label" class="stat-label">Stappen</span><span id="stat-steps" class="stat-val">0</span></div>
@@ -81,6 +81,7 @@ let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
 let alertTime = 0, isOffRoute = false, isPaused = false;
 
 function fmtT(s) {
+    if (!isFinite(s) || s < 0) return "00:00:00";
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
     const sec = Math.floor(s % 60);
@@ -159,9 +160,8 @@ function updateWPUI() {
 }
 
 function handleStartPause() {
-    if (!watchId) {
-        startGPS();
-    } else {
+    if (!watchId) startGPS();
+    else {
         isPaused = !isPaused;
         const btn = document.getElementById('startBtn');
         if (isPaused) {
@@ -178,7 +178,7 @@ function startGPS() {
     if (watchId || !track.length) return;
     document.getElementById('gpxInput').style.display = 'none';
     const first = waypoints.find(w => !w.passed && !w.missed);
-    speak("Systeem actief. Ga naar " + (first ? first.name : "de route"));
+    speak("Systeem actief.");
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen');
 
     watchId = navigator.geolocation.watchPosition(p => {
@@ -226,7 +226,12 @@ function startGPS() {
         const next = waypoints.find(w => !w.passed && !w.missed);
         if(statusChanged && next && !finished) setTimeout(() => speak("Ga naar " + next.name), 2500);
 
-        const avgV = tripDist > 10 ? (tripDist / 1000) / (sport.movingTime / 3600) : 0;
+        // --- ACCURATE LOGICA ---
+        // Snelheid op basis van track-progressie (R.pos)
+        const avgV = R.pos > 20 ? (R.pos / 1000) / (sport.movingTime / 3600) : 0;
+        // ETA: Hoeveel meter nog / (gemiddelde snelheid in m/s)
+        const remainingDist = cumDist.at(-1) - R.pos;
+        const etaSeconds = avgV > 0.5 ? remainingDist / (avgV / 3.6) : 0;
 
         document.getElementById('stat-steps').innerText = Math.round(sport.steps);
         document.getElementById('stat-kcal').innerText = Math.round(sport.kcal);
@@ -240,13 +245,14 @@ function startGPS() {
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
             <b>BEWOGEN TIJD:</b> <span class="field-green">${fmtT(sport.movingTime)}</span><br>
             <b>PAUZE TIJD:</b> <span class="field-green">${fmtT(sport.idleTime)}</span><br>
-            <b>SNELHEID:</b> ${skmh.toFixed(1)} km/u<br>
-            <b>GEMIDDELD:</b> ${avgV.toFixed(2)} km/u<br>
-            <b>MET:</b> ${metVal.toFixed(1)}<br>
+            <b>ETA FINISH:</b> <span class="field-green">${etaSeconds > 0 ? fmtT(etaSeconds) : '--:--:--'}</span><br>
+            <b>SNELHEID (LIVE):</b> ${skmh.toFixed(1)} km/u<br>
+            <b>GEMIDDELD (ROUTE):</b> ${avgV.toFixed(2)} km/u<br>
+            <b>KCAL:</b> ${Math.round(sport.kcal)} kcal<br>
             <b>OFF-TRACK:</b> <span style="color:${R.off > 49 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span><br>
             <b>GPS NAUWKEURIGHEID:</b> ${acc.toFixed(0)}m<br>
-            <span class="field-yellow">LAT: ${Math.abs(lat).toFixed(6)}° ${lat >= 0 ? 'N' : 'Z'}</span>
-            <span class="field-yellow">LON: ${Math.abs(lon).toFixed(6)}° ${lon >= 0 ? 'O' : 'W'}</span>
+            <span class="field-yellow">LAT: ${lat.toFixed(6)}</span>
+            <span class="field-yellow">LON: ${lon.toFixed(6)}</span>
             <button class="copy-btn" onclick="navigator.clipboard.writeText('${lat.toFixed(6)},${lon.toFixed(6)}')">📍 KOPIEER COÖRDINATEN</button>
         `;
         sport.lastTick = now;
