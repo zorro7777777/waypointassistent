@@ -193,8 +193,8 @@ function startGPS() {
         
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        if (R.off > 100 && now - alertTime > 45000) { speak("Afgeweken."); alertTime = now; isOffRoute = true; }
-        else if (isOffRoute && R.off < 30) { speak("Terug op route."); isOffRoute = false; }
+        if (R.off > 49 && now - alertTime > 15000) { speak("Afgeweken."); alertTime = now; isOffRoute = true; }
+        else if (isOffRoute && R.off < 6) { speak("Terug op route."); isOffRoute = false; }
 
         const isM = skmh >= (CONFIG.ms * 3.6) && skmh <= CONFIG.max;
         if (isM) { 
