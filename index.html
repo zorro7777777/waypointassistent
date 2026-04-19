@@ -233,7 +233,7 @@ function startGPS() {
             setTimeout(() => speak("Ga naar " + next.name), 2500);
         }
 
-        // UI Updates
+     // UI Updates
         document.getElementById('stat-steps').innerText = Math.round(sport.steps);
         document.getElementById('stat-kcal').innerText = Math.round(sport.kcal);
         document.getElementById('stat-trip').innerText = (tripDist/1000).toFixed(2);
@@ -244,9 +244,11 @@ function startGPS() {
             <span class="highlight" style="font-size:1.5rem; color:#00ff00;">${next ? next.name : 'FINISH'}</span><br>
             <b>AFSTAND:</b> <span class="highlight">${next ? Math.max(0, Math.round(next.routePos - R.pos)) : 0}m</span><br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <b>SNELHEID:</b> ${skmh.toFixed(1)} km/u | <b>MET:</b> ${currentMet.toFixed(1)}<br>
+            <b>SNELHEID:</b> ${skmh.toFixed(1)} km/u<br>
+            <b>MET:</b> ${currentMet.toFixed(1)}<br>
             <b>GEMIDDELD:</b> ${((tripDist/1000)/(sport.movingTime/3600 || 1)).toFixed(2)} km/u<br>
-            <b>OFF-TRACK:</b> <span style="color:${R.off > 49 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span> | <b>GPS:</b> ${acc.toFixed(0)}m<br>
+            <b>OFF-TRACK:</b> <span style="color:${R.off > 49 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span><br>
+            <b>GPS NAUWKEURIGHEID:</b> ${acc.toFixed(0)}m<br>
             <span class="field-yellow">LAT: ${Math.abs(lat).toFixed(6)}° ${lat >= 0 ? 'N' : 'Z'}</span>
             <span class="field-yellow">LON: ${Math.abs(lon).toFixed(6)}° ${lon >= 0 ? 'O' : 'W'}</span>
             <button class="copy-btn" onclick="navigator.clipboard.writeText('${lat.toFixed(6)},${lon.toFixed(6)}')">📍 KOPIEER COÖRDINATEN</button>
@@ -254,7 +256,7 @@ function startGPS() {
         sport.lastTick = now;
     }, null, { enableHighAccuracy: true });
 }
-
+    
 function updateProfile() {
     CONFIG = { ...PROFS[document.getElementById('profile').value] };
     document.getElementById('unit-label').innerText = CONFIG.unit;
