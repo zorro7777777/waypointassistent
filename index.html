@@ -56,16 +56,15 @@
             <label><input type="checkbox" id="audioToggle" checked> 🔊 Spraak</label>
             <div>
                 <input type="radio" name="voiceType" value="vrouw" checked> Vrouw 
-                <input type="radio" name="voiceType" value="man"> Man
-            </div>
+           </div>
         </div>
     </div>
 
     <input type="file" id="gpxInput" accept=".gpx">
     
     <div class="row" id="mainControls">
-        <button onclick="startGPS()" id="startBtn" class="start">▶ START</button>
-        <button onclick="toggleTable()" id="listBtn" class="toggle-list">📑 LIJST</button>
+        <button onclick="startGPS()" id="startBtn" class="start">▶</button>
+        <button onclick="toggleTable()" id="listBtn" class="toggle-list">📑</button>
         <button onclick="location.reload()" id="resetBtn" class="reset">🔄</button>
     </div>
     
@@ -82,7 +81,7 @@
 
 <script>
 const PROFS = {
-    wandelen: { ms: 0.5, max: 7, th: 0.67, radius: 12, met: 3.5, unit: "Stappen" },
+    wandelen: { ms: 0.42, max: 7, th: 0.67, radius: 12, met: 3.5, unit: "Stappen" },
     fietsen: { ms: 1.95, max: 45, th: 2.10, radius: 20, met: 8.0, unit: "Omwentelingen" }
 };
 let CONFIG = { ...PROFS.wandelen };
@@ -92,10 +91,15 @@ let alertTime = 0, isOffRoute = false, tableVisible = true, configVisible = true
 
 function speak(t) {
     if (!document.getElementById('audioToggle').checked) return;
+
     const m = new SpeechSynthesisUtterance(t);
     m.lang = 'nl-NL';
-    const isMan = document.querySelector('input[name="voiceType"]:checked').value === 'man';
-    const v = window.speechSynthesis.getVoices().find(v => v.lang.includes('NL') && (isMan ? v.name.includes('Male') : v.name.includes('Female')));
+
+    // Zoek specifiek naar een Nederlandse stem die 'Female' in de naam heeft
+    const v = window.speechSynthesis.getVoices().find(v => 
+        v.lang.includes('NL') && v.name.includes('Female')
+    );
+
     if (v) m.voice = v;
     window.speechSynthesis.speak(m);
 }
