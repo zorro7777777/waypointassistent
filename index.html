@@ -222,7 +222,7 @@ function startGPS() {
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
             <b>SNELHEID:</b> ${skmh.toFixed(1)} km/u<br>
             <b>GEMIDDELD:</b> ${((tripDist/1000)/(sport.movingTime/3600 || 1)).toFixed(2)} km/u<br>
-            <b>OFF-TRACK:</b> <span style="color:${isOffRoute?'#e74c3c':'#00ff00'}">${Math.round(R.off)}m</span> | <b>GPS:</b> ${acc.toFixed(0)}m<br>
+            <b>OFF-TRACK:</b> <span style="color:${isOffRoute?'#e74c3c':'#00ff00'}">${Math.round(R.off)}m</span><br><b>GPS:</b> ${acc.toFixed(0)}m<br>
             <span class="field-yellow">LAT: ${Math.abs(lat).toFixed(6)}° ${lat >= 0 ? 'N' : 'Z'}</span>
             <span class="field-yellow">LON: ${Math.abs(lon).toFixed(6)}° ${lon >= 0 ? 'O' : 'W'}</span>
             <button class="copy-btn" onclick="navigator.clipboard.writeText('${lat.toFixed(6)}, ${lon.toFixed(6)}')">📍 KOPIEER COÖRDINATEN</button>
