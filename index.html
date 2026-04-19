@@ -50,20 +50,20 @@
     <div class="config-section" id="configArea">
         <div class="row">
             <select id="profile" onchange="updateProfile()" style="padding:4px; flex: 1;">
-                <option value="wandelen">🚶 Wandelen (Max 7km/u)</option>
-                <option value="fietsen">🚲 Fietsen (Max 45km/u)</option>
+                <option value="wandelen">🚶 Wandelen </option>
+                <option value="fietsen">🚲 Fietsen </option>
             </select>
         </div>
         <div class="row">
-            <label><input type="checkbox" id="audioToggle" checked> 🔊 Spraak (Dynamische afwijking)</label>
+            <label><input type="checkbox" id="audioToggle" checked> 🔊 Spraak </label>
         </div>
     </div>
 
     <input type="file" id="gpxInput" accept=".gpx">
     
     <div class="row" id="mainControls">
-        <button onclick="handleStartStop()" id="startBtn" class="start">▶ START</button>
-        <button onclick="toggleTable()" id="listBtn" class="toggle-list">📑 LIJST</button>
+        <button onclick="handleStartStop()" id="startBtn" class="start">▶</button>
+        <button onclick="toggleTable()" id="listBtn" class="toggle-list">📑T</button>
         <button onclick="location.reload()" id="resetBtn" class="reset">🔄</button>
     </div>
     
@@ -162,13 +162,13 @@ function handleStartStop() {
     const btn = document.getElementById('startBtn');
     if (!watchId) {
         startGPS();
-        btn.innerHTML = "■ STOP";
+        btn.innerHTML = "■";
         btn.className = "stop";
     } else {
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
         sport.lastTick = null;
-        btn.innerHTML = "▶ START";
+        btn.innerHTML = "▶";
         btn.className = "start";
         speak("Pauze.");
     }
