@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Engine v77.1 - Stable Ultra Fix</title>
+<title>GPX Engine v77.1 Stable Fix</title>
 
 <style>
 body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
@@ -52,7 +52,7 @@ body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e
     border-radius: 8px;
     font-family: monospace;
     margin: 10px 0;
-    min-height: 250px;
+    min-height: 200px;
     border-left: 5px solid #27ae60;
     font-size: 0.82rem;
     position: relative;
@@ -62,7 +62,6 @@ body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e
     position: absolute;
     top: 10px;
     right: 10px;
-    font-size: 1.2rem;
     cursor: pointer;
 }
 
@@ -107,13 +106,12 @@ button {
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 5px;
     font-size: 0.8rem;
 }
 
 td {
-    padding: 10px 0;
-    border-bottom: 1px solid #f1f1f1;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
 }
 </style>
 
@@ -123,101 +121,73 @@ td {
 
 <div class="card">
 
-<h1 style="text-align:center;">💿 GPX ENGINE v77.1</h1>
+<h2 style="text-align:center;">💿 GPX ENGINE v77.1 FIX</h2>
 
 <div class="stats-grid">
-    <div class="stat-box">
-        <span class="stat-label">Stappen</span>
-        <span id="stat-steps" class="stat-val">0</span>
-    </div>
-    <div class="stat-box">
-        <span class="stat-label">Cadans</span>
-        <span id="stat-cadence" class="stat-val">0</span>
-    </div>
-    <div class="stat-box">
-        <span class="stat-label">Kcal</span>
-        <span id="stat-kcal" class="stat-val">0</span>
-    </div>
-    <div class="stat-box">
-        <span class="stat-label">Trip Km</span>
-        <span id="stat-trip" class="stat-val">0.00</span>
-    </div>
+    <div class="stat-box"><span class="stat-label">Stappen</span><span id="stat-steps">0</span></div>
+    <div class="stat-box"><span class="stat-label">Cadans</span><span id="stat-cadence">0</span></div>
+    <div class="stat-box"><span class="stat-label">Kcal</span><span id="stat-kcal">0</span></div>
+    <div class="stat-box"><span class="stat-label">Trip Km</span><span id="stat-trip">0.00</span></div>
 </div>
 
-<div class="config-section" id="configArea">
-    <div class="row">
-        <select id="profile" onchange="updateProfile()">
-            <option value="wandelen">🚶 Wandelen</option>
-            <option value="fietsen">🚲 Fietsen</option>
-        </select>
-    </div>
-
-```
-<div class="row">
+<div class="config-section">
     <label><input type="checkbox" id="audioToggle" checked> 🔊 Spraak</label>
-    <label><input type="checkbox" id="ultraToggle"> ⚡ Ultra</label>
-</div>
-```
-
+    <label style="margin-left:10px;"><input type="checkbox" id="ultraToggle"> ⚡ Ultra</label>
 </div>
 
 <input type="file" id="gpxInput" accept=".gpx">
 
 <div class="row">
-    <button onclick="startGPS()" id="startBtn" class="start">▶</button>
-    <button onclick="toggleTable()" id="listBtn" class="toggle-list">📑</button>
+    <button onclick="startGPS()" id="startBtn" class="start">▶ START</button>
+    <button onclick="toggleTable()" class="toggle-list">📑 LIST</button>
     <button onclick="location.reload()" class="reset">🔄</button>
 </div>
 
 <div id="info">
-    <div class="gear-icon" onclick="toggleConfig()">⚙️</div>
-    <div id="display-content">Systeem stand-by.</div>
+<div class="gear-icon" onclick="toggleConfig()">⚙️</div>
+<div id="display">Systeem standby</div>
 </div>
 
 <div id="tableCon">
-    <div id="wp-summary">Punten: 0</div>
-    <table><tbody id="list"></tbody></table>
+<table><tbody id="list"></tbody></table>
 </div>
 
 </div>
 
 <script>
 
-const PROFS = {
-wandelen: { ms: 1.25, max: 7, th: 0.67, radius: 12, met: 3.5, unit: "Stappen" },
-fietsen: { ms: 1.95, max: 45, th: 2.10, radius: 20, met: 8.0, unit: "Omwentelingen" }
-};
-
-let CONFIG = { ...PROFS.wandelen };
-
-let track=[], waypoints=[], cumDist=[], watchId=null;
-let lastIndex=0, lastPos=null;
-let sport={steps:0,kcal:0,movingTime:0,idleTime:0,lastTick:null};
-let finished=false;
-
+let track=[], cumDist=[], waypoints=[];
+let watchId=null;
+let lastIndex=0;
 let isPaused=false;
 let autoPaused=false;
 let stillTime=0;
 let ultraMode=false;
 
-let tableVisible=true;
+let sport={movingTime:0,idleTime:0,lastTick:null};
+
+const CONFIG={ms:1.2};
 
 function speak(t){
-if(!document.getElementById('audioToggle').checked)return;
+if(!document.getElementById('audioToggle').checked) return;
 const s=new SpeechSynthesisUtterance(t);
 s.lang="nl-NL";
 speechSynthesis.speak(s);
 }
 
 function getDist(a,b,c,d){
-const R=6371000,rL=(c-a)*Math.PI/180,rO=(d-b)*Math.PI/180;
-return 2*R*Math.asin(Math.sqrt(Math.sin(rL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(rO/2)**2));
+const R=6371000;
+const dLat=(c-a)*Math.PI/180;
+const dLon=(d-b)*Math.PI/180;
+return 2*R*Math.asin(Math.sqrt(Math.sin(dLat/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2));
 }
 
 function getRInfo(lat,lon){
-let start=Math.max(0,lastIndex-30);
-let end=Math.min(track.length,lastIndex+30);
-let best=lastIndex,bestD=Infinity;
+
+let start=Math.max(0,lastIndex-25);
+let end=Math.min(track.length,lastIndex+25);
+
+let best=lastIndex,bestD=999999;
 
 for(let i=start;i<end;i++){
 const d=getDist(lat,lon,track[i].lat,track[i].lon);
@@ -228,37 +198,38 @@ lastIndex=best;
 return {pos:cumDist[best],off:bestD};
 }
 
-function toggleTable(){
-tableVisible=!tableVisible;
-document.getElementById('tableCon').style.display=tableVisible?'block':'none';
+document.getElementById('gpxInput').onchange=e=>{
+const file=e.target.files[0];
+const r=new FileReader();
+
+r.onload=ev=>{
+const xml=new DOMParser().parseFromString(ev.target.result,"text/xml");
+const pts=[...xml.getElementsByTagName('trkpt')];
+
+track=pts.map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
+
+cumDist=[0];
+for(let i=1;i<track.length;i++){
+cumDist[i]=cumDist[i-1]+getDist(track[i-1].lat,track[i-1].lon,track[i].lat,track[i].lon);
 }
 
-function updateProfile(){
-CONFIG={...PROFS[document.getElementById('profile').value]};
-}
+document.getElementById('display').innerText="GPX geladen";
+};
+
+r.readAsText(file);
+};
 
 function startGPS(){
 
-if(watchId && !isPaused){
-isPaused=true;
-document.getElementById('startBtn').innerText='▶';
-return;
-}
-
 if(!track.length){
-alert("Laad GPX");
+alert("Laad GPX eerst");
 return;
 }
 
-isPaused=false;
-
-const btn=document.getElementById('startBtn');
-btn.innerText='■';
+// START WATCH
+if(!watchId){
 
 watchId=navigator.geolocation.watchPosition(p=>{
-
-const ultra=document.getElementById('ultraToggle').checked;
-ultraMode=ultra;
 
 const now=Date.now();
 const {latitude:lat,longitude:lon,speed:s}=p.coords;
@@ -267,26 +238,48 @@ const skmh=(s||0)*3.6;
 const dt=sport.lastTick?(now-sport.lastTick)/1000:0;
 sport.lastTick=now;
 
-const R=getRInfo(lat,lon);
+ultraMode=document.getElementById('ultraToggle').checked;
 
+const R=getRInfo(lat,lon);
 const moving=skmh>CONFIG.ms*3.6;
 
-if(!moving)stillTime+=dt;else stillTime=0;
+if(!moving) stillTime+=dt;
+else stillTime=0;
 
 if(!autoPaused && stillTime>5){autoPaused=true;speak("Auto pauze");}
 if(autoPaused && moving){autoPaused=false;speak("Verder");}
 
-const active=!isPaused && !autoPaused && moving;
+const active=!isPaused&&!autoPaused&&moving;
 
 if(active){
 sport.movingTime+=dt;
+}else if(!isPaused&&!autoPaused){
+sport.idleTime+=dt;
 }
 
-document.getElementById('stat-steps').innerText=Math.round(sport.steps);
-document.getElementById('stat-kcal').innerText=Math.round(sport.kcal);
+document.getElementById('display').innerHTML=
+"AFSTAND OFF: "+Math.round(R.off)+"m";
 
-});
+},err=>console.log(err),{enableHighAccuracy:true});
 
+document.getElementById('startBtn').innerText="■ STOP";
+return;
+}
+
+// TOGGLE PAUSE
+isPaused=!isPaused;
+
+document.getElementById('startBtn').innerText=isPaused?"▶ START":"■ STOP";
+
+}
+
+function toggleTable(){
+const el=document.getElementById('tableCon');
+el.style.display=el.style.display==="none"?"block":"none";
+}
+
+function toggleConfig(){
+alert("config toggle");
 }
 
 </script>
