@@ -16,7 +16,6 @@
         .gear-icon { position: absolute; top: 10px; right: 10px; font-size: 1.2rem; cursor: pointer; opacity: 0.7; z-index: 10; }
         .highlight { color: #fff; font-weight: bold; font-size: calc(0.95rem * var(--text-scale)); }
         .large-info { font-size: calc(1.2rem * var(--text-scale)); line-height: 1.2; }
-        .field-yellow { color: #ffff00; font-weight: bold; display: block; margin-top: 2px; }
         .config-section { background: #ecf0f1; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #dcdde1; }
         .row { display: flex; gap: 5px; align-items: center; margin-bottom: 8px; }
         button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; color: white; cursor: pointer; flex: 1; transition: background 0.3s; }
@@ -24,8 +23,7 @@
         .stop { background: #c0392b; flex: 2; }
         .toggle-list { background: #3498db; }
         .reset { background: #e74c3c; flex: 1; }
-        .copy-btn { background: #34495e; padding: 8px; font-size: 0.75rem; margin-top: 10px; border: 1px solid #5d6d7e; width: 100%; color: #bdc3c7; }
-        #gpxInput { width:100%; margin-bottom:10px; border:1px solid #ccc; padding:5px; border-radius:5px; box-sizing: border-box; }
+        #gpxInput { width:100%; margin-bottom:10px; border:1px solid #ccc; padding:5px; border-radius:5px; }
         table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.8rem; }
         td { padding: 10px 0; border-bottom: 1px solid #f1f1f1; }
     </style>
@@ -54,7 +52,7 @@
                 <option value="fietsen">🚲 Fietsen </option>
             </select>
         </div>
-        <div class="row" style="justify-content: space-between;">
+        <div class="row">
             <label><input type="checkbox" id="audioToggle" checked> 🔊 Spraak (Vrouw)</label>
         </div>
     </div>
@@ -69,11 +67,11 @@
     
     <div id="info">
         <div class="gear-icon" onclick="toggleConfig()">⚙️</div>
-        <div id="display-content">Systeem stand-by. GPX laden a.u.b.</div>
+        <div id="display-content">Systeem stand-by.</div>
     </div>
 
     <div id="tableCon">
-        <div style="font-size:0.75rem; font-weight:bold; padding:8px; background:#dfe6e9; border-radius:5px; margin-top:10px; display:flex; justify-content:space-around;" id="wp-summary">Punten: 0</div>
+        <div id="wp-summary" style="font-size:0.75rem; font-weight:bold; padding:8px; background:#dfe6e9; border-radius:5px; margin-top:10px; text-align:center;">Punten: 0</div>
         <table><tbody id="list"></tbody></table>
     </div>
 </div>
@@ -86,7 +84,7 @@ const PROFS = {
 let CONFIG = { ...PROFS.wandelen };
 let track = [], waypoints = [], cumDist = [], watchId = null, lastPos = null, maxRoutePos = 0, tripDist = 0, finished = false;
 let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
-let alertTime = 0, isOffRoute = false, lastSearchIdx = 0;
+let alertTime = 0, isOffRoute = false, lastSearchIdx = 0, totalRouteLength = 0;
 
 function speak(t) {
     if (!document.getElementById('audioToggle').checked) return;
@@ -103,7 +101,7 @@ function getDist(a,b,c,d){
 }
 
 function getRInfo(lat, lon) {
-    if (track.length === 0) return { pos: 0, off: 0 };
+    if (!track.length) return { pos: 0, off: 0 };
     let bD = Infinity, bP = 0, bI = 0;
     let startIdx = Math.max(0, lastSearchIdx - 150);
     let endIdx = Math.min(track.length, lastSearchIdx + 150);
@@ -125,9 +123,7 @@ function toggleConfig() {
 
 function toggleTable() {
     const con = document.getElementById('tableCon');
-    const isHidden = con.style.display === 'none';
-    con.style.display = isHidden ? 'block' : 'none';
-    document.getElementById('listBtn').innerText = isHidden ? '📑 VERBERG' : '📑 TOON';
+    con.style.display = con.style.display === 'none' ? 'block' : 'none';
 }
 
 document.getElementById('gpxInput').onchange = e => {
@@ -138,11 +134,12 @@ document.getElementById('gpxInput').onchange = e => {
         try {
             const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
             const pts = [...xml.getElementsByTagName('trkpt')];
-            if(!pts || pts.length === 0) { alert("Geen trackpunten!"); return; }
             track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
-            cumDist = [0]; for(let i=0; i<track.length-1; i++) cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
+            cumDist = [0]; 
+            for(let i=0; i<track.length-1; i++) cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
+            totalRouteLength = cumDist[cumDist.length - 1];
+
             let wpts = [...xml.getElementsByTagName('wpt')].map(w => ({ name: w.getElementsByTagName('name')[0]?.textContent || "WP", lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'), passed: false, missed: false }));
-            
             wpts.push({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false, missed: false });
             wpts.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false });
 
@@ -150,7 +147,7 @@ document.getElementById('gpxInput').onchange = e => {
             document.getElementById('gpxInput').style.display = 'none';
             document.getElementById('display-content').innerText = "GPX geladen. Druk op START.";
             updateWPUI();
-        } catch (err) { alert("Fout in GPX."); }
+        } catch (err) { alert("GPX fout."); }
     };
     r.readAsText(file);
 };
@@ -158,114 +155,78 @@ document.getElementById('gpxInput').onchange = e => {
 function updateWPUI() {
     const p = waypoints.filter(w => w.passed).length, m = waypoints.filter(w => w.missed).length, t = waypoints.length;
     document.getElementById('wp-summary').innerText = `✅ ${p} | ❌ ${m} | ⏳ ${t-p-m}`;
-    document.getElementById('list').innerHTML = waypoints.map(w => `<tr style="${w.passed ? 'color:#27ae60; font-weight:bold;' : (w.missed ? 'color:#e74c3c;text-decoration:line-through;' : '')}"><td>${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td><td>${w.name}</td><td style="text-align:right">${Math.round(w.routePos)}m</td></tr>`).join('');
+    document.getElementById('list').innerHTML = waypoints.map(w => `<tr style="${w.passed ? 'color:#27ae60;' : (w.missed ? 'color:#e74c3c;' : '')}"><td>${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td><td>${w.name}</td><td style="text-align:right">${Math.round(w.routePos)}m</td></tr>`).join('');
 }
 
 function handleStartStop() {
     const btn = document.getElementById('startBtn');
     if (!watchId) {
-        if (!track.length) { alert("Laad eerst GPX!"); return; }
-        const nextWp = waypoints.find(w => !w.passed && !w.missed);
-        speak("Tracking gestart. Ga naar " + (nextWp ? nextWp.name : "de route."));
+        if (!track.length) return;
+        const first = waypoints.find(w => !w.passed && !w.missed);
+        speak("Gestart. Volgend doel: " + (first ? first.name : "onbekend"));
         startGPS();
-        btn.innerHTML = "■";
-        btn.className = "stop";
+        btn.innerHTML = "■"; btn.className = "stop";
     } else {
         navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-        sport.lastTick = null;
-        btn.innerHTML = "▶";
-        btn.className = "start";
-        speak("Tracking gepauzeerd.");
+        watchId = null; btn.innerHTML = "▶"; btn.className = "start";
     }
 }
 
 function startGPS() {
-    document.getElementById('configArea').style.display = 'none';
-    if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
-    
     watchId = navigator.geolocation.watchPosition(p => {
         if (finished) return; 
         const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = p.coords;
         const speedMs = s || 0;
-        const now = Date.now();
-        const dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
-        
+        const now = Date.now(), dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
         const R = getRInfo(lat, lon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        if (R.off > 50 && now - alertTime > 20000) { speak("Let op, u wijkt af."); alertTime = now; isOffRoute = true; }
-        else if (isOffRoute && R.off < 15) { speak("Terug op route."); isOffRoute = false; }
-
+        // Statistieken
         const isMoving = speedMs >= CONFIG.ms;
         if (isMoving) { 
             sport.movingTime += dt; 
             sport.steps += ((speedMs * dt) / CONFIG.th); 
-            sport.kcal += ((CONFIG.met * 3.5 * 80) / 12000) * dt; 
-            if (lastPos && acc < 40) tripDist += getDist(lastPos.lat, lastPos.lon, lat, lon); 
+            if (lastPos) tripDist += getDist(lastPos.lat, lastPos.lon, lat, lon); 
             lastPos = { lat, lon }; 
-        } else if (sport.lastTick) { 
-            sport.idleTime += dt; 
-        }
+        } else if (sport.lastTick) sport.idleTime += dt;
 
-        // LOGICA VOOR WAYPOINTS EN AANKONDIGINGEN
-        let currentNext = waypoints.find(w => !w.passed && !w.missed);
-        
+        // Waypoint Logica
         waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
-            const distToPoint = getDist(lat, lon, w.lat, w.lon);
-            
-            // Punt bereikt
-            if (distToPoint <= CONFIG.radius) { 
+            const dist = getDist(lat, lon, w.lat, w.lon);
+            const isFinish = (i === waypoints.length - 1);
+
+            // CRUCIALE FIX: Finish beveiliging
+            // Finish kan alleen bereikt worden als we meer dan 10% van de route hebben afgelegd
+            const canFinish = !isFinish || (maxRoutePos > totalRouteLength * 0.2);
+
+            if (dist <= CONFIG.radius && canFinish) { 
                 w.passed = true;
-                const isFinish = (i === waypoints.length - 1);
-                
-                // Aankondiging van bereik
                 speak(w.name + " bereikt."); 
-                
                 if (isFinish) { 
-                    finished = true; 
-                    setTimeout(() => speak("Bestemming bereikt. Einde route."), 1500);
-                    navigator.geolocation.clearWatch(watchId);
+                    finished = true;
+                    setTimeout(() => speak("Bestemming bereikt. Proficiat!"), 1500);
                 } else {
-                    // Zoek direct het volgende punt voor de volgende aankondiging
-                    const nextOne = waypoints.find(wp => !wp.passed && !wp.missed);
-                    if (nextOne) {
-                        setTimeout(() => speak("Ga nu naar " + nextOne.name), 2500);
-                    }
+                    const next = waypoints.find(wp => !wp.passed && !wp.missed);
+                    if (next) setTimeout(() => speak("Ga nu naar " + next.name), 2500);
                 }
                 updateWPUI(); 
-            } 
-            // Punt gemist (we zijn er al 30 meter voorbij op de route)
-            else if (R.pos > w.routePos + 30) { 
-                w.missed = true;
-                updateWPUI(); 
+            } else if (maxRoutePos > w.routePos + 50 && !isFinish) { 
+                w.missed = true; updateWPUI(); 
             }
         });
 
         const nextWp = waypoints.find(w => !w.passed && !w.missed);
-
-        // UI UPDATES
         document.getElementById('stat-steps').innerText = Math.round(sport.steps);
         document.getElementById('stat-trip').innerText = (tripDist/1000).toFixed(2);
-        document.getElementById('stat-kcal').innerText = Math.round(sport.kcal);
         document.getElementById('stat-moving').innerText = new Date(sport.movingTime * 1000).toISOString().substr(11, 8);
-        document.getElementById('stat-idle').innerText = new Date(sport.idleTime * 1000).toISOString().substr(11, 8);
-        document.getElementById('stat-cadence').innerText = Math.round(isMoving ? (speedMs/CONFIG.th*60) : 0);
-        
         document.getElementById('display-content').innerHTML = `
-            <b style="color:#ffff00">VOLGEND DOEL:</b><br>
-            <span class="highlight" style="color:#00ff00;">${nextWp ? nextWp.name : 'FINISH'}</span><br>
+            <b style="color:#ffff00">DOEL:</b> <span class="highlight">${nextWp ? nextWp.name : 'FINISH'}</span><br>
             <b>AFSTAND:</b> <span class="highlight">${nextWp ? Math.max(0, Math.round(nextWp.routePos - R.pos)) : 0}m</span><br>
-            <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <div class="large-info">
-                <b>SNELHEID:</b> ${(speedMs * 3.6).toFixed(1)} km/u<br>
-                <b>OFF-TRACK:</b> <span style="color:${isOffRoute?'#e74c3c':'#00ff00'}">${Math.round(R.off)}m</span><br>
-                <b>GPS ACC:</b> ±${acc.toFixed(0)}m
-            </div>
+            <hr><b>SNELHEID:</b> ${(speedMs*3.6).toFixed(1)} km/u | <b>GPS:</b> ±${acc.toFixed(0)}m
         `;
         sport.lastTick = now;
-    }, err => console.error(err), { enableHighAccuracy: true, maximumAge: 0 });
+    }, null, { enableHighAccuracy: true });
 }
 
 function updateProfile() { 
