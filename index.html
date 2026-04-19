@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v77.2 - Waypointassistent</title>
+    <title>GPX Engine v77 - Platina Anticipate</title>
     <style>
         :root { --text-scale: 1.0; }
         body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
@@ -29,11 +29,12 @@
         table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.8rem; }
         td { padding: 10px 0; border-bottom: 1px solid #f1f1f1; }
     </style>
+
 </head>
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0; color:#2c3e50;">💿 PLATINA ENGINE v77.2</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0; color:#2c3e50;">💿 PLATINA ENGINE v77</h1>
     
     <div class="stats-grid">
         <div class="stat-box"><span id="unit-label" class="stat-label">Stappen</span><span id="stat-steps" class="stat-val">0</span></div>
@@ -54,8 +55,8 @@
                 <option value="fietsen">🚲 Fietsen </option>
             </select>
         </div>
-        <div class="row">
-            <label><input type="checkbox" id="audioToggle" checked> 🔊 Spraak </label>
+        <div class="row" style="justify-content: space-between;">
+            <label><input type="checkbox" id="audioToggle" checked> 🔊 Spraak (Vrouw)</label>
         </div>
     </div>
 
@@ -80,7 +81,7 @@
 
 <script>
 const PROFS = {
-    wandelen: { ms: 1.5, max: 7, th: 0.67, radius: 10, met: 3.5, unit: "Stappen" },
+    wandelen: { ms: 1.5, max: 7, th: 0.67, radius: 15, met: 3.5, unit: "Stappen" },
     fietsen: { ms: 1.95, max: 45, th: 2.10, radius: 25, met: 8.0, unit: "Omwentelingen" }
 };
 let CONFIG = { ...PROFS.wandelen };
@@ -104,11 +105,15 @@ function getDist(a,b,c,d){
 
 function getRInfo(lat, lon) {
     let bD = Infinity, bP = 0, bI = 0;
+    // Window Search: scan rond de laatste bekende positie (300 punten bereik)
     let startIdx = Math.max(0, lastSearchIdx - 150);
     let endIdx = Math.min(track.length, lastSearchIdx + 150);
+    
+    // Als we de eerste keer scannen of ver weg zijn, scan de hele track
     if (lastSearchIdx === 0 || getDist(lat, lon, track[lastSearchIdx].lat, track[lastSearchIdx].lon) > 200) {
         startIdx = 0; endIdx = track.length;
     }
+
     for (let i = startIdx; i < endIdx; i++) {
         const d = getDist(lat, lon, track[i].lat, track[i].lon);
         if (d < bD) { bD = d; bP = cumDist[i]; bI = i; }
@@ -141,8 +146,12 @@ document.getElementById('gpxInput').onchange = e => {
             track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
             cumDist = [0]; for(let i=0; i<track.length-1; i++) cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
             let wpts = [...xml.getElementsByTagName('wpt')].map(w => ({ name: w.getElementsByTagName('name')[0]?.textContent || "WP", lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'), passed: false, missed: false, touched: false }));
-            wpts.push({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false, missed: false, touched: false });
-            wpts.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false, touched: false });
+            
+            // Start en Finish expliciet toevoegen
+            const startWp = { name: "START", lat: track[0].lat, lon: track[0].lon, passed: false, missed: false, touched: false };
+            const finishWp = { name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false, touched: false };
+            wpts.push(startWp, finishWp);
+
             waypoints = wpts.map(w => { w.routePos = getRInfo(w.lat, w.lon).pos; return w; }).sort((a,b) => a.routePos - b.routePos);
             document.getElementById('gpxInput').style.display = 'none';
             document.getElementById('display-content').innerText = "GPX geladen. Druk op START.";
@@ -170,7 +179,7 @@ function handleStartStop() {
         sport.lastTick = null;
         btn.innerHTML = "▶";
         btn.className = "start";
-        speak("Pauze.");
+        speak("Tracking gepauzeerd.");
     }
 }
 
@@ -178,8 +187,11 @@ function startGPS() {
     if (!track.length) return;
     configVisible = false;
     document.getElementById('configArea').style.display = 'none';
-    const target = waypoints.find(w => !w.passed && !w.missed);
-    if(target) speak("Tracking gestart. Volg " + target.name);
+    document.getElementById('gpxInput').style.display = 'none';
+    
+    const first = waypoints.find(w => !w.passed && !w.missed);
+    if(first) speak("Tracking gestart. Volg waypoint " + first.name);
+
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen');
     
     watchId = navigator.geolocation.watchPosition(p => {
@@ -189,16 +201,8 @@ function startGPS() {
         const R = getRInfo(lat, lon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        // Dynamische afwijkingswaarschuwing
-        if (R.off > 49 && now - alertTime > 15000) { 
-            speak(`${Math.round(R.off)} meter afgeweken van route.`); 
-            alertTime = now; 
-            isOffRoute = true; 
-        }
-        else if (isOffRoute && R.off < 6) { 
-            speak("Terug op route."); 
-            isOffRoute = false; 
-        }
+        if (R.off > 49 && now - alertTime > 15000) { speak(`${Math.round(R.off)} meter afgeweken.`); alertTime = now; isOffRoute = true; }
+        else if (isOffRoute && R.off < 6) { speak("Terug op route."); isOffRoute = false; }
 
         const isMoving = skmh >= (CONFIG.ms * 3.6) && skmh <= CONFIG.max;
         if (isMoving) { 
@@ -216,11 +220,17 @@ function startGPS() {
             if (w.passed || w.missed) return;
             const distToPoint = getDist(lat, lon, w.lat, w.lon);
             if (distToPoint <= CONFIG.radius) w.touched = true;
+            
             const isFinish = (i === waypoints.length - 1);
+            // Virtuele finish check om lussen te voorkomen
             if (w.touched && distToPoint <= CONFIG.radius) { 
                 w.passed = true; statusChanged = true;
-                speak(isFinish ? "Bestemming bereikt." : w.name + " ok."); 
-                if (isFinish) { finished = true; document.getElementById('resetBtn').style.display = 'block'; navigator.geolocation.clearWatch(watchId); } 
+                speak(isFinish ? "Bestemming bereikt. Tracking voltooid." : w.name + " bereikt."); 
+                if (isFinish) { 
+                    finished = true; 
+                    document.getElementById('resetBtn').style.display = 'block'; 
+                    navigator.geolocation.clearWatch(watchId);
+                } 
                 updateWPUI(); 
             }
             else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 15) { 
@@ -231,9 +241,9 @@ function startGPS() {
             }
         });
 
-        const nextWp = waypoints.find(w => !w.passed && !w.missed);
-        if(statusChanged && nextWp && !finished) {
-            setTimeout(() => speak("Volgende " + nextWp.name), 2000);
+        const next = waypoints.find(w => !w.passed && !w.missed);
+        if(statusChanged && next && !finished) {
+            setTimeout(() => speak("Ga nu naar " + next.name), 2000);
         }
 
         document.getElementById('stat-steps').innerText = Math.round(sport.steps);
@@ -243,7 +253,7 @@ function startGPS() {
         document.getElementById('stat-idle').innerText = new Date(sport.idleTime * 1000).toISOString().substr(11, 8);
         document.getElementById('stat-cadence').innerText = Math.round(isMoving ? ((skmh/3.6)/CONFIG.th*60) : 0);
         
-        document.getElementById('display-content').innerHTML = `
+          document.getElementById('display-content').innerHTML = `
             <b style="color:#ffff00">VOLGEND DOEL:</b><br>
             <span class="highlight" style="color:#00ff00;">${nextWp ? nextWp.name : 'FINISH'}</span><br>
             <b>AFSTAND:</b> <span class="highlight">${nextWp ? Math.max(0, Math.round(nextWp.routePos - R.pos)) : 0}m</span><br>
@@ -263,6 +273,7 @@ function startGPS() {
 }
 
 function updateProfile() { CONFIG = { ...PROFS[document.getElementById('profile').value] }; document.getElementById('unit-label').innerText = CONFIG.unit; }
+
 </script>
 </body>
 </html>
