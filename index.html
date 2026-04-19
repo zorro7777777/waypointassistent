@@ -90,12 +90,29 @@ let alertTime = 0, isOffRoute = false, tableVisible = true, configVisible = true
 
 function speak(t) {
     if (!document.getElementById('audioToggle').checked) return;
+    
+    // Annuleer lopende spraak om wachtrij-opstoppingen te voorkomen
+    window.speechSynthesis.cancel();
+
     const m = new SpeechSynthesisUtterance(t);
     m.lang = 'nl-NL';
-    const v = window.speechSynthesis.getVoices().find(v => v.lang.includes('NL') && v.name.includes('Female'));
+    m.rate = 1.0; // Snelheid
+    m.pitch = 1.0;
+
+    // Haal de beschikbare stemmen op
+    const voices = window.speechSynthesis.getVoices();
+    const v = voices.find(v => v.lang.includes('NL') && v.name.includes('Female')) || 
+              voices.find(v => v.lang.includes('NL')); // Fallback naar eender welke NL stem
+    
     if (v) m.voice = v;
+    
     window.speechSynthesis.speak(m);
 }
+
+// Cruciaal: Forceer de browser om de stemmenlijst te laden
+window.speechSynthesis.onvoiceschanged = () => {
+    window.speechSynthesis.getVoices();
+};
 
 function getDist(a,b,c,d){
     const R=6371000, rL=(c-a)*Math.PI/180, rO=(d-b)*Math.PI/180;
