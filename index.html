@@ -190,12 +190,12 @@ function startGPS() {
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
         // Dynamische afwijkingswaarschuwing
-        if (R.off > 100 && now - alertTime > 45000) { 
+        if (R.off > 49 && now - alertTime > 15000) { 
             speak(`${Math.round(R.off)} meter afgeweken van route.`); 
             alertTime = now; 
             isOffRoute = true; 
         }
-        else if (isOffRoute && R.off < 30) { 
+        else if (isOffRoute && R.off < 6) { 
             speak("Terug op route."); 
             isOffRoute = false; 
         }
