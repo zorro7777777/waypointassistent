@@ -14,18 +14,16 @@
         #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin: 10px 0; min-height: 250px; line-height: 1.4; border-left: 5px solid #27ae60; font-size: 1.1rem; position: relative; }
         .gear-icon { position: absolute; top: 10px; right: 10px; font-size: 1.2rem; cursor: pointer; opacity: 0.7; z-index: 10; }
         .highlight { color: #fff; font-weight: bold; font-size: 1.1rem; }
-        .field-yellow { color: #ffff00; font-weight: bold; font-size: 1.1rem; display: block; margin-top: 2px; }
         .config-section { background: #ecf0f1; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #dcdde1; }
         .row { display: flex; gap: 5px; align-items: center; margin-bottom: 8px; }
         button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; color: white; cursor: pointer; flex: 1; }
         .start { background: #27ae60; flex: 2; } 
-        .pause { background: #f39c12; flex: 2; } /* Kleur voor pauze */
-        .toggle-list { background: #3498db; }
-        .reset { background: #e74c3c; flex: 1; }
+        .pause { background: #f39c12; flex: 2; } 
         .copy-btn { background: #34495e; padding: 8px; font-size: 0.75rem; margin-top: 10px; border: 1px solid #5d6d7e; width: 100%; color: #bdc3c7; }
         #gpxInput { width:100%; margin-bottom:10px; border:1px solid #ccc; padding:5px; border-radius:5px; box-sizing: border-box; }
         table { width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 0.8rem; }
         td { padding: 10px 0; border-bottom: 1px solid #f1f1f1; }
+        .config-input { padding: 4px; border-radius: 4px; border: 1px solid #ccc; width: 60px; }
     </style>
 </head>
 <body>
@@ -51,12 +49,12 @@
                 <option value="wandelen">🚶 Wandelen </option>
                 <option value="fietsen">🚲 Fietsen </option>
             </select>
+            <div style="font-size: 0.8rem;">
+                Gewicht: <input type="number" id="userWeight" class="config-input" value="92"> kg
+            </div>
         </div>
         <div class="row" style="justify-content: space-between;">
             <label><input type="checkbox" id="audioToggle" checked> 🔊 Spraak</label>
-            <div>
-                <input type="radio" name="voiceType" value="vrouw" checked> Vrouw 
-           </div>
         </div>
     </div>
 
@@ -81,20 +79,27 @@
 
 <script>
 const PROFS = {
-    wandelen: { ms: 0.42, max: 7, th: 0.67, radius: 12, met: 3.5, unit: "Stappen" },
-    fietsen: { ms: 1.95, max: 45, th: 2.10, radius: 20, met: 8.0, unit: "Omwentelingen" }
+    wandelen: { ms: 0.42, max: 7, th: 0.67, radius: 12, unit: "Stappen" },
+    fietsen: { ms: 1.95, max: 45, th: 2.10, radius: 20, unit: "Omwentelingen" }
 };
 let CONFIG = { ...PROFS.wandelen };
 let track = [], waypoints = [], cumDist = [], watchId = null, lastPos = null, maxRoutePos = 0, tripDist = 0, finished = false;
-let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
+let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null, currentMET: 0 };
 let alertTime = 0, isOffRoute = false, tableVisible = true, configVisible = true, isPaused = false;
+
+function getDynamicMET(skmh, mode) {
+    if (skmh < 0.5) return 0;
+    if (mode === 'wandelen') {
+        return 0.75 * skmh + 0.5; 
+    } else {
+        return 0.4 * skmh;
+    }
+}
 
 function speak(t) {
     if (!document.getElementById('audioToggle').checked) return;
     const m = new SpeechSynthesisUtterance(t);
     m.lang = 'nl-NL';
-    const v = window.speechSynthesis.getVoices().find(v => v.lang.includes('NL') && v.name.includes('Female'));
-    if (v) m.voice = v;
     window.speechSynthesis.speak(m);
 }
 
@@ -155,33 +160,22 @@ function handleStartPause() {
         isPaused = !isPaused;
         const btn = document.getElementById('startBtn');
         if (isPaused) {
-            btn.innerText = "▶ HERVAT";
-            btn.className = "start";
-            speak("Pauze geactiveerd.");
-            sport.lastTick = null; // Voorkom tijdsprong bij hervatten
+            btn.innerText = "▶ HERVAT"; btn.className = "start";
+            speak("Pauze."); sport.lastTick = null;
         } else {
-            btn.innerText = "⏸ PAUZE";
-            btn.className = "pause";
-            speak("Tracking hervat.");
-            sport.lastTick = Date.now();
+            btn.innerText = "⏸ PAUZE"; btn.className = "pause";
+            speak("Hervat."); sport.lastTick = Date.now();
         }
     }
 }
 
 function startGPS() {
     if (watchId || !track.length) return;
-    
     configVisible = false;
     document.getElementById('configArea').style.display = 'none';
-    document.getElementById('gpxInput').style.display = 'none';
-    
     const btn = document.getElementById('startBtn');
-    btn.innerText = "⏸ PAUZE";
-    btn.className = "pause";
+    btn.innerText = "⏸ PAUZE"; btn.className = "pause";
     
-    const first = waypoints.find(w => !w.passed && !w.missed);
-    if(first) speak("Tracking gestart. Ga naar " + first.name);
-
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen');
     
     watchId = navigator.geolocation.watchPosition(p => {
@@ -191,16 +185,17 @@ function startGPS() {
         const skmh = (s || 0) * 3.6, now = Date.now(), dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
         const R = getRInfo(lat, lon);
         
-        if (R.pos > maxRoutePos) maxRoutePos = R.pos;
-
-        if (R.off > 49 && now - alertTime > 15000) { speak("Afgeweken."); alertTime = now; isOffRoute = true; }
-        else if (isOffRoute && R.off < 6) { speak("Terug op route."); isOffRoute = false; }
-
         const isM = skmh >= (CONFIG.ms * 3.6) && skmh <= CONFIG.max;
+        const currentMode = document.getElementById('profile').value;
+        const weight = parseFloat(document.getElementById('userWeight').value) || 92;
+        
+        sport.currentMET = isM ? getDynamicMET(skmh, currentMode) : 0;
+
         if (isM) { 
             sport.movingTime += dt; 
             sport.steps += ((skmh/3.6 * dt) / CONFIG.th); 
-            sport.kcal += ((CONFIG.met * 3.5 * 92) / 12000) * dt; 
+            // Gebruikt nu het gewicht uit de UI (standaard 92)
+            sport.kcal += (sport.currentMET * 3.5 * weight / 200) * (dt / 60);
             if (lastPos && acc < 25) tripDist += getDist(lastPos.lat, lastPos.lon, lat, lon); 
             lastPos = { lat, lon }; 
         } 
@@ -210,26 +205,14 @@ function startGPS() {
         waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             if (getDist(lat, lon, w.lat, w.lon) <= CONFIG.radius) w.touched = true;
-            const isF = (i === waypoints.length - 1);
             if (R.pos >= w.routePos - CONFIG.radius && w.touched) { 
                 w.passed = true; statusChanged = true;
-                speak(isF ? "Finish bereikt." : w.name + " bereikt."); 
-                if (isF) finished = true; 
-                updateWPUI(); 
-            }
-            else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 10) { 
-                w.missed = true; statusChanged = true;
-                speak(w.name + " gemist."); 
-                if (isF) finished = true; 
-                updateWPUI(); 
+                speak(w.name + " bereikt."); updateWPUI(); 
+                if (i === waypoints.length - 1) finished = true;
             }
         });
 
         const next = waypoints.find(w => !w.passed && !w.missed);
-        if(statusChanged && next && !finished) {
-            setTimeout(() => speak("Ga naar " + next.name), 2000);
-        }
-
         document.getElementById('stat-steps').innerText = Math.round(sport.steps);
         document.getElementById('stat-trip').innerText = (tripDist/1000).toFixed(2);
         document.getElementById('stat-kcal').innerText = Math.round(sport.kcal);
@@ -238,12 +221,11 @@ function startGPS() {
         document.getElementById('stat-cadence').innerText = Math.round(isM ? ((skmh/3.6)/CONFIG.th*60) : 0);
         
         document.getElementById('display-content').innerHTML = `
-            <b style="color:#ffff00">VOLGEND DOEL:</b><br>
-            <span class="highlight" style="font-size:1.5rem; color:#00ff00;">${next ? next.name : 'FINISH'}</span><br>
-            <b>AFSTAND:</b> <span class="highlight">${next ? Math.max(0, Math.round(next.routePos - R.pos)) : 0}m</span><br>
+            <b style="color:#ffff00">VOLGEND: ${next ? next.name : 'FINISH'}</b><br>
+            <span class="highlight" style="font-size:1.8rem; color:#00ff00;">${next ? Math.max(0, Math.round(next.routePos - R.pos)) : 0}m</span><br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
             <b>SNELHEID:</b> ${skmh.toFixed(1)} km/u<br>
-            <b>OFF-TRACK:</b> <span style="color:${isOffRoute?'#e74c3c':'#00ff00'}">${Math.round(R.off)}m</span><br>
+            <b>MET:</b> ${sport.currentMET.toFixed(1)} | <b>GEWICHT:</b> ${weight}kg<br>
             <button class="copy-btn" onclick="navigator.clipboard.writeText('${lat.toFixed(6)}, ${lon.toFixed(6)}')">📍 KOPIEER LOCATIE</button>
         `;
         sport.lastTick = now;
