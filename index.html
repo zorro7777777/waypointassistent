@@ -79,9 +79,10 @@
 </div>
 
 <script>
+// Aangepaste ms (meters per seconde) drempels voor betere detectie
 const PROFS = {
-    wandelen: { ms: 1.5, max: 7, th: 0.67, radius: 15, met: 3.5, unit: "Stappen" },
-    fietsen: { ms: 1.95, max: 45, th: 2.10, radius: 25, met: 8.0, unit: "Omwentelingen" }
+    wandelen: { ms: 0.4, max: 8, th: 0.67, radius: 20, met: 3.5, unit: "Stappen" },
+    fietsen: { ms: 1.5, max: 45, th: 2.10, radius: 30, met: 8.0, unit: "Omwentelingen" }
 };
 let CONFIG = { ...PROFS.wandelen };
 let track = [], waypoints = [], cumDist = [], watchId = null, lastPos = null, maxRoutePos = 0, tripDist = 0, finished = false;
@@ -103,6 +104,7 @@ function getDist(a,b,c,d){
 }
 
 function getRInfo(lat, lon) {
+    if (track.length === 0) return { pos: 0, off: 0 };
     let bD = Infinity, bP = 0, bI = 0;
     let startIdx = Math.max(0, lastSearchIdx - 150);
     let endIdx = Math.min(track.length, lastSearchIdx + 150);
@@ -185,26 +187,35 @@ function startGPS() {
     document.getElementById('configArea').style.display = 'none';
     
     const first = waypoints.find(w => !w.passed && !w.missed);
-    if(first) speak("Tracking gestart. Volg waypoint " + first.name);
+    if(first) speak("Tracking gestart.");
 
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
     
     watchId = navigator.geolocation.watchPosition(p => {
         if (finished) return; 
         const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = p.coords;
-        const skmh = (s || 0) * 3.6, now = Date.now(), dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
+        
+        // Speed in km/h. Als s null is (vaak bij lage snelheid), rekenen we met 0.
+        const currentSpeedMs = s || 0;
+        const skmh = currentSpeedMs * 3.6;
+        
+        const now = Date.now();
+        const dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
+        
         const R = getRInfo(lat, lon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
         if (R.off > 49 && now - alertTime > 15000) { speak(`${Math.round(R.off)} meter afgeweken.`); alertTime = now; isOffRoute = true; }
         else if (isOffRoute && R.off < 10) { speak("Terug op route."); isOffRoute = false; }
 
-        const isMoving = skmh >= (CONFIG.ms * 3.6) && skmh <= CONFIG.max;
+        // BEWEGINGS LOGICA VERBETERD
+        const isMoving = currentSpeedMs >= CONFIG.ms;
+        
         if (isMoving) { 
             sport.movingTime += dt; 
-            sport.steps += ((skmh/3.6 * dt) / CONFIG.th); 
-            sport.kcal += ((CONFIG.met * 3.5 * 92) / 12000) * dt; 
-            if (lastPos && acc < 30) tripDist += getDist(lastPos.lat, lastPos.lon, lat, lon); 
+            sport.steps += ((currentSpeedMs * dt) / CONFIG.th); 
+            sport.kcal += ((CONFIG.met * 3.5 * 80) / 12000) * dt; // 80kg als standaard
+            if (lastPos && acc < 40) tripDist += getDist(lastPos.lat, lastPos.lon, lat, lon); 
             lastPos = { lat, lon }; 
         } else if (sport.lastTick) { 
             sport.idleTime += dt; 
@@ -219,7 +230,7 @@ function startGPS() {
             const isFinish = (i === waypoints.length - 1);
             if (w.touched && distToPoint <= CONFIG.radius) { 
                 w.passed = true; statusChanged = true;
-                speak(isFinish ? "Bestemming bereikt. Tracking voltooid." : w.name + " bereikt."); 
+                speak(isFinish ? "Bestemming bereikt." : w.name + " bereikt."); 
                 if (isFinish) { 
                     finished = true; 
                     document.getElementById('resetBtn').style.display = 'block'; 
@@ -227,25 +238,20 @@ function startGPS() {
                 } 
                 updateWPUI(); 
             }
-            else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 15) { 
+            else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 20) { 
                 w.missed = true; statusChanged = true;
-                speak(w.name + " gemist."); 
-                if (isFinish) { finished = true; document.getElementById('resetBtn').style.display = 'block'; } 
                 updateWPUI(); 
             }
         });
 
         const nextWp = waypoints.find(w => !w.passed && !w.missed);
-        if(statusChanged && nextWp && !finished) {
-            setTimeout(() => speak("Ga nu naar " + nextWp.name), 2000);
-        }
-
+        
         document.getElementById('stat-steps').innerText = Math.round(sport.steps);
         document.getElementById('stat-trip').innerText = (tripDist/1000).toFixed(2);
         document.getElementById('stat-kcal').innerText = Math.round(sport.kcal);
         document.getElementById('stat-moving').innerText = new Date(sport.movingTime * 1000).toISOString().substr(11, 8);
         document.getElementById('stat-idle').innerText = new Date(sport.idleTime * 1000).toISOString().substr(11, 8);
-        document.getElementById('stat-cadence').innerText = Math.round(isMoving ? ((skmh/3.6)/CONFIG.th*60) : 0);
+        document.getElementById('stat-cadence').innerText = Math.round(isMoving ? (currentSpeedMs/CONFIG.th*60) : 0);
         
         document.getElementById('display-content').innerHTML = `
             <b style="color:#ffff00">VOLGEND DOEL:</b><br>
@@ -257,17 +263,20 @@ function startGPS() {
                 <b>GEMIDDELD:</b> ${((tripDist/1000)/(sport.movingTime/3600 || 1)).toFixed(2)} km/u<br>
                 <b>OFF-TRACK:</b> <span style="color:${isOffRoute?'#e74c3c':'#00ff00'}">${Math.round(R.off)}m</span><br>
                 <b>GPS:</b> ±${acc.toFixed(0)}m
-                <span class="field-yellow">LAT: ${Math.abs(lat).toFixed(6)}° ${lat >= 0 ? 'N' : 'Z'}</span>
-                <span class="field-yellow">LON: ${Math.abs(lon).toFixed(6)}° ${lon >= 0 ? 'O' : 'W'}</span>
             </div>
             <button class="copy-btn" onclick="navigator.clipboard.writeText('${lat.toFixed(6)}, ${lon.toFixed(6)}')">📍 KOPIEER COÖRDINATEN</button>
         `;
         sport.lastTick = now;
-    }, err => console.warn(err), { enableHighAccuracy: true, maximumAge: 0 });
+    }, err => {
+        console.warn(err);
+        document.getElementById('display-content').innerText = "GPS Signaal verloren...";
+    }, { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 });
 }
 
-function updateProfile() { CONFIG = { ...PROFS[document.getElementById('profile').value] }; document.getElementById('unit-label').innerText = CONFIG.unit; }
-
+function updateProfile() { 
+    CONFIG = { ...PROFS[document.getElementById('profile').value] }; 
+    document.getElementById('unit-label').innerText = CONFIG.unit; 
+}
 </script>
 </body>
 </html>
