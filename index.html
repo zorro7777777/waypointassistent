@@ -288,21 +288,23 @@ function startGPS() {
             lastEtaUpdate = now;
         }
 
-        document.getElementById('display-content').innerHTML = `
+document.getElementById('display-content').innerHTML = `
             <b style="color:#ffff00">VOLGEND:</b><br>
             <span class="highlight" style="font-size:1.5rem; color:#00ff00;">${finished ? 'FINISH' : (next ? next.name : '---')}</span><br>
-            <b>AFSTAND:</b> <span class="highlight">${(next && !finished) ? Math.max(0, Math.round(next.routePos - R.pos)) : 0}m</span><br>
+            <b>AFSTAND:</b> <span class="highlight">${next ? Math.round(getDist(smoothLat, smoothLon, next.lat, next.lon)) : 0}m</span><br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <b>${CONFIG.unit.toUpperCase()}:</b> <span class="field-green">${Math.round(sport.steps)}</span> (Cad: ${Math.round(isM ? ((skmh/3.6)/CONFIG.th*60) : 0)})<br>
+            <b>${CONFIG.unit.toUpperCase()}:</b> <span class="field-green">${Math.round(sport.steps)}</span><br>
+            <b>CADANS:</b> <span class="field-green">${cadans}</span><br>
             <b>TRIP:</b> <span class="field-green">${(tripDist/1000).toFixed(3)} km</span><br>
             <b>TIJD:</b> <span class="field-green">${fmtT(sport.movingTime)}</span><br>
             <b>AANKOMST:</b> <span class="field-green">${finished ? 'BEREIKT' : cachedArrival}</span><br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <b>SPD:</b> ${skmh.toFixed(1)} km/u | <b>AVG:</b> ${avgV.toFixed(2)}<br>
+            <b>SPD:</b> ${skmh.toFixed(1)} km/u<br>
+            <b>AVG:</b> ${avgV.toFixed(2)} km/u<br>
             <b>ENERGIE:</b> ${Math.round(sport.kcal)} kcal<br>
             <b>POWER:</b> ${metVal.toFixed(1)} MET<br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <b>OFF-TRACK:</b> <span style="color:${R.off > 49 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span><br>
+            <b>OFF-TRACK:</b> <span style="color:${R.off > 30 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span><br>
             <b>ACCURACY:</b> ${acc.toFixed(0)}m<br>
             <span class="field-yellow">LAT: ${smoothLat.toFixed(6)}</span>
             <span class="field-yellow">LON: ${smoothLon.toFixed(6)}</span>
