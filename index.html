@@ -296,7 +296,8 @@ function startGPS() {
             <b>STAPPEN:</b> <span class="field-green">${Math.round(sport.steps)}</span><br>
             <b>CADANS:</b> ${Math.round(isM ? ((skmh/3.6)/CONFIG.th*60) : 0)}<br>
             <b>TRIP:</b> <span class="field-green">${(tripDist/1000).toFixed(3)} km</span><br>
-            <b>TIJD:</b> <span class="field-green">${fmtT(sport.movingTime)}</span><br>
+            <b>BEWOGEN TIJD:</b> <span class="field-green">${fmtT(sport.movingTime)}</span><br>
+            <b>PAUZE TIJD:</b> <span class="field-green">${fmtT(sport.idleTime)}</span><br>
             <b>AANKOMST:</b> <span class="field-green">${finished ? 'BEREIKT' : cachedArrival}</span><br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
             <b>SPEED:</b> ${skmh.toFixed(1)} km/u<br>
