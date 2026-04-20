@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v85 - Voice & Precision</title>
+    <title>GPX Engine v86 - Full Voice Response</title>
    <style>
         body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -28,7 +28,7 @@
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">💿 PLATINA ENGINE v85</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">💿 PLATINA ENGINE v86</h1>
 
     <div class="config-section" id="configArea">
         <div class="row">
@@ -136,7 +136,10 @@ document.getElementById('gpxInput').onchange = e => {
             return w;
         }).sort((a,b) => a.routePos - b.routePos);
         updateWPUI();
-        document.getElementById('display-content').innerText = "Route geladen.";
+        
+        const totalKm = (cumDist.at(-1) / 1000).toFixed(1);
+        speak(`Route geladen. ${waypoints.length} punten over ${totalKm} kilometer. Klik op start.`);
+        document.getElementById('display-content').innerText = "Route geladen. Klik op START.";
     };
     r.readAsText(e.target.files[0]);
 };
@@ -154,15 +157,20 @@ function updateWPUI() {
 }
 
 function handleStartPause() {
-    if (!watchId) startGPS();
-    else {
+    const btn = document.getElementById('startBtn');
+    if (!watchId) {
+        startGPS();
+        btn.innerText = "⏸ PAUZE"; btn.className = "pause";
+        speak("Systeem actief. Goede reis.");
+    } else {
         isPaused = !isPaused;
-        const btn = document.getElementById('startBtn');
         if (isPaused) {
             btn.innerText = "▶ HERVAT"; btn.className = "start";
+            speak("Pauze.");
             sport.lastTick = null;
         } else {
             btn.innerText = "⏸ PAUZE"; btn.className = "pause";
+            speak("Hervatting van de route.");
             sport.lastTick = Date.now();
         }
     }
@@ -171,8 +179,6 @@ function handleStartPause() {
 function startGPS() {
     if (watchId || !track.length) return;
     document.getElementById('gpxInput').style.display = 'none';
-    document.getElementById('startBtn').innerText = "⏸ PAUZE";
-    document.getElementById('startBtn').className = "pause";
     if ('wakeLock' in navigator) navigator.wakeLock.request('screen');
 
     watchId = navigator.geolocation.watchPosition(p => {
@@ -182,11 +188,10 @@ function startGPS() {
         const R = getRInfo(lat, lon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        // Off-route logica
-        if (R.off > 49 && now - alertTime > 15000) { 
+        if (R.off > 55 && now - alertTime > 20000) { 
             speak(Math.round(R.off) + " meter van route."); 
             alertTime = now; isOffRoute = true; 
-        } else if (isOffRoute && R.off < 7) { 
+        } else if (isOffRoute && R.off < 8) { 
             speak("Terug op route."); isOffRoute = false; 
         }
 
@@ -209,21 +214,20 @@ function startGPS() {
             if (R.pos >= w.routePos - CONFIG.radius && w.touched) {
                 w.passed = true; statusChanged = true;
                 if (i === waypoints.length - 1) { 
-                    finished = true; speak("Finish bereikt."); navigator.geolocation.clearWatch(watchId); 
+                    finished = true; speak("Bestemming bereikt."); navigator.geolocation.clearWatch(watchId); 
                 } else { 
                     speak(w.name); 
                 }
                 updateWPUI();
-            } else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 10) {
+            } else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 12) {
                 w.missed = true; statusChanged = true;
                 speak(w.name + " gemist."); updateWPUI();
             }
         });
 
         const next = waypoints.find(w => !w.passed && !w.missed);
-        // Kondig volgend punt aan als er een statuswijziging was
         if(statusChanged && next && !finished) {
-            setTimeout(() => speak("Ga naar " + next.name), 2500);
+            setTimeout(() => speak("Volgend punt: " + next.name), 2500);
         }
 
         const avgV = R.pos > 20 ? (R.pos / 1000) / (sport.movingTime / 3600) : 0;
@@ -263,7 +267,9 @@ function startGPS() {
 }
 
 function updateProfile() {
-    CONFIG = { ...PROFS[document.getElementById('profile').value] };
+    const val = document.getElementById('profile').value;
+    CONFIG = { ...PROFS[val] };
+    speak(`Profiel ingesteld op ${val}.`);
 }
 </script>
 </body>
