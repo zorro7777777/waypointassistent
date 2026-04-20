@@ -290,7 +290,7 @@ function startGPS() {
 
         document.getElementById('display-content').innerHTML = `
             <b style="color:#ffff00">VOLGEND:</b><br>
-            <span class="highlight" style="font-size:1.5rem; color:#00ff00;">${finished ? 'FINISH' : (next ? next.name : '---')}</span><br>
+            <span class="highlight" style="font-size:1.3rem; color:#00ff00;">${finished ? 'FINISH' : (next ? next.name : '---')}</span><br>
             <b>AFSTAND:</b> <span class="highlight">${(next && !finished) ? Math.max(0, Math.round(next.routePos - R.pos)) : 0}m</span><br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
             <b>${CONFIG.unit.toUpperCase()}:</b> <span class="field-green">${Math.round(sport.steps)}</span> (Cad: ${Math.round(isM ? ((skmh/3.6)/CONFIG.th*60) : 0)})<br>
