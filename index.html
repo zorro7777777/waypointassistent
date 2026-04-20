@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v87 - Smooth Voice Queue</title>
+    <title>GPX Engine v88 - Smooth Voice Pro</title>
    <style>
         body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -28,7 +28,7 @@
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">💿 PLATINA ENGINE v87</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">💿 PLATINA ENGINE v88</h1>
 
     <div class="config-section" id="configArea">
         <div class="row">
@@ -71,13 +71,15 @@ let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
 let alertTime = 0, isOffRoute = false, isPaused = false;
 let lastEtaUpdate = 0, cachedArrival = "--:--";
 
-// VOICE QUEUE LOGIC
+// --- VERBETERDE SPRAAK QUEUE ---
 let speechQueue = [];
 let isSpeaking = false;
 
 function speak(text) {
     if (!document.getElementById('audioToggle').checked) return;
-    speechQueue.push(text);
+    // Zet alles om naar kleine letters en filter rare START/FINISH uitspraak
+    let cleanText = text.replace("START", "Startpunt").replace("FINISH", "De Finish");
+    speechQueue.push(cleanText);
     processQueue();
 }
 
@@ -87,13 +89,13 @@ function processQueue() {
     isSpeaking = true;
     const msg = new SpeechSynthesisUtterance(speechQueue.shift());
     msg.lang = 'nl-NL';
+    msg.rate = 0.9; // Iets rustiger praten
     
     msg.onend = () => {
-        // Wacht 2000ms na het einde van de zin voor de volgende start
         setTimeout(() => {
             isSpeaking = false;
             processQueue();
-        }, 2000);
+        }, 2000); // Strikte 2 seconden pauze
     };
     
     window.speechSynthesis.speak(msg);
@@ -158,8 +160,7 @@ document.getElementById('gpxInput').onchange = e => {
         updateWPUI();
         
         const totalKm = (cumDist.at(-1) / 1000).toFixed(1);
-        speak(`Route geladen.`);
-        speak(`${waypoints.length} punten over ${totalKm} kilometer.`);
+        speak(`Route geladen. ${waypoints.length} punten over ${totalKm} kilometer.`);
         document.getElementById('display-content').innerText = "Route geladen. Klik op START.";
     };
     r.readAsText(e.target.files[0]);
@@ -183,6 +184,7 @@ function handleStartPause() {
         startGPS();
         btn.innerText = "⏸ PAUZE"; btn.className = "pause";
         speak("Systeem actief. Goede reis.");
+        // De aankondiging van het eerste punt volgt nu automatisch via de watch-loop met natuurlijke vertraging
     } else {
         isPaused = !isPaused;
         if (isPaused) {
@@ -248,7 +250,7 @@ function startGPS() {
         });
 
         const next = waypoints.find(w => !w.passed && !w.missed);
-        const avgV = R.pos > 25 ? (R.pos / 1000) / (sport.movingTime / 3600) : 0;
+        const avgV = R.pos > 20 ? (R.pos / 1000) / (sport.movingTime / 3600) : 0;
         
         if (now - lastEtaUpdate > 60000 || cachedArrival === "--:--") {
             const remainingDist = cumDist.at(-1) - R.pos;
@@ -274,7 +276,7 @@ function startGPS() {
             <b>ENERGIE:</b> ${Math.round(sport.kcal)} kcal<br>
             <b>POWER:</b> ${metVal.toFixed(1)} MET<br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <b>OFF-TRACK:</b> <span style="color:${R.off > 50 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span><br>
+            <b>OFF-TRACK:</b> <span style="color:${R.off > 49 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span><br>
             <b>ACCURACY:</b> ${acc.toFixed(0)}m<br>
             <span class="field-yellow">LAT: ${lat.toFixed(6)}</span>
             <span class="field-yellow">LON: ${lon.toFixed(6)}</span>
