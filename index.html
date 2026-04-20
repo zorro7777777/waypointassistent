@@ -79,79 +79,151 @@
 <script>
 /**
  * --- INSTELBARE PARAMETERS ---
- * ms:  Minimale snelheid in m/s om als 'beweging' geteld te worden.
- * max: Maximale snelheid in km/u (daarboven wordt het vaak als GPS-ruis gezien).
- * th:  Staplengte/omwenteling in meters voor stappenteller.
- * rad: Radius in meters wanneer je een waypoint 'raakt'.
  */
 const PROFS = {
     wandelen: { ms: 0.5, max: 7, th: 0.67, radius: 12, unit: "Stappen" },
     fietsen:  { ms: 1.95, max: 45, th: 2.10, radius: 25, unit: "Omwentelingen" }
 };
 
-// --- GLOBALE VARIABELEN ---
+// --- HUIDIGE CONFIG ---
 let CONFIG = { ...PROFS.wandelen };
-let track = [], waypoints = [], cumDist = [];
-let watchId = null, lastPos = null, maxRoutePos = 0, tripDist = 0, finished = false;
-let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
-let alertTime = 0, isOffRoute = false, isPaused = false;
-let lastEtaUpdate = 0, cachedArrival = "--:--";
 
-/**
- * --- GPS FILTER SETTINGS ---
- * SMOOTHING_FACTOR: 0.0 tot 1.0. Lager = meer middeling (rustiger beeld), hoger = directer maar zenuwachtiger.
- * ACCURACY_LIMIT: Als de GPS onnauwkeuriger is dan deze waarde (in meters), negeer de meting.
- */
-let smoothLat = null, smoothLon = null;
-const SMOOTHING_FACTOR = 0.35; 
-const ACCURACY_LIMIT = 25; 
+// --- ROUTE STATE ---
+let track = [];
+let waypoints = [];
+let cumDist = [];
 
-// --- VOICE QUEUE (Voorkomt dat spraak door elkaar praat) ---
+// --- GPS STATE ---
+let watchId = null;
+let lastPos = null;
+let maxRoutePos = 0;
+let tripDist = 0;
+let finished = false;
+
+// --- SPORT METRICS ---
+let sport = {
+    steps: 0,
+    kcal: 0,
+    movingTime: 0,
+    idleTime: 0,
+    lastTick: null
+};
+
+// --- ROUTE FLAGS ---
+let alertTime = 0;
+let isOffRoute = false;
+let isPaused = false;
+
+// --- ETA CACHE ---
+let lastEtaUpdate = 0;
+let cachedArrival = "--:--";
+
+// --- GPS FILTER STATE ---
+let smoothLat = null;
+let smoothLon = null;
+
+const SMOOTHING_FACTOR = 0.35;
+const ACCURACY_LIMIT = 25;
+
+// --- SPEECH ENGINE ---
 let speechQueue = [];
 let isSpeaking = false;
 
 function speak(text) {
-    if (!document.getElementById('audioToggle').checked) return;
-    let cleanText = text.replace("START", "Startpunt").replace("FINISH", "De Finish");
+
+    if (!document.getElementById('audioToggle')?.checked) return;
+
+    const cleanText = String(text)
+        .replaceAll("START", "Startpunt")
+        .replaceAll("FINISH", "De Finish");
+
     speechQueue.push(cleanText);
     processQueue();
 }
 
 function processQueue() {
+
     if (isSpeaking || speechQueue.length === 0) return;
+
     isSpeaking = true;
+
     const msg = new SpeechSynthesisUtterance(speechQueue.shift());
     msg.lang = 'nl-NL';
     msg.rate = 0.95;
+
     msg.onend = () => {
-        setTimeout(() => { isSpeaking = false; processQueue(); }, 1500);
+        setTimeout(() => {
+            isSpeaking = false;
+            processQueue();
+        }, 1200);
     };
+
     window.speechSynthesis.speak(msg);
 }
 
-// --- MATH UTILS ---
+// --- TIME FORMAT ---
 function fmtT(s) {
-    if (!isFinite(s) || s < 0) return "00:00:00";
-    const h = Math.floor(s / 3600).toString().padStart(2, '0');
-    const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
-    const sec = Math.floor(s % 60).toString().padStart(2, '0');
-    return `${h}:${m}:${sec}`;
+
+    if (!Number.isFinite(s) || s < 0) return "00:00:00";
+
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+
+    return (
+        String(h).padStart(2, '0') + ":" +
+        String(m).padStart(2, '0') + ":" +
+        String(sec).padStart(2, '0')
+    );
 }
 
-// Haversine formule voor afstand tussen twee coördinaten in meters
-function getDist(a,b,c,d){
-    const R=6371000, rL=(c-a)*Math.PI/180, rO=(d-b)*Math.PI/180;
-    return 2*R*Math.asin(Math.sqrt(Math.sin(rL/2)**2 + Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(rO/2)**2));
+// --- HAVERSINE DISTANCE ---
+function getDist(a, b, c, d) {
+
+    const R = 6371000;
+
+    const dLat = (c - a) * Math.PI / 180;
+    const dLon = (d - b) * Math.PI / 180;
+
+    const lat1 = a * Math.PI / 180;
+    const lat2 = c * Math.PI / 180;
+
+    const x =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1) *
+        Math.cos(lat2) *
+        Math.sin(dLon / 2) ** 2;
+
+    return 2 * R * Math.asin(Math.sqrt(x));
 }
 
 // Zoekt dichtstbijzijnde punt op de route voor ETA en Off-route checks
 function getRInfo(lat, lon) {
-    let bD = Infinity, bP = 0;
-    track.forEach((t, i) => {
+
+    let bestDist = Infinity;
+    let bestRoutePos = 0;
+
+    const len = track.length;
+
+    for (let i = 0; i < len; i++) {
+
+        const t = track[i];
+
         const d = getDist(lat, lon, t.lat, t.lon);
-        if (d < bD) { bD = d; bP = cumDist[i]; }
-    });
-    return { pos: bP, off: bD };
+
+        if (d < bestDist) {
+            bestDist = d;
+            bestRoutePos = cumDist[i];
+
+            // kleine optimalisatie: perfecte match
+            if (bestDist < 2) break;
+        }
+    }
+
+    return {
+        pos: bestRoutePos,
+        off: bestDist
+    };
 }
 
 // --- UI HANDLERS ---
@@ -168,55 +240,139 @@ function toggleTable() {
     el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
+
 // GPX PARSER
 document.getElementById('gpxInput').onchange = e => {
+
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     const r = new FileReader();
+
     r.onload = ev => {
+
         const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
+
         const pts = [...xml.getElementsByTagName('trkpt')];
-        track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
-        
-        // Bereken gecumuleerde afstand van de route
-        cumDist = [0];
-        for(let i=0; i<track.length-1; i++) {
-            cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
+
+        if (!pts.length) {
+            speak("Geen track gevonden in GPX bestand.");
+            return;
         }
 
-        // Importeer waypoints
-        let tempWps = [...xml.getElementsByTagName('wpt')].map(w => ({
-            name: w.getElementsByTagName('name')[0]?.textContent || "Punt",
-            lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'),
-            passed: false, missed: false, touched: false
+        track = pts.map(p => ({
+            lat: +p.getAttribute('lat'),
+            lon: +p.getAttribute('lon')
         }));
 
-        // Voeg start en finish toe als waypoints
-        tempWps.push({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false, missed: false, touched: false });
-        tempWps.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false, touched: false });
-        
-        // Sorteer waypoints op basis van hun positie langs de route (niet chronologisch in XML)
+        // -------------------------
+        // ROUTE AFSTAND (cumulatief)
+        // -------------------------
+        cumDist = [0];
+
+        for (let i = 1; i < track.length; i++) {
+            cumDist[i] =
+                cumDist[i - 1] +
+                getDist(
+                    track[i - 1].lat,
+                    track[i - 1].lon,
+                    track[i].lat,
+                    track[i].lon
+                );
+        }
+
+        // -------------------------
+        // WAYPOINTS
+        // -------------------------
+        let tempWps = [...xml.getElementsByTagName('wpt')].map(w => ({
+            name: w.getElementsByTagName('name')[0]?.textContent || "Punt",
+            lat: +w.getAttribute('lat'),
+            lon: +w.getAttribute('lon'),
+            passed: false,
+            missed: false,
+            touched: false
+        }));
+
+        // START / FINISH altijd correct uit track
+        tempWps.push({
+            name: "START",
+            lat: track[0].lat,
+            lon: track[0].lon,
+            passed: false,
+            missed: false,
+            touched: false
+        });
+
+        tempWps.push({
+            name: "FINISH",
+            lat: track.at(-1).lat,
+            lon: track.at(-1).lon,
+            passed: false,
+            missed: false,
+            touched: false
+        });
+
+        // -------------------------
+        // ROUTE POSITION INDEXERING
+        // -------------------------
+
         waypoints = tempWps.map(w => {
-            w.routePos = getRInfo(w.lat, w.lon).pos;
+
+            const r = getRInfo(w.lat, w.lon);
+
+            w.routePos = r.pos;
+            w.offDistance = r.off;
+
             return w;
-        }).sort((a,b) => a.routePos - b.routePos);
+        });
+
+        // sorteer op route volgorde
+        waypoints.sort((a, b) => a.routePos - b.routePos);
+
+        // -------------------------
+        // RESET STATE (BELANGRIJK)
+        // -------------------------
+        maxRoutePos = 0;
+        lastIndex = 0;
+        lastPos = null;
 
         updateWPUI();
+
         const totalKm = (cumDist.at(-1) / 1000).toFixed(1);
+
         speak(`Route geladen. ${waypoints.length} punten over ${totalKm} kilometer.`);
-        document.getElementById('display-content').innerText = "Route geladen. Klik op START.";
+
+        document.getElementById('display-content').innerText =
+            "Route geladen. Klik op START.";
+
     };
-    r.readAsText(e.target.files[0]);
+
+    r.readAsText(file);
 };
 
 function updateWPUI() {
+
     const p = waypoints.filter(w => w.passed).length;
     const m = waypoints.filter(w => w.missed).length;
-    document.getElementById('wp-summary').innerText = `✅ ${p} | ❌ ${m} | ⏳ ${waypoints.length - p - m}`;
+
+    document.getElementById('wp-summary').innerText =
+        `✅ ${p} | ❌ ${m} | ⏳ ${waypoints.length - p - m}`;
+
     document.getElementById('list').innerHTML = waypoints.map(w => `
-        <tr style="${w.passed ? 'color:#27ae60; font-weight:bold;' : (w.missed ? 'color:#e74c3c;text-decoration:line-through;' : '')}">
-            <td style="width:25px">${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
+        <tr style="${
+            w.passed
+                ? 'color:#27ae60;font-weight:bold;'
+                : (w.missed
+                    ? 'color:#e74c3c;text-decoration:line-through;'
+                    : '')
+        }">
+            <td style="width:25px">
+                ${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}
+            </td>
             <td>${w.name}</td>
             <td style="text-align:right">${Math.round(w.routePos)}m</td>
-        </tr>`).join('');
+        </tr>
+    `).join('');
 }
 
 function handleStartPause() {
@@ -242,103 +398,169 @@ function handleStartPause() {
 // --- CORE GPS LOOP ---
 function startGPS() {
     if (watchId || !track.length) return;
+
     document.getElementById('gpxInput').style.display = 'none';
-    if ('wakeLock' in navigator) navigator.wakeLock.request('screen');
+
+    if ('wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').catch(()=>{});
+    }
 
     watchId = navigator.geolocation.watchPosition(p => {
+
         if (finished || isPaused) return;
 
         const { latitude: rawLat, longitude: rawLon, accuracy: acc, speed: s } = p.coords;
         const now = Date.now();
         const dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
 
-        // 1. ACCURACY GUARD
-        if (acc > ACCURACY_LIMIT) return; 
+        // 1. ACCURACY FILTER
+        if (acc > ACCURACY_LIMIT) return;
 
-        // 2. EMA FILTERING (Smooth coördinaten)
+        // 2. EMA SMOOTHING + JUMP FILTER
         if (smoothLat === null) {
-            smoothLat = rawLat; smoothLon = rawLon;
+            smoothLat = rawLat;
+            smoothLon = rawLon;
         } else {
-            // Verwerp onmogelijke sprongen (sneller dan 15 m/s of 54km/u)
-            const distJump = getDist(smoothLat, smoothLon, rawLat, rawLon);
-            if (dt > 0 && (distJump / dt) > 15) return; 
+            const jumpDist = getDist(smoothLat, smoothLon, rawLat, rawLon);
 
-            smoothLat = (rawLat * SMOOTHING_FACTOR) + (smoothLat * (1 - SMOOTHING_FACTOR));
-            smoothLon = (rawLon * SMOOTHING_FACTOR) + (smoothLon * (1 - SMOOTHING_FACTOR));
+            // voorkomt GPS spikes in stad
+            if (dt > 0 && (jumpDist / dt) > 15) return;
+
+            smoothLat = rawLat * SMOOTHING_FACTOR + smoothLat * (1 - SMOOTHING_FACTOR);
+            smoothLon = rawLon * SMOOTHING_FACTOR + smoothLon * (1 - SMOOTHING_FACTOR);
         }
 
-        const skmh = (s || 0) * 3.6;
+        // 3. BETROUWBARE SNELHEID (GPS + motion fallback)
+        let gpsSpeed = (s || 0) * 3.6;
+
+        let motionSpeed = 0;
+        if (lastPos && dt > 0) {
+            const d = getDist(lastPos.lat, lastPos.lon, smoothLat, smoothLon);
+            motionSpeed = (d / dt) * 3.6;
+        }
+
+        const skmh = (gpsSpeed > 1 && gpsSpeed < 80) ? gpsSpeed : motionSpeed;
+
+        // 4. ROUTE POSITION
         const R = getRInfo(smoothLat, smoothLon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        // OFF-ROUTE CHECK (45 meter drempel)
-        if (R.off > 45 && now - alertTime > 25000) { 
-            speak("Je bent " + Math.round(R.off) + " meter van de route afgeweken.");
-            alertTime = now; isOffRoute = true; 
-        } else if (isOffRoute && R.off < 10) { 
-            speak("Je bent terug op de route aangekomen."); isOffRoute = false; 
+        // 5. OFF-ROUTE LOGIC (met context)
+        if (R.off > 45 && now - alertTime > 25000) {
+
+            const nextWp = waypoints.find(w => !w.passed && !w.missed);
+
+            if (nextWp) {
+                speak("Je bent " + Math.round(R.off) + " meter van de route. Draai terug richting de route.");
+            } else {
+                speak("Je bent " + Math.round(R.off) + " meter van de route afgeweken.");
+            }
+
+            alertTime = now;
+            isOffRoute = true;
+
+        } else if (isOffRoute && R.off < 10) {
+            speak("Je bent terug op de route.");
+            isOffRoute = false;
         }
 
-        // 3. TRIP TELLER LOGICA (Verbeterd)
-        const isM = skmh >= (CONFIG.ms * 3.6) && skmh <= CONFIG.max;
+        // 6. TRIP TRACKING
+        const isMoving = skmh >= (CONFIG.ms * 3.6) && skmh <= CONFIG.max;
         const weight = parseFloat(document.getElementById('userWeight').value) || 92;
-        const metVal = document.getElementById('profile').value === 'wandelen' ? (0.75 * skmh + 0.5) : (0.4 * skmh);
+
+        const metVal =
+            document.getElementById('profile').value === 'wandelen'
+                ? (0.75 * skmh + 0.5)
+                : (0.4 * skmh);
 
         if (lastPos) {
             const d = getDist(lastPos.lat, lastPos.lon, smoothLat, smoothLon);
-            // d > 0.4 filtert 'jitter' weg terwijl je stilstaat, maar telt langzame stappen wel mee
-            if (d > 0.4 && d < 30) { 
-                tripDist += d; 
+
+            if (d > 0.6 && d < 35) {
+                tripDist += d;
             }
         }
+
         lastPos = { lat: smoothLat, lon: smoothLon };
 
-        if (isM) {
+        if (isMoving) {
             sport.movingTime += dt;
-            sport.steps += ((skmh/3.6 * dt) / CONFIG.th);
+            sport.steps += ((skmh / 3.6) * dt) / CONFIG.th;
             sport.kcal += (metVal * 3.5 * weight / 200) * (dt / 60);
-        } else if (sport.lastTick) {
+        } else if (dt > 0) {
             sport.idleTime += dt;
         }
 
-        // 4. WAYPOINT CHECK
+        // 7. WAYPOINT LOGIC (stabiel + anti-false miss)
         waypoints.forEach((w, i) => {
+
             if (w.passed || w.missed) return;
-            
-            // Check of we in de buurt van waypoint zijn (radius)
-            if (getDist(smoothLat, smoothLon, w.lat, w.lon) <= CONFIG.radius) w.touched = true;
-            
-            // Markeer als gepasseerd als we de radius hebben geraakt EN op de route voorbij het punt zijn
-            if (R.pos >= w.routePos - CONFIG.radius && w.touched) {
+
+            const d = getDist(smoothLat, smoothLon, w.lat, w.lon);
+
+            const dynamicRadius = Math.max(
+                CONFIG.radius,
+                Math.min(CONFIG.radius * 2.5, (acc || 10) * 1.2)
+            );
+
+            if (d <= dynamicRadius) w.touched = true;
+
+            if (w.touched && R.pos >= w.routePos - CONFIG.radius) {
+
                 w.passed = true;
-                if (i === waypoints.length - 1) { 
-                    finished = true; speak("Finish! Je bent op uw bestemming aangekomen."); navigator.geolocation.clearWatch(watchId); 
-                } else { 
-                    speak(w.name); 
+
+                if (i === waypoints.length - 1) {
+                    finished = true;
+                    speak("Finish! Je bent op uw bestemming aangekomen.");
+                    navigator.geolocation.clearWatch(watchId);
+                } else {
+                    speak(w.name);
+
                     const nxt = waypoints.find(nw => !nw.passed && !nw.missed);
-                    if(nxt) speak("Het volgende waypoint is: " + nxt.name);
+                    if (nxt) speak("Het volgende waypoint is: " + nxt.name);
                 }
+
                 updateWPUI();
-            } 
-            // Missed check: als we al 12m + accuraatheid voorbij het punt op de route zijn zonder te raken
-            else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 12) {
-               w.missed = true; speak("Door een omweg of werkzaamheden heb je waypoint " + w.name + " gemist."); updateWPUI();
+            }
+
+            else if (
+                maxRoutePos > w.routePos + CONFIG.radius + acc + 12 &&
+                d > dynamicRadius
+            ) {
+                w.missed = true;
+                speak("Waypoint gemist: " + w.name);
+                updateWPUI();
             }
         });
 
-        // 5. ETA & DISPLAY UPDATE
+        // 8. ETA + DISPLAY (ongewijzigd conceptueel)
         const next = waypoints.find(w => !w.passed && !w.missed);
         const avgV = R.pos > 20 ? (R.pos / 1000) / (sport.movingTime / 3600) : 0;
-        
-        // Update aankomsttijd elke minuut om batterij/rekenkracht te sparen
+
         if (now - lastEtaUpdate > 60000 || cachedArrival === "--:--") {
-            const remainingDist = cumDist.at(-1) - R.pos;
+
+            const remaining = cumDist.at(-1) - R.pos;
+
             if (avgV > 0.5) {
-                const arrivalDate = new Date(now + (remainingDist / (avgV / 3.6)) * 1000);
-                cachedArrival = arrivalDate.getHours().toString().padStart(2, '0') + ":" + arrivalDate.getMinutes().toString().padStart(2, '0');
+                const arrival = new Date(now + (remaining / (avgV / 3.6)) * 1000);
+
+                cachedArrival =
+                    arrival.getHours().toString().padStart(2, '0') + ":" +
+                    arrival.getMinutes().toString().padStart(2, '0');
             }
+
             lastEtaUpdate = now;
         }
+
+        // 9. STATE UPDATE
+        sport.lastTick = now;
+
+    }, err => console.error(err), {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000
+    });
+}
 
         document.getElementById('display-content').innerHTML = `
             <b style="color:#ffff00">VOLGEND:</b><br>
