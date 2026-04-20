@@ -224,7 +224,7 @@ function handleStartPause() {
     if (!watchId) {
         startGPS();
         btn.innerText = "⏸ PAUZE"; btn.className = "pause";
-        speak("Systeem actief. Goede reis.");
+        speak("Systeem actief. Ik wens jou een goede reis toe.");
     } else {
         isPaused = !isPaused;
         if (isPaused) {
@@ -271,12 +271,12 @@ function startGPS() {
         const R = getRInfo(smoothLat, smoothLon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        // OFF-ROUTE CHECK (55 meter drempel)
-        if (R.off > 55 && now - alertTime > 25000) { 
-            speak(Math.round(R.off) + " meter van route."); 
+        // OFF-ROUTE CHECK (45 meter drempel)
+        if (R.off > 45 && now - alertTime > 25000) { 
+            speak("Je bent " + Math.round(R.off) + " meter van de route afgeweken.");
             alertTime = now; isOffRoute = true; 
         } else if (isOffRoute && R.off < 10) { 
-            speak("Terug op route."); isOffRoute = false; 
+            speak("Je bent terug op de route aangekomen."); isOffRoute = false; 
         }
 
         // 3. TRIP TELLER LOGICA (Verbeterd)
@@ -312,17 +312,17 @@ function startGPS() {
             if (R.pos >= w.routePos - CONFIG.radius && w.touched) {
                 w.passed = true;
                 if (i === waypoints.length - 1) { 
-                    finished = true; speak("Bestemming bereikt."); navigator.geolocation.clearWatch(watchId); 
+                    finished = true; speak("Finish! Je bent op uw bestemming aangekomen."); navigator.geolocation.clearWatch(watchId); 
                 } else { 
                     speak(w.name); 
                     const nxt = waypoints.find(nw => !nw.passed && !nw.missed);
-                    if(nxt) speak("Volgende punt: " + nxt.name);
+                    if(nxt) speak("Het volgende waypoint is: " + nxt.name);
                 }
                 updateWPUI();
             } 
             // Missed check: als we al 12m + accuraatheid voorbij het punt op de route zijn zonder te raken
             else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 12) {
-                w.missed = true; speak(w.name + " gemist."); updateWPUI();
+               w.missed = true; speak("Door een omweg of werkzaamheden heb je waypoint " + w.name + " gemist."); updateWPUI();
             }
         });
 
