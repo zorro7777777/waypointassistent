@@ -3,155 +3,138 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GPX Engine v9.5</title>
+<title>Garmin-Style GPX Engine v1</title>
 <style>
-body { font-family:sans-serif; padding:10px; background:#f0f3f5; }
-.card { max-width:600px; margin:auto; background:white; padding:15px; border-radius:12px; }
-#info { background:#111; color:#0f0; padding:15px; border-radius:8px; font-family:monospace; min-height:300px; }
-button { padding:12px; margin:5px 0; width:100%; }
+body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:10px}
+.card{max-width:650px;margin:auto;background:#111827;padding:15px;border-radius:14px}
+button{padding:12px;width:100%;margin:6px 0;border:0;border-radius:10px;font-weight:bold}
+.start{background:#22c55e}
+.pause{background:#f59e0b}
+.info{background:#000;padding:12px;border-radius:10px;font-family:monospace;min-height:320px}
+.small{font-size:12px;color:#94a3b8}
+input{width:100%;padding:8px;margin:6px 0}
 </style>
 </head>
 <body>
-
 <div class="card">
-<h3>🚀 PLATINA ENGINE v9.5</h3>
+<h3>🛰 Garmin-Style Engine v1</h3>
 
-<input type="file" id="gpxInput" accept=".gpx">
-<button onclick="startGPS()">START</button>
+<input type="file" id="gpx" accept=".gpx">
+<button class="start" onclick="start()">START GPS</button>
+<button class="pause" onclick="pauseToggle()">PAUSE</button>
 
-<div id="info">Klaar...</div>
+<div class="info" id="out">Laad GPX...</div>
+<div class="small">Segment projection + smoothing + anti-jitter</div>
 </div>
 
 <script>
-let track=[], cumDist=[], waypoints=[];
-let lastPos=null, lastIndex=0, watchId=null;
+let track=[],cum=[],watch=null;
+let last=null,lastT=0;
+let speedBuf=[];
+let paused=false;
 
-let sport = { kcal:0, steps:0, movingTime:0, lastTick:null };
-let speedBuffer=[];
+let sport={kcal:0,time:0,last:0};
 
-// --- DIST ---
-function getDist(a,b,c,d){
- const R=6371000;
- const dLat=(c-a)*Math.PI/180;
- const dLon=(d-b)*Math.PI/180;
- return 2*R*Math.asin(Math.sqrt(
-  Math.sin(dLat/2)**2 +
-  Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2
- ));
+function dist(a,b,c,d){
+const R=6371000;
+let x=(c-a)*Math.PI/180;
+let y=(d-b)*Math.PI/180;
+return 2*R*Math.asin(Math.sqrt(Math.sin(x/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(y/2)**2));
 }
 
-// --- SEGMENT PROJECTIE ---
 function project(p,a,b){
- const t = ((p.lat-a.lat)*(b.lat-a.lat)+(p.lon-a.lon)*(b.lon-a.lon)) /
-           ((b.lat-a.lat)**2+(b.lon-a.lon)**2);
- return Math.max(0,Math.min(1,t));
+let A=p.lat-a.lat,B=p.lon-a.lon,C=b.lat-a.lat,D=b.lon-a.lon;
+let t=(A*C+B*D)/(C*C+D*D);
+return Math.max(0,Math.min(1,t));
 }
 
-function getRInfo(lat,lon){
- let bestDist=Infinity, bestPos=0;
+let lastIndex=0;
+function getR(lat,lon){
+let best=1e9,pos=0;
+let s=Math.max(0,lastIndex-10);
+let e=Math.min(track.length-2,lastIndex+20);
 
- let start=Math.max(0,lastIndex-10);
- let end=Math.min(track.length-2,lastIndex+20);
-
- for(let i=start;i<=end;i++){
-  const a=track[i], b=track[i+1];
-  const t=project({lat,lon},a,b);
-
-  const pLat=a.lat+(b.lat-a.lat)*t;
-  const pLon=a.lon+(b.lon-a.lon)*t;
-
-  const d=getDist(lat,lon,pLat,pLon);
-
-  if(d<bestDist){
-    bestDist=d;
-    bestPos=cumDist[i]+getDist(a.lat,a.lon,pLat,pLon);
-    lastIndex=i;
-  }
- }
- return {pos:bestPos, off:bestDist};
+for(let i=s;i<=e;i++){
+let a=track[i],b=track[i+1];
+let t=project({lat,lon},a,b);
+let pLat=a.lat+(b.lat-a.lat)*t;
+let pLon=a.lon+(b.lon-a.lon)*t;
+let d=dist(lat,lon,pLat,pLon);
+if(d<best){best=d;pos=cum[i]+dist(a.lat,a.lon,pLat,pLon);lastIndex=i;}
+}
+return {pos,off:best};
 }
 
-// --- GPX ---
-document.getElementById('gpxInput').onchange=e=>{
- const r=new FileReader();
- r.onload=ev=>{
-  const xml=new DOMParser().parseFromString(ev.target.result,"text/xml");
+document.getElementById('gpx').onchange=e=>{
+let r=new FileReader();
+r.onload=ev=>{
+let xml=new DOMParser().parseFromString(ev.target.result,'text/xml');
+let pts=[...xml.getElementsByTagName('trkpt')];
+track=pts.map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
 
-  const pts=[...xml.getElementsByTagName('trkpt')];
-  track=pts.map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
+cum=[0];
+for(let i=0;i<track.length-1;i++){
+cum[i+1]=cum[i]+dist(track[i].lat,track[i].lon,track[i+1].lat,track[i+1].lon);
+}
 
-  cumDist=[0];
-  for(let i=0;i<track.length-1;i++){
-    cumDist[i+1]=cumDist[i]+getDist(
-      track[i].lat,track[i].lon,
-      track[i+1].lat,track[i+1].lon
-    );
-  }
-
-  document.getElementById('info').innerText="Route geladen";
- };
- r.readAsText(e.target.files[0]);
+document.getElementById('out').innerText='GPX geladen';
+};
+r.readAsText(e.target.files[0]);
 };
 
-// --- START ---
-function startGPS(){
- if(!track.length) return alert("Laad GPX");
+function pauseToggle(){paused=!paused;}
 
- if('wakeLock' in navigator){
-  try{ navigator.wakeLock.request('screen'); }catch(e){}
- }
+function start(){
+if(watch||!track.length)return;
 
- watchId=navigator.geolocation.watchPosition(p=>{
-  const {latitude:lat, longitude:lon, accuracy:acc}=p.coords;
+watch=navigator.geolocation.watchPosition(p=>{
+if(paused)return;
 
-  const now=Date.now();
-  const dt=sport.lastTick?(now-sport.lastTick)/1000:0;
+let {latitude:lat,longitude:lon,accuracy:acc}=p.coords;
+let now=Date.now();
+let dt=lastT?(now-lastT)/1000:0;
 
-  const R=getRInfo(lat,lon);
+let R=getR(lat,lon);
 
-  // snelheid via afstand
-  let speed=0;
-  if(lastPos && dt>0){
-    const d=getDist(lastPos.lat,lastPos.lon,lat,lon);
-    speed=(d/dt)*3.6;
-  }
+let speed=0;
+if(last&&dt>0){
+let d=dist(last.lat,last.lon,lat,lon);
+if(d<5)d=0; // anti jitter
+speed=(d/dt)*3.6;
+}
 
-  // smoothing
-  speedBuffer.push(speed);
-  if(speedBuffer.length>5) speedBuffer.shift();
-  speed=speedBuffer.reduce((a,b)=>a+b,0)/speedBuffer.length;
+speedBuf.push(speed);
+if(speedBuf.length>6)speedBuf.shift();
+speed=speedBuf.reduce((a,b)=>a+b,0)/speedBuf.length;
 
-  // MET
-  let met=1.5+(0.9*speed);
-  const weight=92;
+let met=1.6+0.8*speed;
+let weight=92;
 
-  if(speed>1){
-    sport.movingTime+=dt;
-    sport.kcal+=(met*3.5*weight/200)*(dt/60);
-  }
+if(speed>0.8){
+sport.time+=dt;
+sport.kcal+=(met*3.5*weight/200)*(dt/60);
+}
 
-  lastPos={lat,lon};
-  sport.lastTick=now;
+let avg=(R.pos/1000)/(sport.time/3600||1);
+let remain=cum.at(-1)-R.pos;
+let eta=avg>0.5?remain/(avg/3.6):0;
 
-  const avgV = sport.movingTime>30 ?
-    (R.pos/1000)/(sport.movingTime/3600) : 0;
+last={lat,lon};
+lastT=now;
 
-  const remain=cumDist.at(-1)-R.pos;
-  const eta=avgV>0.5 ? remain/(avgV/3.6) : 0;
+// UI
 
-  document.getElementById('info').innerHTML=`
-  POS: ${Math.round(R.pos)} m<br>
-  OFF: ${Math.round(R.off)} m<br>
-  SPEED: ${speed.toFixed(2)} km/u<br>
-  AVG: ${avgV.toFixed(2)} km/u<br>
-  KCAL: ${Math.round(sport.kcal)}<br>
-  ETA: ${eta>0?Math.round(eta/60)+" min":"--"}<br>
-  ACC: ${acc}m
-  `;
+document.getElementById('out').innerHTML=
+`POS: ${Math.round(R.pos)} m<br>
+OFF: ${Math.round(R.off)} m<br>
+SPD: ${speed.toFixed(2)} km/u<br>
+AVG: ${avg.toFixed(2)} km/u<br>
+KCAL: ${Math.round(sport.kcal)}<br>
+ETA: ${eta?Math.round(eta/60)+' min':'--'}<br>
+ACC: ${acc} m`;
 
- },null,{enableHighAccuracy:true});
+},null,{enableHighAccuracy:true});
 }
 </script>
-
 </body>
 </html>
