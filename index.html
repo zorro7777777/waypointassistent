@@ -298,10 +298,9 @@ function startGPS() {
             <b>TIJD:</b> <span class="field-green">${fmtT(sport.movingTime)}</span><br>
             <b>AANKOMST:</b> <span class="field-green">${finished ? 'BEREIKT' : cachedArrival}</span><br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <b>SPD:</b> ${skmh.toFixed(1)} km/u<br>
-            <b>AVG:</b> ${avgV.toFixed(2)}<br>
+            <b>SPEED:</b> ${skmh.toFixed(1)} km/u<br>
+            <b>AVG SPEED:</b> ${avgV.toFixed(2)}<br>
             <b>ENERGIE:</b> ${Math.round(sport.kcal)} kcal<br>
-            <b>SPD:</b> ${skmh.toFixed(1)} km/u<br>
             <b>AVG:</b> ${avgV.toFixed(2)}<br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
             <b>OFF-TRACK:</b> <span style="color:${R.off > 50 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span><br>
