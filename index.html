@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v84 - Precision Clock</title>
+    <title>GPX Engine v85 - Voice & Precision</title>
    <style>
         body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin: 10px 0; min-height: 450px; line-height: 1.3; border-left: 5px solid #27ae60; font-size: 1.1rem; position: relative; }
+        #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin: 10px 0; min-height: 460px; line-height: 1.3; border-left: 5px solid #27ae60; font-size: 1.1rem; position: relative; }
         .gear-icon { position: absolute; top: 10px; right: 10px; font-size: 1.2rem; cursor: pointer; opacity: 0.7; z-index: 10; }
         .highlight { color: #fff; font-weight: bold; font-size: 1.1rem; }
         .field-yellow { color: #ffff00; font-weight: bold; font-size: 0.95rem; display: block; margin-top: 2px; }
@@ -28,7 +28,7 @@
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">💿 PLATINA ENGINE v84</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">💿 PLATINA ENGINE v85</h1>
 
     <div class="config-section" id="configArea">
         <div class="row">
@@ -51,7 +51,7 @@
     
     <div id="info">
         <div class="gear-icon" onclick="toggleConfig()">⚙️</div>
-        <div id="display-content">Systeem gereed. Upload een GPX.</div>
+        <div id="display-content">Systeem gereed.</div>
     </div>
 
     <div id="tableCon">
@@ -73,10 +73,10 @@ let lastEtaUpdate = 0, cachedArrival = "--:--";
 
 function fmtT(s) {
     if (!isFinite(s) || s < 0) return "00:00:00";
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = Math.floor(s % 60);
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    const h = Math.floor(s / 3600).toString().padStart(2, '0');
+    const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
+    const sec = Math.floor(s % 60).toString().padStart(2, '0');
+    return `${h}:${m}:${sec}`;
 }
 
 function speak(t) {
@@ -136,7 +136,7 @@ document.getElementById('gpxInput').onchange = e => {
             return w;
         }).sort((a,b) => a.routePos - b.routePos);
         updateWPUI();
-        document.getElementById('display-content').innerText = "Klaar voor start.";
+        document.getElementById('display-content').innerText = "Route geladen.";
     };
     r.readAsText(e.target.files[0]);
 };
@@ -182,10 +182,11 @@ function startGPS() {
         const R = getRInfo(lat, lon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
+        // Off-route logica
         if (R.off > 49 && now - alertTime > 15000) { 
             speak(Math.round(R.off) + " meter van route."); 
             alertTime = now; isOffRoute = true; 
-        } else if (isOffRoute && R.off < 6) { 
+        } else if (isOffRoute && R.off < 7) { 
             speak("Terug op route."); isOffRoute = false; 
         }
 
@@ -201,23 +202,32 @@ function startGPS() {
             lastPos = { lat, lon };
         } else if (sport.lastTick) { sport.idleTime += dt; }
 
+        let statusChanged = false;
         waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             if (getDist(lat, lon, w.lat, w.lon) <= CONFIG.radius) w.touched = true;
             if (R.pos >= w.routePos - CONFIG.radius && w.touched) {
-                w.passed = true;
-                if (i === waypoints.length - 1) { finished = true; speak("Finish."); navigator.geolocation.clearWatch(watchId); }
-                else { speak(w.name); }
+                w.passed = true; statusChanged = true;
+                if (i === waypoints.length - 1) { 
+                    finished = true; speak("Finish bereikt."); navigator.geolocation.clearWatch(watchId); 
+                } else { 
+                    speak(w.name); 
+                }
                 updateWPUI();
             } else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 10) {
-                w.missed = true; speak(w.name + " gemist."); updateWPUI();
+                w.missed = true; statusChanged = true;
+                speak(w.name + " gemist."); updateWPUI();
             }
         });
 
         const next = waypoints.find(w => !w.passed && !w.missed);
+        // Kondig volgend punt aan als er een statuswijziging was
+        if(statusChanged && next && !finished) {
+            setTimeout(() => speak("Ga naar " + next.name), 2500);
+        }
+
         const avgV = R.pos > 20 ? (R.pos / 1000) / (sport.movingTime / 3600) : 0;
         
-        // --- ETA LOGICA (OM DE MINUUT UPDATEN) ---
         if (now - lastEtaUpdate > 60000 || cachedArrival === "--:--") {
             const remainingDist = cumDist.at(-1) - R.pos;
             if (avgV > 0.5) {
