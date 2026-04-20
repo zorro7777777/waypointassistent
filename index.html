@@ -96,6 +96,7 @@ let watchId = null, lastPos = null, maxRoutePos = 0, tripDist = 0, finished = fa
 let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
 let alertTime = 0, isOffRoute = false, isPaused = false;
 let lastEtaUpdate = 0, cachedArrival = "--:--";
+let lastTrackIndex = 0; // <--- DEZE REGEL MOET ERBIJ!
 
 /**
  * --- GPS FILTER SETTINGS ---
@@ -193,6 +194,7 @@ document.getElementById('gpxInput').onchange = e => {
         const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
         const pts = [...xml.getElementsByTagName('trkpt')];
         track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
+        lastTrackIndex = 0;
         
         // Bereken gecumuleerde afstand van de route
         cumDist = [0];
