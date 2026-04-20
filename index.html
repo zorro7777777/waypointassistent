@@ -3,37 +3,42 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Garmin-Style GPX Engine v1</title>
+<title>Garmin-Style GPX Engine v1.2 (Voice + Deviation)</title>
 <style>
 body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:10px}
 .card{max-width:650px;margin:auto;background:#111827;padding:15px;border-radius:14px}
 button{padding:12px;width:100%;margin:6px 0;border:0;border-radius:10px;font-weight:bold}
 .start{background:#22c55e}
 .pause{background:#f59e0b}
-.info{background:#000;padding:12px;border-radius:10px;font-family:monospace;min-height:320px}
+.info{background:#000;padding:12px;border-radius:10px;font-family:monospace;min-height:360px}
 .small{font-size:12px;color:#94a3b8}
 input{width:100%;padding:8px;margin:6px 0}
 </style>
 </head>
 <body>
 <div class="card">
-<h3>🛰 Garmin-Style Engine v1</h3>
+<h3>🛰 Garmin Engine v1.2 Voice + Deviation</h3>
 
 <input type="file" id="gpx" accept=".gpx">
 <button class="start" onclick="start()">START GPS</button>
 <button class="pause" onclick="pauseToggle()">PAUSE</button>
 
 <div class="info" id="out">Laad GPX...</div>
-<div class="small">Segment projection + smoothing + anti-jitter</div>
+<div class="small">Waypoint + voice + deviation awareness</div>
 </div>
 
 <script>
-let track=[],cum=[],watch=null;
+let track=[],cum=[],waypoints=[];
+let watch=null;
 let last=null,lastT=0;
 let speedBuf=[];
 let paused=false;
+let lastIndex=0;
 
 let sport={kcal:0,time:0,last:0};
+
+let offRoute=false;
+let lastAnnounce=0;
 
 function dist(a,b,c,d){
 const R=6371000;
@@ -48,7 +53,13 @@ let t=(A*C+B*D)/(C*C+D*D);
 return Math.max(0,Math.min(1,t));
 }
 
-let lastIndex=0;
+function speak(t){
+window.speechSynthesis.cancel();
+let u=new SpeechSynthesisUtterance(t);
+u.lang='nl-NL';
+window.speechSynthesis.speak(u);
+}
+
 function getR(lat,lon){
 let best=1e9,pos=0;
 let s=Math.max(0,lastIndex-10);
@@ -65,19 +76,27 @@ if(d<best){best=d;pos=cum[i]+dist(a.lat,a.lon,pLat,pLon);lastIndex=i;}
 return {pos,off:best};
 }
 
+function nextWP(){return waypoints.find(w=>!w.passed);}
+
+// LOAD GPX
 document.getElementById('gpx').onchange=e=>{
 let r=new FileReader();
 r.onload=ev=>{
 let xml=new DOMParser().parseFromString(ev.target.result,'text/xml');
-let pts=[...xml.getElementsByTagName('trkpt')];
-track=pts.map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
+
+track=[...xml.getElementsByTagName('trkpt')].map(p=>({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon')}));
 
 cum=[0];
 for(let i=0;i<track.length-1;i++){
 cum[i+1]=cum[i]+dist(track[i].lat,track[i].lon,track[i+1].lat,track[i+1].lon);
 }
 
-document.getElementById('out').innerText='GPX geladen';
+waypoints=[...xml.getElementsByTagName('wpt')].map(w=>({
+name:w.getElementsByTagName('name')[0]?.textContent||"WP",
+lat:+w.getAttribute('lat'),lon:+w.getAttribute('lon'),passed:false
+}));
+
+speak("Route geladen");
 };
 r.readAsText(e.target.files[0]);
 };
@@ -96,10 +115,31 @@ let dt=lastT?(now-lastT)/1000:0;
 
 let R=getR(lat,lon);
 
+// ---------------- DEVIATION LOGIC ----------------
+let deviation=R.off;
+let nowT=Date.now();
+
+if(deviation>50 && !offRoute){
+offRoute=true;
+if(nowT-lastAnnounce>10000){
+speak("Afwijking van route: " + Math.round(deviation) + " meter");
+lastAnnounce=nowT;
+}
+}
+
+if(offRoute && deviation<10){
+offRoute=false;
+if(nowT-lastAnnounce>8000){
+speak("Terug op route");
+lastAnnounce=nowT;
+}
+}
+
+// ---------------- SPEED ----------------
 let speed=0;
 if(last&&dt>0){
 let d=dist(last.lat,last.lon,lat,lon);
-if(d<5)d=0; // anti jitter
+if(d<5)d=0;
 speed=(d/dt)*3.6;
 }
 
@@ -115,6 +155,17 @@ sport.time+=dt;
 sport.kcal+=(met*3.5*weight/200)*(dt/60);
 }
 
+// ---------------- WAYPOINTS ----------------
+waypoints.forEach(w=>{
+if(w.passed)return;
+if(dist(lat,lon,w.lat,w.lon)<20){
+w.passed=true;
+speak("Doel bereikt: "+w.name);
+let nxt=nextWP();
+if(nxt)setTimeout(()=>speak("Volgende doel: "+nxt.name),2000);
+}
+});
+
 let avg=(R.pos/1000)/(sport.time/3600||1);
 let remain=cum.at(-1)-R.pos;
 let eta=avg>0.5?remain/(avg/3.6):0;
@@ -122,16 +173,19 @@ let eta=avg>0.5?remain/(avg/3.6):0;
 last={lat,lon};
 lastT=now;
 
-// UI
+let nxt=nextWP();
 
+// ---------------- UI ----------------
 document.getElementById('out').innerHTML=
 `POS: ${Math.round(R.pos)} m<br>
-OFF: ${Math.round(R.off)} m<br>
+OFF: ${Math.round(deviation)} m<br>
+STATUS: ${offRoute?"AFWIJKING":"OK"}<br><br>
 SPD: ${speed.toFixed(2)} km/u<br>
 AVG: ${avg.toFixed(2)} km/u<br>
 KCAL: ${Math.round(sport.kcal)}<br>
 ETA: ${eta?Math.round(eta/60)+' min':'--'}<br>
-ACC: ${acc} m`;
+ACC: ${acc} m<br><br>
+NEXT WP: ${nxt?nxt.name:'DONE'}`;
 
 },null,{enableHighAccuracy:true});
 }
