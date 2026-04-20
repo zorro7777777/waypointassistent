@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v86 - Full Voice Response</title>
+    <title>GPX Engine v87 - Smooth Voice Queue</title>
    <style>
         body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -28,7 +28,7 @@
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">💿 PLATINA ENGINE v86</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">💿 PLATINA ENGINE v87</h1>
 
     <div class="config-section" id="configArea">
         <div class="row">
@@ -71,20 +71,40 @@ let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
 let alertTime = 0, isOffRoute = false, isPaused = false;
 let lastEtaUpdate = 0, cachedArrival = "--:--";
 
+// VOICE QUEUE LOGIC
+let speechQueue = [];
+let isSpeaking = false;
+
+function speak(text) {
+    if (!document.getElementById('audioToggle').checked) return;
+    speechQueue.push(text);
+    processQueue();
+}
+
+function processQueue() {
+    if (isSpeaking || speechQueue.length === 0) return;
+    
+    isSpeaking = true;
+    const msg = new SpeechSynthesisUtterance(speechQueue.shift());
+    msg.lang = 'nl-NL';
+    
+    msg.onend = () => {
+        // Wacht 2000ms na het einde van de zin voor de volgende start
+        setTimeout(() => {
+            isSpeaking = false;
+            processQueue();
+        }, 2000);
+    };
+    
+    window.speechSynthesis.speak(msg);
+}
+
 function fmtT(s) {
     if (!isFinite(s) || s < 0) return "00:00:00";
     const h = Math.floor(s / 3600).toString().padStart(2, '0');
     const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
     const sec = Math.floor(s % 60).toString().padStart(2, '0');
     return `${h}:${m}:${sec}`;
-}
-
-function speak(t) {
-    if (!document.getElementById('audioToggle').checked) return;
-    window.speechSynthesis.cancel();
-    const m = new SpeechSynthesisUtterance(t);
-    m.lang = 'nl-NL';
-    window.speechSynthesis.speak(m);
 }
 
 function getDist(a,b,c,d){
@@ -125,7 +145,7 @@ document.getElementById('gpxInput').onchange = e => {
             cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
         }
         let tempWps = [...xml.getElementsByTagName('wpt')].map(w => ({
-            name: w.getElementsByTagName('name')[0]?.textContent || "Knooppunt",
+            name: w.getElementsByTagName('name')[0]?.textContent || "Punt",
             lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'),
             passed: false, missed: false, touched: false
         }));
@@ -138,7 +158,8 @@ document.getElementById('gpxInput').onchange = e => {
         updateWPUI();
         
         const totalKm = (cumDist.at(-1) / 1000).toFixed(1);
-        speak(`Route geladen. ${waypoints.length} punten over ${totalKm} kilometer. Klik op start.`);
+        speak(`Route geladen.`);
+        speak(`${waypoints.length} punten over ${totalKm} kilometer.`);
         document.getElementById('display-content').innerText = "Route geladen. Klik op START.";
     };
     r.readAsText(e.target.files[0]);
@@ -170,7 +191,7 @@ function handleStartPause() {
             sport.lastTick = null;
         } else {
             btn.innerText = "⏸ PAUZE"; btn.className = "pause";
-            speak("Hervatting van de route.");
+            speak("Hervatting.");
             sport.lastTick = Date.now();
         }
     }
@@ -188,7 +209,7 @@ function startGPS() {
         const R = getRInfo(lat, lon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        if (R.off > 55 && now - alertTime > 20000) { 
+        if (R.off > 55 && now - alertTime > 25000) { 
             speak(Math.round(R.off) + " meter van route."); 
             alertTime = now; isOffRoute = true; 
         } else if (isOffRoute && R.off < 8) { 
@@ -207,30 +228,27 @@ function startGPS() {
             lastPos = { lat, lon };
         } else if (sport.lastTick) { sport.idleTime += dt; }
 
-        let statusChanged = false;
         waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             if (getDist(lat, lon, w.lat, w.lon) <= CONFIG.radius) w.touched = true;
             if (R.pos >= w.routePos - CONFIG.radius && w.touched) {
-                w.passed = true; statusChanged = true;
+                w.passed = true;
                 if (i === waypoints.length - 1) { 
                     finished = true; speak("Bestemming bereikt."); navigator.geolocation.clearWatch(watchId); 
                 } else { 
                     speak(w.name); 
+                    const next = waypoints.find(nw => !nw.passed && !nw.missed);
+                    if(next) speak("Ga naar " + next.name);
                 }
                 updateWPUI();
             } else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 12) {
-                w.missed = true; statusChanged = true;
+                w.missed = true;
                 speak(w.name + " gemist."); updateWPUI();
             }
         });
 
         const next = waypoints.find(w => !w.passed && !w.missed);
-        if(statusChanged && next && !finished) {
-            setTimeout(() => speak("Volgend punt: " + next.name), 2500);
-        }
-
-        const avgV = R.pos > 20 ? (R.pos / 1000) / (sport.movingTime / 3600) : 0;
+        const avgV = R.pos > 25 ? (R.pos / 1000) / (sport.movingTime / 3600) : 0;
         
         if (now - lastEtaUpdate > 60000 || cachedArrival === "--:--") {
             const remainingDist = cumDist.at(-1) - R.pos;
@@ -256,7 +274,7 @@ function startGPS() {
             <b>ENERGIE:</b> ${Math.round(sport.kcal)} kcal<br>
             <b>POWER:</b> ${metVal.toFixed(1)} MET<br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <b>OFF-TRACK:</b> <span style="color:${R.off > 49 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span><br>
+            <b>OFF-TRACK:</b> <span style="color:${R.off > 50 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span><br>
             <b>ACCURACY:</b> ${acc.toFixed(0)}m<br>
             <span class="field-yellow">LAT: ${lat.toFixed(6)}</span>
             <span class="field-yellow">LON: ${lon.toFixed(6)}</span>
