@@ -168,6 +168,25 @@ document.getElementById('gpxInput').onchange = e => {
     r.readAsText(e.target.files[0]);
 };
 
+function updateWPUI() {
+    const listEl = document.getElementById('list');
+    const summaryEl = document.getElementById('wp-summary');
+    if (!listEl || !waypoints.length) return;
+
+    const p = waypoints.filter(w => w.passed).length;
+    const m = waypoints.filter(w => w.missed).length;
+
+    summaryEl.innerText = `✅ ${p} | ❌ ${m} | ⏳ ${waypoints.length - p - m}`;
+
+    listEl.innerHTML = waypoints.map(w => `
+        <tr style="${w.passed ? 'color:#27ae60;font-weight:bold;' : (w.missed ? 'color:#e74c3c;text-decoration:line-through;' : '')}">
+            <td style="width:25px">${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
+            <td>${w.name}</td>
+            <td style="text-align:right">${Math.round(w.routePos)}m</td>
+        </tr>
+    `).join('');
+}
+
 function handleStartPause() {
     const btn = document.getElementById('startBtn');
     if (!watchId) {
