@@ -293,7 +293,8 @@ function startGPS() {
             <span class="highlight" style="font-size:1.3rem; color:#00ff00;">${finished ? 'FINISH' : (next ? next.name : '---')}</span><br>
             <b>AFSTAND:</b> <span class="highlight">${(next && !finished) ? Math.max(0, Math.round(next.routePos - R.pos)) : 0}m</span><br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <b>${CONFIG.unit.toUpperCase()}:</b> <span class="field-green">${Math.round(sport.steps)}</span> (Cad: ${Math.round(isM ? ((skmh/3.6)/CONFIG.th*60) : 0)})<br>
+            <b>STAPPEN:</b> <span class="field-green">${Math.round(sport.steps)}</span><br>
+            <b>CADANS:</b> ${Math.round(isM ? ((skmh/3.6)/CONFIG.th*60) : 0)}<br>
             <b>TRIP:</b> <span class="field-green">${(tripDist/1000).toFixed(3)} km</span><br>
             <b>TIJD:</b> <span class="field-green">${fmtT(sport.movingTime)}</span><br>
             <b>AANKOMST:</b> <span class="field-green">${finished ? 'BEREIKT' : cachedArrival}</span><br>
