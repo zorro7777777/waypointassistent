@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v88 - Smooth Voice Pro</title>
+    <title>GPX Engine v89 - Kalman-Light Filtering</title>
    <style>
         body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin: 10px 0; min-height: 460px; line-height: 1.3; border-left: 5px solid #27ae60; font-size: 1.1rem; position: relative; }
+        #info { background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; margin: 10px 0; min-height: 480px; line-height: 1.3; border-left: 5px solid #27ae60; font-size: 1.1rem; position: relative; }
         .gear-icon { position: absolute; top: 10px; right: 10px; font-size: 1.2rem; cursor: pointer; opacity: 0.7; z-index: 10; }
         .highlight { color: #fff; font-weight: bold; font-size: 1.1rem; }
         .field-yellow { color: #ffff00; font-weight: bold; font-size: 0.95rem; display: block; margin-top: 2px; }
@@ -28,7 +28,7 @@
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">💿 PLATINA ENGINE v88</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">💿 PLATINA ENGINE v89</h1>
 
     <div class="config-section" id="configArea">
         <div class="row">
@@ -54,13 +54,14 @@
         <div id="display-content">Systeem gereed.</div>
     </div>
 
-    <div id="tableCon">
+    <div id="tableCon" style="display:none;">
         <div style="font-size:0.75rem; font-weight:bold; padding:8px; background:#dfe6e9; border-radius:5px; text-align:center;" id="wp-summary">Geen route geladen</div>
         <table><tbody id="list"></tbody></table>
     </div>
 </div>
 
 <script>
+// --- CONFIGURATIE & STATS ---
 const PROFS = {
     wandelen: { ms: 0.42, max: 7, th: 0.67, radius: 10, unit: "Stappen" },
     fietsen: { ms: 1.95, max: 45, th: 2.10, radius: 20, unit: "Omwentelingen" }
@@ -71,13 +72,16 @@ let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
 let alertTime = 0, isOffRoute = false, isPaused = false;
 let lastEtaUpdate = 0, cachedArrival = "--:--";
 
-// --- VERBETERDE SPRAAK QUEUE ---
+// --- GPS SMOOTHING VARS ---
+let smoothLat = null, smoothLon = null;
+const SMOOTHING_FACTOR = 0.35; // Balans tussen responsiviteit en vloeiendheid
+
+// --- VOICE QUEUE ENGINE ---
 let speechQueue = [];
 let isSpeaking = false;
 
 function speak(text) {
     if (!document.getElementById('audioToggle').checked) return;
-    // Zet alles om naar kleine letters en filter rare START/FINISH uitspraak
     let cleanText = text.replace("START", "Startpunt").replace("FINISH", "De Finish");
     speechQueue.push(cleanText);
     processQueue();
@@ -85,22 +89,17 @@ function speak(text) {
 
 function processQueue() {
     if (isSpeaking || speechQueue.length === 0) return;
-    
     isSpeaking = true;
     const msg = new SpeechSynthesisUtterance(speechQueue.shift());
     msg.lang = 'nl-NL';
-    msg.rate = 0.9; // Iets rustiger praten
-    
+    msg.rate = 0.9;
     msg.onend = () => {
-        setTimeout(() => {
-            isSpeaking = false;
-            processQueue();
-        }, 2000); // Strikte 2 seconden pauze
+        setTimeout(() => { isSpeaking = false; processQueue(); }, 2000);
     };
-    
     window.speechSynthesis.speak(msg);
 }
 
+// --- MATH UTILS ---
 function fmtT(s) {
     if (!isFinite(s) || s < 0) return "00:00:00";
     const h = Math.floor(s / 3600).toString().padStart(2, '0');
@@ -123,6 +122,7 @@ function getRInfo(lat, lon) {
     return { pos: bP, off: bD };
 }
 
+// --- UI HANDLERS ---
 function toggleConfig() {
     const el = document.getElementById('configArea');
     const reset = document.getElementById('resetBtn');
@@ -184,7 +184,6 @@ function handleStartPause() {
         startGPS();
         btn.innerText = "⏸ PAUZE"; btn.className = "pause";
         speak("Systeem actief. Goede reis.");
-        // De aankondiging van het eerste punt volgt nu automatisch via de watch-loop met natuurlijke vertraging
     } else {
         isPaused = !isPaused;
         if (isPaused) {
@@ -199,6 +198,7 @@ function handleStartPause() {
     }
 }
 
+// --- CORE GPS LOOP MET FILTERING ---
 function startGPS() {
     if (watchId || !track.length) return;
     document.getElementById('gpxInput').style.display = 'none';
@@ -206,11 +206,30 @@ function startGPS() {
 
     watchId = navigator.geolocation.watchPosition(p => {
         if (finished || isPaused) return;
-        const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = p.coords;
-        const skmh = (s || 0) * 3.6, now = Date.now(), dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
-        const R = getRInfo(lat, lon);
+
+        const { latitude: rawLat, longitude: rawLon, accuracy: acc, speed: s } = p.coords;
+        const now = Date.now();
+        const dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
+
+        // 1. ACCURACY GUARD
+        if (acc > 25) return; 
+
+        // 2. OUTLIER & EMA FILTERING
+        if (smoothLat === null) {
+            smoothLat = rawLat; smoothLon = rawLon;
+        } else {
+            const distJump = getDist(smoothLat, smoothLon, rawLat, rawLon);
+            if (dt > 0 && (distJump / dt) > 15) return; // Verwerp sprongen > 54km/u
+
+            smoothLat = (rawLat * SMOOTHING_FACTOR) + (smoothLat * (1 - SMOOTHING_FACTOR));
+            smoothLon = (rawLon * SMOOTHING_FACTOR) + (smoothLon * (1 - SMOOTHING_FACTOR));
+        }
+
+        const skmh = (s || 0) * 3.6;
+        const R = getRInfo(smoothLat, smoothLon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
+        // Off-route waarschuwing
         if (R.off > 55 && now - alertTime > 25000) { 
             speak(Math.round(R.off) + " meter van route."); 
             alertTime = now; isOffRoute = true; 
@@ -218,6 +237,7 @@ function startGPS() {
             speak("Terug op route."); isOffRoute = false; 
         }
 
+        // 3. VELOCITY & DRIFT FILTER
         const isM = skmh >= (CONFIG.ms * 3.6) && skmh <= CONFIG.max;
         const weight = parseFloat(document.getElementById('userWeight').value) || 92;
         const metVal = document.getElementById('profile').value === 'wandelen' ? (0.75 * skmh + 0.5) : (0.4 * skmh);
@@ -226,29 +246,36 @@ function startGPS() {
             sport.movingTime += dt;
             sport.steps += ((skmh/3.6 * dt) / CONFIG.th);
             sport.kcal += (metVal * 3.5 * weight / 200) * (dt / 60);
-            if (lastPos && acc < 25) tripDist += getDist(lastPos.lat, lastPos.lon, lat, lon);
-            lastPos = { lat, lon };
-        } else if (sport.lastTick) { sport.idleTime += dt; }
+            
+            if (lastPos) {
+                const d = getDist(lastPos.lat, lastPos.lon, smoothLat, smoothLon);
+                if (d > 1.2) tripDist += d; // Filter micro-drift
+            }
+            lastPos = { lat: smoothLat, lon: smoothLon };
+        } else if (sport.lastTick) {
+            sport.idleTime += dt;
+        }
 
+        // 4. WAYPOINT CHECK
         waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
-            if (getDist(lat, lon, w.lat, w.lon) <= CONFIG.radius) w.touched = true;
+            if (getDist(smoothLat, smoothLon, w.lat, w.lon) <= CONFIG.radius) w.touched = true;
             if (R.pos >= w.routePos - CONFIG.radius && w.touched) {
                 w.passed = true;
                 if (i === waypoints.length - 1) { 
                     finished = true; speak("Bestemming bereikt."); navigator.geolocation.clearWatch(watchId); 
                 } else { 
                     speak(w.name); 
-                    const next = waypoints.find(nw => !nw.passed && !nw.missed);
-                    if(next) speak("Ga naar " + next.name);
+                    const nxt = waypoints.find(nw => !nw.passed && !nw.missed);
+                    if(nxt) speak("Ga naar " + nxt.name);
                 }
                 updateWPUI();
             } else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 12) {
-                w.missed = true;
-                speak(w.name + " gemist."); updateWPUI();
+                w.missed = true; speak(w.name + " gemist."); updateWPUI();
             }
         });
 
+        // 5. ETA & DISPLAY
         const next = waypoints.find(w => !w.passed && !w.missed);
         const avgV = R.pos > 20 ? (R.pos / 1000) / (sport.movingTime / 3600) : 0;
         
@@ -271,19 +298,18 @@ function startGPS() {
             <b>TIJD:</b> <span class="field-green">${fmtT(sport.movingTime)}</span><br>
             <b>AANKOMST:</b> <span class="field-green">${finished ? 'BEREIKT' : cachedArrival}</span><br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
-            <b>SPD:</b> ${skmh.toFixed(1)} km/u<br>
-            <b>AVG:</b> ${avgV.toFixed(2)} km/u<br>
+            <b>SPD:</b> ${skmh.toFixed(1)} km/u | <b>AVG:</b> ${avgV.toFixed(2)}<br>
             <b>ENERGIE:</b> ${Math.round(sport.kcal)} kcal<br>
             <b>POWER:</b> ${metVal.toFixed(1)} MET<br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
             <b>OFF-TRACK:</b> <span style="color:${R.off > 49 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span><br>
             <b>ACCURACY:</b> ${acc.toFixed(0)}m<br>
-            <span class="field-yellow">LAT: ${lat.toFixed(6)}</span>
-            <span class="field-yellow">LON: ${lon.toFixed(6)}</span>
-            <button class="copy-btn" onclick="navigator.clipboard.writeText('${lat.toFixed(6)},${lon.toFixed(6)}')">📍 KOPIEER COÖRDINATEN</button>
+            <span class="field-yellow">LAT: ${smoothLat.toFixed(6)}</span>
+            <span class="field-yellow">LON: ${smoothLon.toFixed(6)}</span>
+            <button class="copy-btn" onclick="navigator.clipboard.writeText('${smoothLat.toFixed(6)},${smoothLon.toFixed(6)}')">📍 KOPIEER COÖRDINATEN</button>
         `;
         sport.lastTick = now;
-    }, null, { enableHighAccuracy: true });
+    }, null, { enableHighAccuracy: true, maximumAge: 0 });
 }
 
 function updateProfile() {
