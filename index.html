@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Engine v89 - Kalman-Light Filtering</title>
+    <title>WAYPOINTASSISTENT</title>
    <style>
         body { font-family: sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -28,7 +28,7 @@
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">💿 PLATINA ENGINE v89</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 5px 0; color:#2c3e50;">WAYPOINTASSISTENT</h1>
 
     <div class="config-section" id="configArea">
         <div class="row">
@@ -295,10 +295,10 @@ function startGPS() {
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
             <b>STAPPEN:</b> <span class="field-green">${Math.round(sport.steps)}</span><br>
             <b>CADANS :</b> ${Math.round(isM ? ((skmh/3.6)/CONFIG.th*60) : 0)}<br>
-            <b>TRIP   :</b> <span class="field-green">${(tripDist/1000).toFixed(3)} km</span><br>
+            <b>TRIP:</b> <span class="field-green">${(tripDist/1000).toFixed(3)} km</span><br>
             <b>BEWOGEN TIJD:</b> <span class="field-green">${fmtT(sport.movingTime)}</span><br>
-            <b>PAUZE TIJD  :</b> <span class="field-green">${fmtT(sport.idleTime)}</span><br>
-            <b>AANKOMST    :</b> <span class="field-green">${finished ? 'BEREIKT' : cachedArrival}</span><br>
+            <b>PAUZE TIJD:</b> <span class="field-green">${fmtT(sport.idleTime)}</span><br>
+            <b>AANKOMST:</b> <span class="field-green">${finished ? 'BEREIKT' : cachedArrival}</span><br>
             <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
             <b>SPEED:</b> ${skmh.toFixed(1)} km/u<br>
             <b>AVG SPEED:</b> ${avgV.toFixed(2)} km/u<br>
