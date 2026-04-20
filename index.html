@@ -127,7 +127,6 @@ function projectOnSegment(pLat, pLon, A, B) {
 }
 
 document.getElementById('gpxInput').onchange = e => {
-    const file = e.target.files?.[0]; if (!file) return;
     const r = new FileReader();
     r.onload = ev => {
         const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
@@ -135,51 +134,39 @@ document.getElementById('gpxInput').onchange = e => {
         track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
         
         cumDist = [0];
-        for (let i = 1; i < track.length; i++) {
-            cumDist[i] = cumDist[i-1] + getDist(track[i-1].lat, track[i-1].lon, track[i].lat, track[i].lon);
+        for(let i=0; i<track.length-1; i++) {
+            cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
         }
 
-        // Haal waypoints op
-        let rawWpts = [...xml.getElementsByTagName('wpt')].map(w => ({
-            name: w.getElementsByTagName('name')[0]?.textContent || "Punt",
-            lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'),
-            passed: false, missed: false, touched: false
-        }));
-
-        // Wijs elk waypoint toe aan de routepositie
-        waypoints = rawWpts.map(w => {
-            const res = getRInfo(w.lat, w.lon);
-            return { ...w, routePos: res.pos };
+        // 1. Haal waypoints op en bereken DIRECT hun routePos
+        waypoints = [...xml.getElementsByTagName('wpt')].map(w => {
+            const lat = +w.getAttribute('lat'), lon = +w.getAttribute('lon');
+            return {
+                name: w.getElementsByTagName('name')[0]?.textContent || "Punt",
+                lat, lon,
+                routePos: getRInfo(lat, lon).pos, // Direct hier berekenen
+                passed: false, missed: false, touched: false
+            };
         });
 
-        // SORTEER: Eerst op routePos, maar dwing START en FINISH
-        waypoints.sort((a, b) => a.routePos - b.routePos);
+        // 2. Sorteer op basis van afstand langs de route
+        waypoints.sort((a,b) => a.routePos - b.routePos);
 
-        // Voeg START en FINISH handmatig toe op de juiste plek als ze er nog niet zijn
-        if (!waypoints.find(w => w.name === "START")) {
+        // 3. Forceer START aan het begin en FINISH aan het eind (zonder dubbelingen)
+        if (waypoints[0]?.name !== "START") {
             waypoints.unshift({ name: "START", lat: track[0].lat, lon: track[0].lon, routePos: 0, passed: false, missed: false, touched: false });
         }
-        if (!waypoints.find(w => w.name === "FINISH")) {
+        if (waypoints.at(-1)?.name !== "FINISH") {
             waypoints.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, routePos: cumDist.at(-1), passed: false, missed: false, touched: false });
         }
 
-        // Extra check: zorg dat de lijst uniek blijft en de FINISH altijd onderaan staat
-        waypoints = waypoints.filter((v, i, a) => a.findIndex(t => t.name === v.name) === i);
-        waypoints.sort((a, b) => a.routePos - b.routePos);
-
-        maxRoutePos = 0; lastTrackIndex = 0; lastPos = null;
         updateWPUI();
-        speak(`Route geladen. ${waypoints.length} punten over ${(cumDist.at(-1)/1000).toFixed(1)} kilometer.`);
+        const totalKm = (cumDist.at(-1) / 1000).toFixed(1);
+        speak(`Route geladen. ${waypoints.length} punten over ${totalKm} kilometer.`);
         document.getElementById('display-content').innerText = "Klik op START.";
     };
-    r.readAsText(file);
+    r.readAsText(e.target.files[0]);
 };
-
-function updateWPUI() {
-    const p = waypoints.filter(w => w.passed).length, m = waypoints.filter(w => w.missed).length;
-    document.getElementById('wp-summary').innerText = `✅ ${p} | ❌ ${m} | ⏳ ${waypoints.length - p - m}`;
-    document.getElementById('list').innerHTML = waypoints.map(w => `<tr style="${w.passed ? 'color:#27ae60;font-weight:bold;' : (w.missed ? 'color:#e74c3c;text-decoration:line-through;' : '')}"><td style="width:25px">${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td><td>${w.name}</td><td style="text-align:right">${Math.round(w.routePos)}m</td></tr>`).join('');
-}
 
 function handleStartPause() {
     const btn = document.getElementById('startBtn');
