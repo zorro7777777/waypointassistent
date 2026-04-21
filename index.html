@@ -189,16 +189,20 @@ function copyCoords() {
     const lat = document.getElementById('ui-lat').innerText;
     const lon = document.getElementById('ui-lon').innerText;
     
-    // Door "Locatie:" toe te voegen en de cijfers te scheiden met een ' | ', 
-    // ziet WhatsApp dit niet meer aan voor een telefoonnummer.
-    const text = `Locatie: ${lat} | ${lon}`;
+    // We voegen een onzichtbaar karakter (Zero Width Space) toe na de punt.
+    // Dit breekt de herkenning als telefoonnummer, maar de cijfers zien er 
+    // voor het menselijk oog nog exact hetzelfde uit: 51.123456
+    const cleanLat = lat.replace(".", ".\u200B");
+    const cleanLon = lon.replace(".", ".\u200B");
+    
+    const text = `${cleanLat}, ${cleanLon}`;
     
     if (navigator.clipboard) {
         navigator.clipboard.writeText(text).then(() => {
             const btn = document.getElementById('copyCoords');
             btn.innerText = "✅ OK";
             
-            // Wist eventuele visuele selectie in de browser zelf
+            // Wist de selectie in de browser
             window.getSelection().removeAllRanges(); 
             
             setTimeout(() => btn.innerText = "📋 KOPIEER", 2000);
