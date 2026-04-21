@@ -186,23 +186,26 @@ function getRInfo(lat, lon) {
 }
 
 function copyCoords() {
-    // We halen de tekst op uit de elementen
     const lat = document.getElementById('ui-lat').innerText;
     const lon = document.getElementById('ui-lon').innerText;
-    const text = `${lat}, ${lon}`;
     
-    if (navigator.clipboard && navigator.clipboard.writeText) {
+    // Door "Locatie:" toe te voegen en de cijfers te scheiden met een ' | ', 
+    // ziet WhatsApp dit niet meer aan voor een telefoonnummer.
+    const text = `Locatie: ${lat} | ${lon}`;
+    
+    if (navigator.clipboard) {
         navigator.clipboard.writeText(text).then(() => {
             const btn = document.getElementById('copyCoords');
-            const originalText = btn.innerHTML;
             btn.innerText = "✅ OK";
-            // Geen selectie-effecten toestaan
+            
+            // Wist eventuele visuele selectie in de browser zelf
             window.getSelection().removeAllRanges(); 
-            setTimeout(() => btn.innerHTML = originalText, 2000);
+            
+            setTimeout(() => btn.innerText = "📋 KOPIEER", 2000);
         });
     }
 }
-
+    
 function handleStartPause() {
     if (track.length === 0) { alert("GPX nodig!"); return; }
     initAudio();
