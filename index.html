@@ -276,29 +276,26 @@ function startGPS() {
         }
 
  // --- AFSTAND + SPORT DATA ---
+// --- AFSTAND + SPORT DATA ---
         if (lastPos) {
             const d = getDist(lastPos.lat, lastPos.lon, lat, lon);
             const weight = parseFloat(document.getElementById('userWeight').value) || 92;
 
-            // Drempel naar 1.8 km/u: Dit negeert vrijwel alle GPS-jitter bij ramen/gebouwen.
-            // Pas als je echt wandelt (normaal tempo is 4-5 km/u) begint de teller.
+            // STRIKTE AUTO-PAUZE: 
+            // We tellen alleen afstand, tijd, stappen en kcal als de snelheid > 1.8 km/u is.
             if (skmh > 1.8 && !isPaused) { 
                 tripDist += d;
                 sport.movingTime += delta;
                 sport.steps += (d / CONFIG.th);
 
-                // Actief verbruik op basis van je huidige MET-waarde
+                // Actief verbruik (alleen tijdens beweging)
                 const kcalPerSeconde = (met * weight * 1.05) / 3600;
                 sport.kcal += kcalPerSeconde * delta;
             } else {
-                // STILSTAND OF PAUZE
+                // HIER IS DE AUTO-PAUZE ACTIEF
+                // We tellen alleen de pauzetijd op. Afstand en KCAL bevriezen volledig.
                 sport.pauseTime += delta;
                 met = 1.0; 
-                
-                // Wil je dat de teller ECHT op 0 blijft staan bij stilstand? 
-                // Verwijder dan de regel hieronder. 
-                // Nu telt hij alleen je minimale overlevings-calorieën (BMR).
-                sport.kcal += (1.0 * weight * 1.05 / 3600) * delta;
             }
             
             sport.currentMet = met; 
