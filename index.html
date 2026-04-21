@@ -287,14 +287,14 @@ function startGPS() {
         if (next) {
             const sDist = next.routePos - w.routePos;
             const dTxt = sDist >= 1000 ? `${(sDist/1000).toFixed(1)} km` : `${Math.round(sDist)} meter`;
-            setTimeout(() => speak(`Het volgende waypoint is: ${next.name}, over ${dTxt}`), 2500);
+            speak(`Het volgende waypoint is: ${next.name}, over ${dTxt}`);
         }
 
         if (w.name === "FINISH") { 
             finished = true; 
-            speak("Gefeliciteerd, finish bereikt."); 
+            speak("Finish bereikt. Activiteit voltooid.");
         }
-    } else if (R.pos > w.routePos + 15) { 
+    } else if (R.pos > w.routePos + 30) { 
         // Voorkom dat de FINISH als 'gemist' wordt gemarkeerd aan het begin
         if (w.name !== "FINISH") {
             w.missed = true; 
@@ -330,18 +330,26 @@ function updateUI(lat, lon, R, skmh, eta, avg, met) {
     const off = Math.round(R.off);
     DOM.uiOffBig.innerText = off + "m";
     
-    // Kleur-logica voor de afwijking (blijft hetzelfde)
-    if (off > 40) {
-        DOM.uiOffBig.style.color = 'red'; 
-        DOM.uiOffBig.style.fontSize = '2.2rem'; 
-        DOM.uiOffBig.style.fontWeight = '900';
-    } else {
-        DOM.uiOffBig.style.color = '#00bfff'; // Jouw mooie blauwe kleur
-        DOM.uiOffBig.style.fontSize = '2.2rem';
-        DOM.uiOffBig.style.fontWeight = 'bold';
-    }
-    updateWPUI();
+// --- OFF-route visualisatie ---
+const off = Math.round(R.off);
+DOM.uiOffBig.innerText = off + "m";
+
+// Basis stijl (1x zetten)
+DOM.uiOffBig.style.fontSize = '2.2rem';
+
+// Dynamische kleur + gewicht
+if (off > 80) {
+    DOM.uiOffBig.style.color = 'red';
+    DOM.uiOffBig.style.fontWeight = '900';
+} else if (off > 40) {
+    DOM.uiOffBig.style.color = 'orange';
+    DOM.uiOffBig.style.fontWeight = 'bold';
+} else {
+    DOM.uiOffBig.style.color = '#00bfff'; // blauw
+    DOM.uiOffBig.style.fontWeight = 'bold';
 }
+
+updateWPUI();
 
 function fmt(s) { return new Date(s * 1000).toISOString().substr(11, 8); }
 function getMet(s) { 
