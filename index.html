@@ -141,6 +141,7 @@ let smoothLat = null, smoothLon = null;
 const SMOOTHING_FACTOR = 0.35; 
 const ACCURACY_LIMIT = 25; 
 
+// --- DOM CACHE ---
 const DOM = {
     uiNextWp: document.getElementById('ui-next-wp'),
     uiDist: document.getElementById('ui-dist'),
@@ -153,6 +154,7 @@ const DOM = {
     uiKcal: document.getElementById('ui-kcal'),    
     uiSpeed: document.getElementById('ui-speed'),
     uiAvgSpeed: document.getElementById('ui-avg-speed'),
+    uiPower: document.getElementById('ui-power'), // <--- DEZE REGEL WAS VERGETEN
     uiAcc: document.getElementById('ui-acc'),
     uiOff: document.getElementById('ui-off'),
     uiLat: document.getElementById('ui-lat'),
