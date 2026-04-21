@@ -246,7 +246,7 @@ function startGPS() {
 
         document.getElementById('ui-next-wp').innerText = next ? next.name : "FINISH";
         document.getElementById('ui-dist').innerText = next ? Math.round(next.routePos - R.pos) + "m" : "0m";
-        document.getElementById('ui-trip').innerText = (tripDist/1000).toFixed(2) + " km";
+        document.getElementById('ui-trip').innerText = (tripDist/1000).toFixed(3) + " km";
         document.getElementById('ui-steps').innerText = Math.round(sport.steps);
         document.getElementById('ui-mov-time').innerText = fmtT(sport.movingTime);
         document.getElementById('ui-idl-time').innerText = fmtT(sport.idleTime);
