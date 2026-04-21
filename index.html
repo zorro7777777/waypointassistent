@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WAYPOINTASSISTENT PRO - V3.5</title>
+    <title>WAYPOINTASSISTENT PRO - V3.6</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -100,7 +100,7 @@ let watchId = null, maxRoutePos = 0, tripDist = 0, finished = false;
 let sport = { steps: 0, movingTime: 0, idleTime: 0, lastTick: null };
 let isPaused = false, lastTrackIndex = 0, lastAnnouncedWp = -1;
 let smoothLat = null, smoothLon = null;
-const SMOOTHING_FACTOR = 0.35;
+const SMOOTHING_FACTOR = 0.25; // Iets sterker filteren
 
 function fmtT(s) {
     const h = Math.floor(s / 3600).toString().padStart(2, '0');
@@ -128,7 +128,6 @@ function getRInfo(lat, lon) {
     return { pos: bP, off: bD };
 }
 
-// SPRAAK MET QUEUE
 let speechQueue = [];
 let isSpeaking = false;
 function speak(text) {
@@ -145,7 +144,6 @@ function processQueue() {
     window.speechSynthesis.speak(msg);
 }
 
-// GPX
 document.getElementById('gpxInput').onchange = e => {
     const reader = new FileReader();
     reader.onload = ev => {
@@ -200,40 +198,50 @@ function startGPS() {
         const { latitude: rLat, longitude: rLon, accuracy: acc, speed: s } = p.coords;
         const now = Date.now();
         const dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
-        if (acc > 35) return;
+        
+        // Harde filter op onnauwkeurigheid
+        if (acc > 25) return;
+
+        let skmh = (s || 0) * 3.6;
 
         if (smoothLat !== null) {
             const jump = getDist(smoothLat, smoothLon, rLat, rLon);
-            smoothLat = (rLat * SMOOTHING_FACTOR) + (smoothLat * (1 - SMOOTHING_FACTOR));
-            smoothLon = (rLon * SMOOTHING_FACTOR) + (smoothLon * (1 - SMOOTHING_FACTOR));
-            tripDist += jump;
-        } else { smoothLat = rLat; smoothLon = rLon; }
+            
+            // ANTI-JITTER LOGICA:
+            // Alleen tellen als sprong > 2 meter EN gerapporteerde snelheid > 1.8 km/u
+            if (jump > 2 && skmh > 1.8) {
+                smoothLat = (rLat * SMOOTHING_FACTOR) + (smoothLat * (1 - SMOOTHING_FACTOR));
+                smoothLon = (rLon * SMOOTHING_FACTOR) + (smoothLon * (1 - SMOOTHING_FACTOR));
+                tripDist += jump;
+                sport.movingTime += dt;
+                sport.steps += ((skmh/3.6 * dt) / CONFIG.th);
+            } else if (dt > 0) {
+                sport.idleTime += dt;
+                skmh = 0; // Forceer weergave op 0 als we stilstaan/jitteren
+            }
+        } else { 
+            smoothLat = rLat; 
+            smoothLon = rLon; 
+        }
 
-        const skmh = (s || 0) * 3.6;
         const R = getRInfo(smoothLat, smoothLon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
-
-        if (skmh > 1.5 && dt > 0) {
-            sport.movingTime += dt;
-            sport.steps += ((skmh/3.6 * dt) / CONFIG.th);
-        } else if (dt > 0) { sport.idleTime += dt; }
 
         // Waypoint Logic
         waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             const d = getDist(smoothLat, smoothLon, w.lat, w.lon);
             if (d < CONFIG.radius) w.touched = true;
-            if (d < 10 || (R.pos >= w.routePos && w.touched)) {
+            if (d < 12 || (R.pos >= w.routePos && w.touched)) {
                 w.passed = true;
                 speak("Bereikt: " + w.name);
                 updateWPUI();
-            } else if (maxRoutePos > w.routePos + 60) {
+            } else if (maxRoutePos > w.routePos + 80) {
                 w.missed = true;
                 updateWPUI();
             }
         });
 
-        // NIEUW: Kondig volgende punt aan als dat nog niet gedaan is
         const nextIdx = waypoints.findIndex(w => !w.passed && !w.missed);
         if (nextIdx !== -1 && nextIdx !== lastAnnouncedWp) {
             speak("Volgend punt: " + waypoints[nextIdx].name);
@@ -241,7 +249,8 @@ function startGPS() {
         }
 
         const next = waypoints[nextIdx];
-        const avgS = sport.movingTime > 0 ? (tripDist/1000) / (sport.movingTime/3600) : 0;
+        // Gemiddelde snelheid nu correct over de tripDist en movingTime
+        const avgS = sport.movingTime > 5 ? (tripDist/1000) / (sport.movingTime/3600) : 0;
         const met = document.getElementById('profile').value === 'wandelen' ? (0.75 * skmh + 0.5) : (0.4 * skmh);
 
         document.getElementById('ui-next-wp').innerText = next ? next.name : "FINISH";
@@ -252,7 +261,7 @@ function startGPS() {
         document.getElementById('ui-idl-time').innerText = fmtT(sport.idleTime);
         document.getElementById('ui-speed').innerText = skmh.toFixed(1);
         document.getElementById('ui-avg-speed').innerText = avgS.toFixed(1);
-        document.getElementById('ui-power').innerText = met.toFixed(1);
+        document.getElementById('ui-power').innerText = skmh > 1.5 ? met.toFixed(1) : "0.0";
         document.getElementById('ui-acc').innerText = Math.round(acc) + "m";
         document.getElementById('ui-off').innerText = Math.round(R.off) + "m";
 
