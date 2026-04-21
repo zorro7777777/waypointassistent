@@ -275,22 +275,28 @@ function startGPS() {
             }
         }
 
-        // --- AFSTAND + SPORT DATA ---
+      // --- AFSTAND + SPORT DATA ---
         if (lastPos) {
             const d = getDist(lastPos.lat, lastPos.lon, lat, lon);
+            const weight = parseFloat(document.getElementById('userWeight').value) || 92;
 
-            if (skmh > 0.5 && !isPaused) {
+            // Drempel verhoogd naar 1.2 km/u om GPS-ruis (stilstaan) te negeren
+            if (skmh > 1.2 && !isPaused) { 
                 tripDist += d;
                 sport.movingTime += delta;
                 sport.steps += (d / CONFIG.th);
 
-                const weight = parseFloat(document.getElementById('userWeight').value) || 92;
-                // Gebruik de actuele MET voor de kcal berekening
-                sport.kcal += (met * 3.5 * weight / 200) * (delta / 60);
+                // Gecorrigeerde formule: (MET * gewicht * 1.05) / 3600 geeft kcal per seconde.
+                // Dit vermenigvuldigen we met de verstreken tijd (delta).
+                const kcalPerSeconde = (met * weight * 1.05) / 3600;
+                sport.kcal += kcalPerSeconde * delta;
             } else {
-                // Stilstand of pauze
+                // Stilstand of handmatige pauze
                 sport.pauseTime += delta;
-                met = 1.0; // Forceer MET naar ruststand bij stilstand
+                met = 1.0; 
+                
+                // Rustverbruik (BMR) tijdens pauze: je verbrandt altijd wat, ook als je stilstaat.
+                sport.kcal += (1.0 * weight * 1.05 / 3600) * delta;
             }
             
             sport.currentMet = met; 
@@ -412,20 +418,25 @@ function updateUI(lat, lon, R, skmh, eta, avg, met) {
 
 function fmt(s) { return new Date(s * 1000).toISOString().substr(11, 8); }
     
+// VERVANG DE BESTAANDE getMet FUNCTIE DOOR DEZE:
 function getMet(s) { 
-    if (s < 0.5) return 1.0; // Ruststand (basal metabolism)
+    if (s < 1.0) return 1.0; // Echt stilstaan/rust
     
     const profile = document.getElementById('profile').value;
     
     if (profile === 'wandelen') {
-        if (s > 6) return 5.0;  // Snelwandelen
-        if (s > 4) return 4.0;  // Gemiddeld tempo
-        return 3.0;             // Rustig wandelen
+        // Lineaire schaling: 3.0 bij 4km/u, 4.5 bij 6km/u
+        if (s > 6.5) return 5.0; 
+        if (s > 5.5) return 4.0;
+        if (s > 4.0) return 3.2;
+        return 2.5; // Rustig wandelen
     } else {
-        // Fietsen
-        if (s > 25) return 12.0; // Intensief
-        if (s > 18) return 8.0;  // Gemiddeld
-        return 6.0;              // Rustig toeristisch
+        // Fietsen (iets conservatiever)
+        if (s > 30) return 11.0;
+        if (s > 25) return 9.0;
+        if (s > 20) return 7.5;
+        if (s > 15) return 5.5;
+        return 3.5; 
     }
 }
 
