@@ -73,7 +73,9 @@
         <label><input type="checkbox" id="audioToggle" checked> Spraakassistent</label>
     </div>
 
-    <div>OFF : <span id="ui-off" style="color:#00ff00; font-weight: bold; transition: all 0.3s ease;">0m</span></div>
+    <div style="margin-bottom: 15px; padding: 5px 0;">
+    OFF-ROUTE: <span id="ui-off" style="color:#00ff00; font-weight: bold; transition: all 0.3s ease; display: inline-block;">0m</span>
+   </div>
 
     <input type="file" id="gpxInput" accept=".gpx">
     
@@ -309,11 +311,11 @@ function updateUI(lat, lon, R, skmh, eta, avg) {
 
     if (off > 40) {
         DOM.uiOff.style.color = 'red';
-        DOM.uiOff.style.fontSize = '1.2rem';
+        DOM.uiOff.style.fontSize = '1.5rem';
         DOM.uiOff.style.fontWeight = '900';
     } else {
         DOM.uiOff.style.color = '#00ff00';
-        DOM.uiOff.style.fontSize = '1rem';
+        DOM.uiOff.style.fontSize = '1.3rem';
         DOM.uiOff.style.fontWeight = 'bold';
     }
 
