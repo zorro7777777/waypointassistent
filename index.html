@@ -96,9 +96,11 @@
                     <div><span class="dashboard-label">Energie:</span><br><span id="ui-kcal" class="field-green">0 kcal</span></div>
                 </div>
                 <hr>
-                <div style="font-size: 0.85rem;">
+                    <div style="font-size: 0.85rem;">
                     Snelheid: <span id="ui-speed">0.0</span> km/u (Gem: <span id="ui-avg-speed">0.0</span>)<br>
-                    Nauwkeurigheid: <span id="ui-acc">0m</span> | Off-track: <span id="ui-off" style="color:#00ff00">0m</span>
+                    <b>POWER:</b> <span id="ui-power" class="field-green">0.0</span> MET<br>
+                    <hr style="border-top: 1px dotted #444;"> Nauwkeurigheid: <span id="ui-acc">0m</span><br>
+                    Off-track: <span id="ui-off" style="color:#00ff00">0m</span>
                 </div>
                 <hr>
                 <span class="field-yellow">LAT: <span id="ui-lat">0.000000</span></span>
@@ -156,7 +158,7 @@ const DOM = {
     uiMovTime: document.getElementById('ui-mov-time'),
     uiIdlTime: document.getElementById('ui-idl-time'),
     uiEta: document.getElementById('ui-eta'),
-    uiKcal: document.getElementById('ui-kcal'),
+    uiKcal: document.getElementById('ui-kcal'),    
     uiSpeed: document.getElementById('ui-speed'),
     uiAvgSpeed: document.getElementById('ui-avg-speed'),
     uiAcc: document.getElementById('ui-acc'),
