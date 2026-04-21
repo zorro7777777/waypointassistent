@@ -250,10 +250,10 @@ function startGPS() {
                 if (next) {
                     const sDist = next.routePos - w.routePos;
                     const dTxt = sDist >= 1000 ? `${(sDist/1000).toFixed(1)} km` : `${Math.round(sDist)} meter`;
-                    setTimeout(() => speak(`Volgende: ${next.name}, over ${dTxt}`), 2500);
+                    setTimeout(() => speak(`Het volgende waypoint is: ${next.name}, over ${dTxt}`), 2500);
                 }
                 if (w.name === "FINISH") { finished = true; speak("Finish bereikt."); }
-            } else if (R.pos > w.routePos + 100) { w.missed = true; speak(`${w.name} gemist.`); }
+            } else if (R.pos > w.routePos + 50) { w.missed = true; speak(`${w.name} gemist.`); }
         });
 
         lastPos = { lat, lon };
