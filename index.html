@@ -105,15 +105,18 @@
             <div><span id="ui-unit-label">STAPPEN:</span> <span id="ui-steps" class="field-green">0</span></div>
             <hr>
             
-            <div class="coord-container">
-                <div style="font-size: 0.8rem;">
-                    <span class="field-yellow">LAT: <span id="ui-lat">0.000000</span></span><br>
-                    <span class="field-yellow">LON: <span id="ui-lon">0.000000</span></span>
-                </div>
-                <div class="copy-btn" id="copyCoords" onclick="copyCoords()">📋 KOPIEER</div>
-            </div>
-        </div>
+<div class="coord-container" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; user-select: none; -webkit-user-select: none;">
+    
+    <div style="font-size: 0.8rem; pointer-events: none;">
+        <span class="field-yellow">LAT: <span id="ui-lat">0.000000</span></span><br>
+        <span class="field-yellow">LON: <span id="ui-lon">0.000000</span></span>
     </div>
+
+    <div class="copy-btn" id="copyCoords" onclick="copyCoords()" 
+         style="background: #333; color: #00ff00; padding: 8px 12px; font-size: 0.7rem; border-radius: 6px; border: 1px solid #00ff00; cursor: pointer; pointer-events: auto; user-select: none; -webkit-user-select: none;">
+         📋 KOPIEER
+    </div>
+</div>
 
     <div id="tableCon" style="display:none;"><table id="list" style="width:100%"></table></div>
 </div>
@@ -183,12 +186,19 @@ function getRInfo(lat, lon) {
 }
 
 function copyCoords() {
-    const text = `${DOM.uiLat.innerText}, ${DOM.uiLon.innerText}`;
+    // We halen de tekst op uit de elementen
+    const lat = document.getElementById('ui-lat').innerText;
+    const lon = document.getElementById('ui-lon').innerText;
+    const text = `${lat}, ${lon}`;
+    
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
             const btn = document.getElementById('copyCoords');
+            const originalText = btn.innerHTML;
             btn.innerText = "✅ OK";
-            setTimeout(() => btn.innerText = "📋 KOPIEER", 2000);
+            // Geen selectie-effecten toestaan
+            window.getSelection().removeAllRanges(); 
+            setTimeout(() => btn.innerHTML = originalText, 2000);
         });
     }
 }
