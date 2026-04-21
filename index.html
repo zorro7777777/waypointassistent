@@ -121,11 +121,6 @@
 <script>
 /**
  * --- WAYPOINTASSISTENT PRO V3.1 ---
- * Updates:
- * - DOM Caching voor CPU besparing.
- * - Sliding Window Average Speed voor stabiele ETA.
- * - Event-based Copy button handling.
- * - Verbeterde Off-route herkenning.
  */
 
 const PROFS = {
@@ -133,7 +128,6 @@ const PROFS = {
     fietsen:  { ms: 1.95, max: 45, th: 2.10, radius: 25, unit: "Omwentelingen" }
 };
 
-// --- STAAT & CONFIG ---
 let CONFIG = { ...PROFS.wandelen };
 let track = [], waypoints = [], cumDist = [];
 let watchId = null, lastPos = null, maxRoutePos = 0, tripDist = 0, finished = false;
@@ -141,15 +135,12 @@ let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
 let alertTime = 0, isOffRoute = false, isPaused = false;
 let lastEtaUpdate = 0, lastUiUpdate = 0, cachedArrival = "--:--";
 let lastTrackIndex = 0;
-let speedHistory = []; // Voor Sliding Window ETA
+let speedHistory = [];
 
-// GPS Filtering
 let smoothLat = null, smoothLon = null;
 const SMOOTHING_FACTOR = 0.35; 
 const ACCURACY_LIMIT = 25; 
 
-// --- DOM CACHE ---
-// --- DOM CACHE ---
 const DOM = {
     uiNextWp: document.getElementById('ui-next-wp'),
     uiDist: document.getElementById('ui-dist'),
@@ -162,7 +153,6 @@ const DOM = {
     uiKcal: document.getElementById('ui-kcal'),    
     uiSpeed: document.getElementById('ui-speed'),
     uiAvgSpeed: document.getElementById('ui-avg-speed'),
-    uiPower: document.getElementById('ui-power'), // <--- DEZE REGEL WAS VERGETEN
     uiAcc: document.getElementById('ui-acc'),
     uiOff: document.getElementById('ui-off'),
     uiLat: document.getElementById('ui-lat'),
@@ -172,7 +162,6 @@ const DOM = {
     copyBtn: document.getElementById('copyBtn')
 };
 
-// --- VOICE QUEUE ---
 let speechQueue = [];
 let isSpeaking = false;
 
@@ -185,14 +174,17 @@ function speak(text) {
 function processQueue() {
     if (isSpeaking || speechQueue.length === 0) return;
     isSpeaking = true;
+    
+    // Reset spraak engine om vastlopen te voorkomen
+    window.speechSynthesis.cancel(); 
+
     const msg = new SpeechSynthesisUtterance(speechQueue.shift());
     msg.lang = 'nl-NL';
     msg.rate = 0.95;
-    msg.onend = () => { setTimeout(() => { isSpeaking = false; processQueue(); }, 1200); };
+    msg.onend = () => { setTimeout(() => { isSpeaking = false; processQueue(); }, 800); };
     window.speechSynthesis.speak(msg);
 }
 
-// --- MATH UTILS ---
 function fmtT(s) {
     if (!isFinite(s) || s < 0) return "00:00:00";
     const h = Math.floor(s / 3600).toString().padStart(2, '0');
@@ -209,7 +201,6 @@ function getDist(a, b, c, d) {
     return 2 * R * Math.asin(Math.sqrt(x));
 }
 
-// --- CORE LOGIC: ROUTE SCANNER ---
 function getRInfo(lat, lon) {
     let bD = Infinity, bP = 0, bestIdx = 0;
     let start = Math.max(0, lastTrackIndex - 50);
@@ -225,17 +216,11 @@ function getRInfo(lat, lon) {
             const d = getDist(lat, lon, track[i].lat, track[i].lon);
             if (d < bD) { bD = d; bP = cumDist[i]; bestIdx = i; }
         }
-        let refStart = Math.max(0, bestIdx - 15), refEnd = Math.min(track.length, bestIdx + 15);
-        for (let i = refStart; i < refEnd; i++) {
-            const d = getDist(lat, lon, track[i].lat, track[i].lon);
-            if (d < bD) { bD = d; bP = cumDist[i]; bestIdx = i; }
-        }
     }
     lastTrackIndex = bestIdx;
     return { pos: bP, off: bD, idx: bestIdx };
 }
 
-// --- UI HANDLERS ---
 function toggleConfig() {
     const el = document.getElementById('configArea');
     const reset = document.getElementById('resetBtn');
@@ -249,7 +234,6 @@ function toggleTable() {
     el.style.display = (el.style.display === 'none') ? 'block' : 'none';
 }
 
-// --- GPX PARSER ---
 document.getElementById('gpxInput').onchange = e => {
     const file = e.target.files[0];
     if (!file) return;
@@ -300,9 +284,12 @@ function updateWPUI() {
         </tr>`).join('');
 }
 
-// --- GPS ENGINE ---
 function handleStartPause() {
     const btn = document.getElementById('startBtn');
+    
+    // CRUCIAAL: Activeer spraak engine bij klik (User Interaction)
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+
     if (!watchId) {
         startGPS();
         btn.innerText = "⏸ PAUZEER SYSTEEM"; btn.className = "pause";
@@ -331,8 +318,6 @@ function startGPS() {
 
         if (smoothLat === null) { smoothLat = rawLat; smoothLon = rawLon; }
         else {
-            const jump = getDist(smoothLat, smoothLon, rawLat, rawLon);
-            if (dt > 0 && (jump / dt) > 30) return; 
             smoothLat = (rawLat * SMOOTHING_FACTOR) + (smoothLat * (1 - SMOOTHING_FACTOR));
             smoothLon = (rawLon * SMOOTHING_FACTOR) + (smoothLon * (1 - SMOOTHING_FACTOR));
         }
@@ -341,8 +326,6 @@ function startGPS() {
         const R = getRInfo(smoothLat, smoothLon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        // Trip Calculator
-        const moving = skmh >= (CONFIG.ms * 3.6) && skmh <= CONFIG.max;
         const weight = parseFloat(document.getElementById('userWeight').value) || 92;
         const metVal = document.getElementById('profile').value === 'wandelen' ? (0.75 * skmh + 0.5) : (0.4 * skmh);
 
@@ -352,38 +335,38 @@ function startGPS() {
         }
         lastPos = { lat: smoothLat, lon: smoothLon };
 
-        if (moving && dt > 0) {
+        if (skmh >= (CONFIG.ms * 3.6) && dt > 0) {
             sport.movingTime += dt;
             sport.steps += ((skmh / 3.6 * dt) / CONFIG.th);
             sport.kcal += (metVal * 3.5 * weight / 200) * (dt / 60);
-            
-            // ETA Window
             speedHistory.push(skmh);
             if (speedHistory.length > 20) speedHistory.shift();
         } else if (dt > 0) {
             sport.idleTime += dt;
         }
 
-        // Waypoints
+        // --- VERBETERDE WAYPOINT TRIGGER ---
         waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             const dToWp = getDist(smoothLat, smoothLon, w.lat, w.lon);
+            
             if (dToWp <= CONFIG.radius) w.touched = true;
-            if (R.pos >= w.routePos - 5 && w.touched) {
+
+            // Roep aan als we binnen de straal zijn OF als we de route-positie passeren na aanraking
+            if (dToWp <= (CONFIG.radius * 0.8) || (R.pos >= w.routePos && w.touched)) {
                 w.passed = true;
                 speak(w.name);
                 if (i === waypoints.length - 1) { 
                     finished = true; 
-                    speak("Finish bereikt.");
+                    speak("Bestemming bereikt.");
                     navigator.geolocation.clearWatch(watchId);
                 }
                 updateWPUI();
-            } else if (maxRoutePos > w.routePos + CONFIG.radius + acc + 10) {
+            } else if (maxRoutePos > w.routePos + 50) { 
                 w.missed = true; updateWPUI();
             }
         });
 
-        // UI Update (Optimized)
         if (now - lastUiUpdate > 1000) {
             const next = waypoints.find(w => !w.passed && !w.missed);
             const avgV = R.pos > 50 ? (R.pos / 1000) / (sport.movingTime / 3600) : 0;
@@ -414,14 +397,12 @@ function startGPS() {
             DOM.uiOff.style.color = R.off > 50 ? '#e74c3c' : '#00ff00';
             DOM.uiLat.textContent = smoothLat.toFixed(6);
             DOM.uiLon.textContent = smoothLon.toFixed(6);
-            
             lastUiUpdate = now;
         }
         sport.lastTick = now;
     }, err => console.error(err), { enableHighAccuracy: true, maximumAge: 0 });
 }
 
-// --- INITIALIZE ---
 DOM.copyBtn.onclick = (e) => {
     const txt = `${smoothLat.toFixed(6)},${smoothLon.toFixed(6)}`;
     navigator.clipboard.writeText(txt).then(() => {
