@@ -286,4 +286,32 @@ document.getElementById('gpxInput').onchange = e => {
             name: w.getElementsByTagName('name')[0]?.textContent || "WPT",
             lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'), passed: false, missed: false
         }));
-        waypoints.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false
+        waypoints.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false });
+        waypoints.forEach(w => {
+            let bD = Infinity, bP = 0;
+            track.forEach((t, idx) => { const d = getDist(w.lat, w.lon, t.lat, t.lon); if (d < bD) { bD = d; bP = cumDist[idx]; }});
+            w.routePos = bP;
+        });
+        waypoints.sort((a,b) => a.routePos - b.routePos);
+        DOM.standbyMsg.innerHTML = "ROUTE GELADEN<br>Druk op START";
+        speak("Route geladen.");
+        updateWPUI();
+    };
+    reader.readAsText(file);
+};
+
+function updateWPUI() {
+    document.getElementById('list').innerHTML = waypoints.map(w => `
+        <tr style="color: ${w.passed ? '#27ae60' : (w.missed ? '#e74c3c' : '#2c3e50')}">
+            <td>${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
+            <td>${w.name}</td>
+            <td style="text-align:right">${(w.routePos/1000).toFixed(3)} km</td>
+        </tr>`).join('');
+}
+
+function toggleConfig() { document.getElementById('configArea').style.display = document.getElementById('configArea').style.display === 'none' ? 'block' : 'none'; }
+function toggleTable() { document.getElementById('tableCon').style.display = document.getElementById('tableCon').style.display === 'none' ? 'block' : 'none'; }
+function updateProfile() { CONFIG = { ...PROFS[document.getElementById('profile').value] }; DOM.uiUnitLabel.textContent = CONFIG.unit + ":"; }
+</script>
+</body>
+</html>
