@@ -225,13 +225,20 @@ function startGPS() {
             lastOffSpeech = now;
         }
 
-        if (lastPos && skmh > 0.5) {
+      if (lastPos) {
             const d = getDist(lastPos.lat, lastPos.lon, lat, lon);
-            tripDist += d;
-            sport.movingTime += delta;
-            sport.steps += (d / CONFIG.th);
-            const weight = parseFloat(document.getElementById('userWeight').value) || 92;
-            sport.kcal += (met * 3.5 * weight / 200) * (delta / 60);
+            
+            // Logica voor bewegen vs pauze
+            if (skmh > 0.5 && !isPaused) {
+                tripDist += d;
+                sport.movingTime += delta;
+                sport.steps += (d / CONFIG.th);
+                const weight = parseFloat(document.getElementById('userWeight').value) || 92;
+                sport.kcal += (met * 3.5 * weight / 200) * (delta / 60);
+            } else {
+                // Als je stilstaat (skmh < 0.5) OF de pauzeknop is ingedrukt:
+                sport.pauseTime += delta;
+            }
         }
         
         const avg = sport.movingTime > 0 ? (tripDist / sport.movingTime) * 3.6 : 0;
