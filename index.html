@@ -100,8 +100,16 @@ const DOM = {
     uiLon: document.getElementById('ui-lon'), uiEta: document.getElementById('ui-eta'),
     uiMet: document.getElementById('ui-met'), uiSpeed: document.getElementById('ui-speed'),
     liveUi: document.getElementById('live-ui'), standbyMsg: document.getElementById('standby-msg'), 
-    audioToggle: document.getElementById('audioToggle')
+    audioToggle: document.getElementById('audioToggle'),
+    startBtn: document.getElementById('startBtn'),
+    resetBtn: document.getElementById('resetBtn')
 };
+
+// --- CRUCIALE FIX VOOR AUDIO ---
+function initAudio() {
+    const v = new SpeechSynthesisUtterance("");
+    window.speechSynthesis.speak(v);
+}
 
 function speak(text) {
     if (!DOM.audioToggle.checked) return;
@@ -114,7 +122,9 @@ function processQueue() {
     isSpeaking = true;
     const msg = new SpeechSynthesisUtterance(speechQueue.shift());
     msg.lang = 'nl-NL';
-    msg.onend = () => { setTimeout(() => { isSpeaking = false; processQueue(); }, 1000); };
+    msg.onend = () => { 
+        setTimeout(() => { isSpeaking = false; processQueue(); }, 1000); 
+    };
     window.speechSynthesis.speak(msg);
 }
 
@@ -126,8 +136,9 @@ function getDist(a, b, c, d) {
 }
 
 function getRInfo(lat, lon) {
+    if (track.length === 0) return { pos: 0, off: 0 };
     let bD = Infinity, bP = 0, bestIdx = 0;
-    let start = Math.max(0, lastTrackIndex - 50), end = Math.min(track.length, lastTrackIndex + 100);
+    let start = Math.max(0, lastTrackIndex - 100), end = Math.min(track.length, lastTrackIndex + 200);
     for (let i = start; i < end; i++) {
         const d = getDist(lat, lon, track[i].lat, track[i].lon);
         if (d < bD) { bD = d; bP = cumDist[i]; bestIdx = i; }
@@ -141,34 +152,30 @@ function handleStartPause() {
         alert("Laad eerst een GPX bestand!");
         return;
     }
+    
+    initAudio(); // Forceer audio activatie
+
     if (!watchId) {
         startGPS();
-        document.getElementById('startBtn').innerText = "⏸ PAUZEER SYSTEEM";
-        document.getElementById('startBtn').className = "pause";
-        DOM.standbyMsg.style.display = 'none'; DOM.liveUi.style.display = 'block';
+        DOM.startBtn.innerText = "⏸ PAUZEER SYSTEEM";
+        DOM.startBtn.className = "pause";
+        DOM.resetBtn.style.display = "block";
+        DOM.standbyMsg.style.display = 'none'; 
+        DOM.liveUi.style.display = 'block';
         speak("Systeem gestart.");
     } else {
         isPaused = !isPaused;
-        document.getElementById('startBtn').innerText = isPaused ? "▶ HERVAT SYSTEEM" : "⏸ PAUZEER SYSTEEM";
-        document.getElementById('startBtn').className = isPaused ? "start" : "pause";
+        DOM.startBtn.innerText = isPaused ? "▶ HERVAT SYSTEEM" : "⏸ PAUZEER SYSTEEM";
+        DOM.startBtn.className = isPaused ? "start" : "pause";
         speak(isPaused ? "Systeem gepauzeerd." : "Systeem hervat.");
+        if (!isPaused) sport.lastTick = Date.now();
     }
 }
 
 function getMet(skmh) {
     const p = document.getElementById('profile').value;
     if (skmh < 0.5) return 1.0;
-    if (p === 'wandelen') {
-        if (skmh < 3.2) return 2.8;
-        if (skmh < 4.5) return 3.5;
-        if (skmh < 5.6) return 4.3;
-        return 5.0;
-    } else {
-        if (skmh < 16) return 4.0;
-        if (skmh < 19) return 6.0;
-        if (skmh < 22) return 8.0;
-        return 10.0;
-    }
+    return (p === 'wandelen') ? (skmh < 4.5 ? 3.5 : 5.0) : (skmh < 20 ? 6.0 : 10.0);
 }
 
 function startGPS() {
@@ -176,7 +183,7 @@ function startGPS() {
         if (finished || isPaused) return;
 
         const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = p.coords;
-        if (acc > 30) return;
+        if (acc > 50) return; // lets iets ruimer voor snellere fix
 
         const now = Date.now();
         const R = getRInfo(lat, lon);
@@ -184,7 +191,7 @@ function startGPS() {
 
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        // --- OFF-ROUTE DETECTIE ---
+        // --- OFF-ROUTE ---
         if (R.off > 40) {
             isOffRoute = true;
             if (now - lastOffSpeech > 30000) {
@@ -196,7 +203,7 @@ function startGPS() {
             speak("Terug op de route.");
         }
 
-        // --- STATS & ETA ---
+        // --- STATS ---
         if (lastPos && skmh > 0.5) {
             const d = getDist(lastPos.lat, lastPos.lon, lat, lon);
             tripDist += d;
@@ -204,57 +211,45 @@ function startGPS() {
             sport.steps += (d / CONFIG.th);
         }
         
-        const avgSpeedMS = sport.movingTime > 0 ? tripDist / sport.movingTime : CONFIG.ms;
         const remD = cumDist[cumDist.length - 1] - R.pos;
+        const avgSpeedMS = sport.movingTime > 0 ? tripDist / sport.movingTime : CONFIG.ms;
         const etaS = remD / (avgSpeedMS > 0.5 ? avgSpeedMS : CONFIG.ms);
         const etaDate = new Date(Date.now() + etaS * 1000);
         const etaStr = finished ? "FINISH" : etaDate.getHours().toString().padStart(2, '0') + ":" + etaDate.getMinutes().toString().padStart(2, '0');
 
-   // --- WAYPOINT LOGICA ---
-        waypoints.forEach((w, i) => {
+        // --- WAYPOINT LOGICA ---
+        waypoints.forEach((w) => {
             if (w.passed || w.missed) return;
             const dToWp = getDist(lat, lon, w.lat, w.lon);
             
-            // Controleer of punt bereikt is
             if (dToWp <= CONFIG.radius || (R.pos >= w.routePos && dToWp < 40)) {
-                // Speciale check voor Finish
-                if (w.name === "FINISH" && R.pos < (cumDist.at(-1) * 0.95)) return;
+                if (w.name === "FINISH" && R.pos < (cumDist.at(-1) * 0.90)) return;
                 
                 w.passed = true;
-                speak(`Waypoint bereikt: ${w.name}`);
+                speak(`Punt bereikt: ${w.name}`);
 
-                // Zoek specifiek naar het EERSTVOLGENDE punt dat nog niet gepasseerd is
-                // We filteren de lijst om er zeker van te zijn dat we niet het huidige punt pakken
+                // Zoek volgende
                 const next = waypoints.find(nw => !nw.passed && !nw.missed);
-                
                 if (next && next.name !== "FINISH") {
-                    const dNext = Math.round(next.routePos - R.pos);
-                    let msg;
-                    
-                    if (dNext < 100) {
-                        msg = `Snel gevolgd door ${next.name}`;
-                    } else {
-                        const phrases = [
-                            `Uw volgende punt is waypoint ${next.name}`,
-                            `Ga verder naar waypoint ${next.name}`,
-                            `Op naar waypoint ${next.name}`,
-                            `Het volgende waypoint is ${next.name}`
-                        ];
-                        msg = phrases[Math.floor(Math.random() * phrases.length)];
-                    }
-                    // Verhoog de delay iets naar 2.5s zodat de eerste zin zeker klaar is
-                    setTimeout(() => speak(msg), 2500);
+                    setTimeout(() => speak(`Volgende is ${next.name}`), 2500);
                 }
 
                 if (w.name === "FINISH") { 
                     finished = true; 
-                    speak("Gefeliciteerd, de finish is bereikt."); 
+                    speak("Bestemming bereikt."); 
                 }
-            } else if (R.pos > w.routePos + 150) { // Iets ruimere marge voor 'missed'
+            } else if (R.pos > w.routePos + 150) {
                 w.missed = true;
-                speak(`Waypoint ${w.name} voorbij gereden.`);
+                speak(`${w.name} overgeslagen.`);
             }
         });
+
+        lastPos = { lat, lon };
+        sport.lastTick = now;
+        updateUI(lat, lon, R, skmh, etaStr, getMet(skmh));
+
+    }, err => alert("GPS Fout: " + err.message), { enableHighAccuracy: true, timeout: 5000 });
+}
 
 function updateUI(lat, lon, R, skmh, eta, met) {
     const next = waypoints.find(w => !w.passed && !w.missed);
@@ -278,6 +273,8 @@ document.getElementById('gpxInput').onchange = e => {
     reader.onload = ev => {
         const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
         const pts = [...xml.getElementsByTagName('trkpt')];
+        if(pts.length === 0) { alert("Geen track gevonden!"); return; }
+        
         track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
         cumDist = [0];
         for(let i=0; i < track.length-1; i++) cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
@@ -286,15 +283,19 @@ document.getElementById('gpxInput').onchange = e => {
             name: w.getElementsByTagName('name')[0]?.textContent || "WPT",
             lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'), passed: false, missed: false
         }));
+        
         waypoints.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false });
+        
         waypoints.forEach(w => {
             let bD = Infinity, bP = 0;
-            track.forEach((t, idx) => { const d = getDist(w.lat, w.lon, t.lat, t.lon); if (d < bD) { bD = d; bP = cumDist[idx]; }});
+            track.forEach((t, idx) => { 
+                const d = getDist(w.lat, w.lon, t.lat, t.lon); 
+                if (d < bD) { bD = d; bP = cumDist[idx]; }
+            });
             w.routePos = bP;
         });
         waypoints.sort((a,b) => a.routePos - b.routePos);
         DOM.standbyMsg.innerHTML = "ROUTE GELADEN<br>Druk op START";
-        speak("Route geladen.");
         updateWPUI();
     };
     reader.readAsText(file);
