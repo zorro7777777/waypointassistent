@@ -249,7 +249,9 @@ function startGPS() {
 
         const R = getRInfo(lat, lon);
         const skmh = (s || 0) * 3.6;
-        const met = getMet(skmh);
+        
+        // Bereken de actuele MET op basis van snelheid
+        let met = getMet(skmh);
 
         if (R.off > 40 && now - lastOffSpeech > 20000) {
             speak(`Route alarm: ${Math.round(R.off)} meter`);
@@ -266,33 +268,34 @@ function startGPS() {
                 sport.steps += (d / CONFIG.th);
 
                 const weight = parseFloat(document.getElementById('userWeight').value) || 92;
+                // Gebruik de actuele MET voor de kcal berekening
                 sport.kcal += (met * 3.5 * weight / 200) * (delta / 60);
             } else {
+                // Stilstand of pauze
                 sport.pauseTime += delta;
+                met = 1.0; // Forceer MET naar ruststand bij stilstand
             }
+            
+            sport.currentMet = met; 
         }
+        
+        // --- STABIELE SNELHEID ---
+        const avg = sport.movingTime > 2 ? (tripDist / sport.movingTime) * 3.6 : 0;
+        const currentSpeed = skmh > 1 ? skmh : (avg || 0);
+        smoothSpeed = smoothSpeed * 0.8 + currentSpeed * 0.2;
 
+        // Beveiliging voor ETA deling
+        const effectiveSpeed = smoothSpeed > 0.2 ? smoothSpeed : (CONFIG.ms * 3.6);
 
- // --- STABIELE SNELHEID ---
-// Alleen AVG berekenen als we langer dan 2 seconden bewegen
-const avg = sport.movingTime > 2 ? (tripDist / sport.movingTime) * 3.6 : 0;
-const currentSpeed = skmh > 1 ? skmh : (avg || 0);
+        // --- ETA ---
+        const distLeft = (cumDist.at(-1) || 0) - R.pos;
+        const etaS = distLeft / (effectiveSpeed / 3.6);
+        const safeEtaS = isFinite(etaS) ? Math.min(etaS, 24 * 3600) : 0; 
 
-smoothSpeed = smoothSpeed * 0.8 + currentSpeed * 0.2;
+        const etaStr = new Date(Date.now() + safeEtaS * 1000)
+            .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-// Beveiliging: effectieve snelheid mag nooit 0 zijn voor de deling
-const effectiveSpeed = smoothSpeed > 0.2 ? smoothSpeed : (CONFIG.ms * 3.6);
-
-// --- ETA ---
-const distLeft = (cumDist.at(-1) || 0) - R.pos;
-const etaS = distLeft / (effectiveSpeed / 3.6);
-// Voorkom absurde tijden bij stilstand
-const safeEtaS = isFinite(etaS) ? Math.min(etaS, 24 * 3600) : 0; 
-
-const etaStr = new Date(Date.now() + safeEtaS * 1000)
-    .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    // --- WAYPOINT LOGICA ---
+        // --- WAYPOINT LOGICA ---
         waypoints.forEach(w => {
             if (w.passed || w.missed) return;
 
@@ -321,19 +324,13 @@ const etaStr = new Date(Date.now() + safeEtaS * 1000)
                     finished = true;
                     speak("Finish bereikt. Activiteit voltooid.");
 
-                    // HARD STOP: Stop GPS om batterij te sparen
                     if (watchId !== null) {
                         navigator.geolocation.clearWatch(watchId);
                         watchId = null;
-                        console.log("GPS gestopt bij finish.");
                     }
 
-                    // WAKELOCK VRIJGEVEN: Scherm mag weer uit
                     if (wakeLock) {
-                        wakeLock.release().then(() => {
-                            wakeLock = null;
-                            console.log("WakeLock vrijgegeven.");
-                        });
+                        wakeLock.release().then(() => { wakeLock = null; });
                     }
                 }
 
@@ -397,9 +394,22 @@ function updateUI(lat, lon, R, skmh, eta, avg, met) {
 }
 
 function fmt(s) { return new Date(s * 1000).toISOString().substr(11, 8); }
+    
 function getMet(s) { 
-    if (s < 0.5) return 1.0;
-    return document.getElementById('profile').value === 'wandelen' ? 4.0 : 7.0; 
+    if (s < 0.5) return 1.0; // Ruststand (basal metabolism)
+    
+    const profile = document.getElementById('profile').value;
+    
+    if (profile === 'wandelen') {
+        if (s > 6) return 5.0;  // Snelwandelen
+        if (s > 4) return 4.0;  // Gemiddeld tempo
+        return 3.0;             // Rustig wandelen
+    } else {
+        // Fietsen
+        if (s > 25) return 12.0; // Intensief
+        if (s > 18) return 8.0;  // Gemiddeld
+        return 6.0;              // Rustig toeristisch
+    }
 }
 
 DOM.gpxInput.onchange = e => {
