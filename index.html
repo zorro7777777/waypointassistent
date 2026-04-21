@@ -138,6 +138,7 @@ let isPaused = false, lastOffSpeech = 0, lastTrackIndex = 0;
 let speechQueue = [], isSpeaking = false;
 let wakeLock = null;
 let smoothSpeed = 0;
+let isOffRoute = false; // Nieuwe status-tracker
 
 const DOM = {
     uiNextWp: document.getElementById('ui-next-wp'), uiDist: document.getElementById('ui-dist'),
@@ -253,9 +254,25 @@ function startGPS() {
         // Bereken de actuele MET op basis van snelheid
         let met = getMet(skmh);
 
-        if (R.off > 40 && now - lastOffSpeech > 20000) {
-            speak(`Route alarm: ${Math.round(R.off)} meter`);
-            lastOffSpeech = now;
+        // --- ROUTE ALARM & HERSTEL ---
+        if (R.off > 40) {
+            // We zijn buiten de marge
+            if (!isOffRoute) {
+                // We waren net nog op de route, dus we gaan er nu AF
+                isOffRoute = true; 
+            }
+
+            if (now - lastOffSpeech > 20000) {
+                speak(`Route alarm: ${Math.round(R.off)} meter`);
+                lastOffSpeech = now;
+            }
+        } else {
+            // We zijn binnen de 40 meter marge
+            if (isOffRoute) {
+                // We waren off-route, maar nu zijn we weer terug!
+                speak("Route hersteld");
+                isOffRoute = false; 
+            }
         }
 
         // --- AFSTAND + SPORT DATA ---
