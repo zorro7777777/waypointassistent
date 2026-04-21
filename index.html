@@ -212,14 +212,23 @@ function copyCoords() {
 function handleStartPause() {
     if (track.length === 0) return alert("Laad eerst een GPX!");
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+    
     if (!watchId) {
         startGPS();
-        requestWakeLock(); 
+        requestWakeLock();
         DOM.startBtn.innerText = "⏸ PAUZE"; DOM.startBtn.className = "pause";
         DOM.standbyMsg.style.display = 'none'; DOM.liveUi.style.display = 'block';
         speak("Gestart");
     } else {
         isPaused = !isPaused;
+        
+        // WakeLock loslaten bij pauze, aanvragen bij hervatten
+        if (isPaused) {
+            if (wakeLock) { wakeLock.release(); wakeLock = null; }
+        } else {
+            requestWakeLock();
+        }
+
         DOM.startBtn.innerText = isPaused ? "▶ HERVAT" : "⏸ PAUZE";
         DOM.startBtn.className = isPaused ? "start" : "pause";
         speak(isPaused ? "Gepauzeerd" : "Hervat");
@@ -263,23 +272,27 @@ function startGPS() {
             }
         }
 
-        // --- STABIELE SNELHEID ---
-        const avg = sport.movingTime > 0 ? (tripDist / sport.movingTime) * 3.6 : 0;
-        const currentSpeed = skmh > 1 ? skmh : (avg || 0);
 
-        smoothSpeed = smoothSpeed * 0.8 + currentSpeed * 0.2;
+ // --- STABIELE SNELHEID ---
+// Alleen AVG berekenen als we langer dan 2 seconden bewegen
+const avg = sport.movingTime > 2 ? (tripDist / sport.movingTime) * 3.6 : 0;
+const currentSpeed = skmh > 1 ? skmh : (avg || 0);
 
-        const effectiveSpeed = smoothSpeed > 1 ? smoothSpeed : CONFIG.ms * 3.6;
+smoothSpeed = smoothSpeed * 0.8 + currentSpeed * 0.2;
 
-        // --- ETA ---
-        const distLeft = (cumDist.at(-1) || 0) - R.pos;
-        const etaS = distLeft / (effectiveSpeed / 3.6);
-        const safeEtaS = Math.min(etaS, 24 * 3600);
+// Beveiliging: effectieve snelheid mag nooit 0 zijn voor de deling
+const effectiveSpeed = smoothSpeed > 0.2 ? smoothSpeed : (CONFIG.ms * 3.6);
 
-        const etaStr = new Date(Date.now() + safeEtaS * 1000)
-            .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+// --- ETA ---
+const distLeft = (cumDist.at(-1) || 0) - R.pos;
+const etaS = distLeft / (effectiveSpeed / 3.6);
+// Voorkom absurde tijden bij stilstand
+const safeEtaS = isFinite(etaS) ? Math.min(etaS, 24 * 3600) : 0; 
 
-        // --- WAYPOINT LOGICA ---
+const etaStr = new Date(Date.now() + safeEtaS * 1000)
+    .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // --- WAYPOINT LOGICA ---
         waypoints.forEach(w => {
             if (w.passed || w.missed) return;
 
@@ -288,6 +301,7 @@ function startGPS() {
 
             if (d <= CONFIG.radius || (R.pos >= w.routePos && d < 40)) {
 
+                // Finish beveiliging: niet goedkeuren onder de 80% voortgang
                 if (w.name === "FINISH" && progress < 0.8) return;
 
                 w.passed = true;
@@ -306,6 +320,21 @@ function startGPS() {
                 if (w.name === "FINISH") {
                     finished = true;
                     speak("Finish bereikt. Activiteit voltooid.");
+
+                    // HARD STOP: Stop GPS om batterij te sparen
+                    if (watchId !== null) {
+                        navigator.geolocation.clearWatch(watchId);
+                        watchId = null;
+                        console.log("GPS gestopt bij finish.");
+                    }
+
+                    // WAKELOCK VRIJGEVEN: Scherm mag weer uit
+                    if (wakeLock) {
+                        wakeLock.release().then(() => {
+                            wakeLock = null;
+                            console.log("WakeLock vrijgegeven.");
+                        });
+                    }
                 }
 
             } else if (R.pos > w.routePos + 30) {
@@ -319,9 +348,13 @@ function startGPS() {
         lastPos = { lat, lon };
         updateUI(lat, lon, R, skmh, etaStr, avg, met);
 
-    }, null, { enableHighAccuracy: true });
+    }, err => console.error("GPS Fout:", err), { 
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0 
+    });
 }
-
+    
 function updateUI(lat, lon, R, skmh, eta, avg, met) {
     const next = waypoints.find(w => !w.passed && !w.missed);
 
