@@ -174,73 +174,58 @@ function startGPS() {
         if (finished || isPaused) return;
 
         const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = p.coords;
-        if (acc > 25) return;
+        if (acc > 30) return;
 
-        const now = Date.now(),
-              R = getRInfo(lat, lon),
-              skmh = (s || 0) * 3.6;
+        const now = Date.now();
+        const R = getRInfo(lat, lon);
+        const skmh = (s || 0) * 3.6;
 
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        // Off-route detectie
+        // --- OFF-ROUTE DETECTIE ---
         if (R.off > 40) {
             isOffRoute = true;
-            if (now - lastOffSpeech > 20000) {
-                speak(`Je bent van je route ${Math.round(R.off)} meter afgeweken.`);
+            if (now - lastOffSpeech > 30000) {
+                speak(`Route alarm: ${Math.round(R.off)} meter afwijking.`);
                 lastOffSpeech = now;
             }
-        } else if (isOffRoute && R.off < 20) {
+        } else if (isOffRoute && R.off < 15) {
             isOffRoute = false;
-            speak("Je bent terug op de route.");
+            speak("Terug op de route.");
         }
 
-        const nextWpIdx = waypoints.findIndex(w => !w.passed && !w.missed);
-        if (nextWpIdx === -1) return;
+        // --- STATS & ETA BEREKENING ---
+        if (lastPos && skmh > 0.5) {
+            const d = getDist(lastPos.lat, lastPos.lon, lat, lon);
+            tripDist += d;
+            sport.movingTime += (now - (sport.lastTick || now)) / 1000;
+            sport.steps += (d / CONFIG.th);
+        }
+        
+        const avgSpeedMS = sport.movingTime > 0 ? tripDist / sport.movingTime : CONFIG.ms;
+        const remD = cumDist[cumDist.length - 1] - R.pos;
+        const etaS = remD / (avgSpeedMS > 0.5 ? avgSpeedMS : CONFIG.ms);
+        const etaDate = new Date(Date.now() + etaS * 1000);
+        const etaStr = finished ? "FINISH" : etaDate.getHours().toString().padStart(2, '0') + ":" + etaDate.getMinutes().toString().padStart(2, '0');
 
+        // --- WAYPOINT LOGICA (MET JOUW VARIATIE) ---
         waypoints.forEach((w, i) => {
-            if (w.passed || w.missed || i > nextWpIdx + 2) return;
-
+            if (w.passed || w.missed) return;
             const dToWp = getDist(lat, lon, w.lat, w.lon);
-
-            // --- WAYPOINT BEREIKT ---
-            if (dToWp <= CONFIG.radius || (R.pos >= w.routePos && dToWp < 50)) {
-
-                if (w.name === "FINISH" && R.pos < (cumDist.at(-1) * 0.9)) return;
-
+            
+            // Check of punt bereikt is
+            if (dToWp <= CONFIG.radius || (R.pos >= w.routePos && dToWp < 40)) {
+                if (w.name === "FINISH" && R.pos < (cumDist.at(-1) * 0.95)) return;
+                
                 w.passed = true;
-                lastNextSpeech = 0;
+                speak(`Waypoint bereikt: ${w.name}`);
 
-                speak(`Waypoint bereikt. ${w.name}`);
-
+                // Zoek volgende punt voor de aankondiging
                 const next = waypoints.find((nw, idx) => !nw.passed && !nw.missed && idx > i);
-
                 if (next) {
                     const dNext = Math.round(next.routePos - w.routePos);
-                    const meth = document.getElementById('profile').value;
-
-                    // 🔥 DIRECT in queue (geen setTimeout)
-                    speak(`Ga verder naar ${next.name}. Ongeveer ${dNext} meter ${meth}.`);
-                }
-
-                if (w.name === "FINISH") {
-                    finished = true;
-                    speak("Finish bereikt.");
-                }
-
-            // --- WAYPOINT GEMIST ---
-            } else if (R.pos > w.routePos + 80 && dToWp > 60) {
-
-                w.missed = true;
-                lastNextSpeech = 0;
-
-                speak(`Waypoint ${w.name} gemist.`);
-
-                const next = waypoints.find((nw, idx) => !nw.passed && !nw.missed && idx > i);
-
-                if (next) {
-                    const dNext = Math.round(next.routePos - R.pos);
-
                     let msg;
+
                     if (dNext < 50) {
                         msg = `Bijna bij ${next.name}`;
                     } else {
@@ -252,16 +237,28 @@ function startGPS() {
                         ];
                         msg = phrases[Math.floor(Math.random() * phrases.length)];
                     }
-
-                    if (now - lastNextSpeech > 10000) {
-                        speak(msg);
-                        lastNextSpeech = now;
-                    }
+                    
+                    // Klein beetje vertraging zodat de "bereikt" en "volgende" melding niet door elkaar praten
+                    setTimeout(() => speak(msg), 2000);
                 }
+
+                if (w.name === "FINISH") { 
+                    finished = true; 
+                    speak("Gefeliciteerd, de finish is bereikt."); 
+                }
+
+            // Check of punt gemist is
+            } else if (R.pos > w.routePos + 100) {
+                w.missed = true;
+                speak(`Waypoint ${w.name} overgeslagen.`);
             }
         });
 
-    }, null, { enableHighAccuracy: true });
+        lastPos = { lat, lon };
+        sport.lastTick = now;
+        updateUI(lat, lon, R, skmh, etaStr, getMet(skmh));
+
+    }, err => console.error("GPS Error:", err), { enableHighAccuracy: true });
 }
 
         // Beweging / stats
