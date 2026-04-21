@@ -70,9 +70,16 @@
         <label><input type="checkbox" id="audioToggle" checked> Spraakassistent</label>
     </div>
 
-    <div style="margin-bottom: 10px; padding: 5px 0;">
-        OFF-ROUTE: <span id="ui-off-big" style="color:#00bfff; font-weight: bold; transition: all 0.3s ease; display: inline-block;">0m</span>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 5px 0;">
+    <div style="flex: 1;">
+        OFF-ROUTE:<br>
+        <span id="ui-off-big" style="color:#00bfff; font-weight: bold; font-size: 2.2rem; transition: all 0.3s ease; display: inline-block;">0m</span>
     </div>
+    <div style="flex: 1; text-align: right;">
+        KM/U:<br>
+        <span id="ui-speed-big" style="color:#00bfff; font-weight: bold; font-size: 2.2rem; display: inline-block;">0.0</span>
+    </div>
+</div>
 
     <input type="file" id="gpxInput" accept=".gpx">
     
@@ -303,16 +310,20 @@ function updateUI(lat, lon, R, skmh, eta, avg, met) {
     DOM.uiLat.innerText = lat.toFixed(6); DOM.uiLon.innerText = lon.toFixed(6);
     DOM.uiEta.innerText = eta;
 
+    // NIEUW: Werk de grote blauwe snelheidsmeter rechtsboven bij
+    const speedElement = document.getElementById('ui-speed-big');
+    if (speedElement) speedElement.innerText = skmh.toFixed(1);
+
     const off = Math.round(R.off);
     DOM.uiOffBig.innerText = off + "m";
     
-    // Kleur-logica voor de afwijking
+    // Kleur-logica voor de afwijking (blijft hetzelfde)
     if (off > 40) {
         DOM.uiOffBig.style.color = 'red'; 
         DOM.uiOffBig.style.fontSize = '2.2rem'; 
         DOM.uiOffBig.style.fontWeight = '900';
     } else {
-        DOM.uiOffBig.style.color = '#00bfff'; // Altijd blauw als het goed is
+        DOM.uiOffBig.style.color = '#00bfff'; // Jouw mooie blauwe kleur
         DOM.uiOffBig.style.fontSize = '2.2rem';
         DOM.uiOffBig.style.fontWeight = 'bold';
     }
