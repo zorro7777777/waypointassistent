@@ -279,13 +279,21 @@ document.getElementById('gpxInput').onchange = e => {
         cumDist = [0];
         for(let i=0; i < track.length-1; i++) cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
         
+        // Haal bestaande waypoints op
         waypoints = [...xml.getElementsByTagName('wpt')].map(w => ({
             name: w.getElementsByTagName('name')[0]?.textContent || "WPT",
             lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'), passed: false, missed: false
         }));
         
+        // VOEG START TOE (als die er nog niet is)
+        if (!waypoints.find(w => w.name === "START")) {
+            waypoints.push({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false, missed: false });
+        }
+        
+        // VOEG FINISH TOE
         waypoints.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false });
         
+        // Bereken route-posities
         waypoints.forEach(w => {
             let bD = Infinity, bP = 0;
             track.forEach((t, idx) => { 
@@ -294,6 +302,7 @@ document.getElementById('gpxInput').onchange = e => {
             });
             w.routePos = bP;
         });
+        
         waypoints.sort((a,b) => a.routePos - b.routePos);
         DOM.standbyMsg.innerHTML = "ROUTE GELADEN<br>Druk op START";
         updateWPUI();
