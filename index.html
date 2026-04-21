@@ -391,22 +391,37 @@ function startGPS() {
         }
 
         // --- WAYPOINTS LOGICA ---
+      // --- WAYPOINTS LOGICA (GEOPTIMALISEERD VOOR LUSSEN) ---
+        const nextWpIdx = waypoints.findIndex(w => !w.passed);
+
         waypoints.forEach((w, i) => {
             if (w.passed) return;
             
+            // Beveiliging voor lussen: 
+            // Alleen het eerstvolgende waypoint (of het punt daarna als backup) mag gecheckt worden.
+            // Dit voorkomt dat de FINISH al bij de START gepasseerd wordt.
+            if (i > nextWpIdx + 1) return; 
+
             const dToWp = getDist(smoothLat, smoothLon, w.lat, w.lon);
             
-            // Check of we bij het waypoint zijn (radius of gepasseerd op route)
-            if (dToWp <= CONFIG.radius || (R.pos >= w.routePos && dToWp < 50)) {
+            // Check of we bij het waypoint zijn
+            const isInsideRadius = dToWp <= CONFIG.radius;
+            const isPassedOnRoute = (R.pos >= w.routePos && dToWp < 50);
+
+            if (isInsideRadius || isPassedOnRoute) {
+                // Extra veiligheid voor de Finish: 
+                // De finish mag pas na 90% van de totale route-afstand behaald worden
+                if (w.name === "FINISH" && R.pos < (cumDist.at(-1) * 0.9)) return;
+
                 w.passed = true;
                 
                 // 1. Kondig huidige waypoint aan
                 speak(`Waypoint bereikt. ${w.name}`);
                 
-                // 2. Zoek en kondig het volgende waypoint aan
-                const nextWp = waypoints.find((nw, idx) => !nw.passed && idx > i);
-                if (nextWp) {
-                    speak(`Volgend waypoint. ${nextWp.name}`);
+                // 2. Kondig het volgende waypoint aan (als die er is)
+                const nextOne = waypoints.find((nw, idx) => !nw.passed && idx > i);
+                if (nextOne) {
+                    speak(`Volgend punt: ${nextOne.name}`);
                 }
 
                 if (w.name === "FINISH") { 
