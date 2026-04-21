@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WAYPOINTASSISTENT PRO - V3.9</title>
+    <title>WAYPOINTASSISTENT PRO - V4.0</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -32,7 +32,7 @@
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0;">WAYPOINTASSISTENT PRO V3.9</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0;">WAYPOINTASSISTENT PRO V4.0</h1>
 
     <div class="config-section" id="configArea">
         <div class="row">
@@ -92,9 +92,7 @@
 
     <div id="tableCon" style="display:none;">
         <div class="stat-bar" id="statBar">
-            <span style="color:#2ecc71">✅ 0</span>
-            <span style="color:#e74c3c">❌ 0</span>
-            <span style="color:#3498db">⏳ 0</span>
+            <span style="color:#2ecc71">✅ 0</span> <span style="color:#e74c3c">❌ 0</span> <span style="color:#3498db">⏳ 0</span>
         </div>
         <table><tbody id="list"></tbody></table>
     </div>
@@ -188,10 +186,17 @@ function handleStartPause() {
         document.getElementById('startBtn').innerText = "⏸ PAUZE";
         document.getElementById('live-ui').style.display = 'block';
         document.getElementById('standby-msg').style.display = 'none';
-        speak("Gestart.");
+        speak("Systeem gestart.");
     } else {
         isPaused = !isPaused;
-        document.getElementById('startBtn').innerText = isPaused ? "▶ HERVAT" : "⏸ PAUZE";
+        const btn = document.getElementById('startBtn');
+        if (isPaused) {
+            btn.innerText = "▶ HERVAT";
+            speak("Systeem gepauzeerd.");
+        } else {
+            btn.innerText = "⏸ PAUZE";
+            speak("Systeem hervat.");
+        }
     }
 }
 
@@ -214,7 +219,6 @@ function startGPS() {
 
         if (smoothLat !== null) {
             const jump = getDist(smoothLat, smoothLon, rLat, rLon);
-            // ALTIJD MET BEREKENEN ALS WE REËEL BEWEGEN
             if (curKmh > 1.2) {
                 met = (document.getElementById('profile').value === 'wandelen') ? (0.75 * curKmh + 0.5) : (0.4 * curKmh);
             }
@@ -236,7 +240,6 @@ function startGPS() {
         const R = getRInfo(rLat, rLon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        // WP check
         waypoints.forEach(w => {
             if (w.passed || w.missed) return;
             const d = getDist(rLat, rLon, w.lat, w.lon);
