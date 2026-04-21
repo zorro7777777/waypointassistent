@@ -4,55 +4,54 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WAYPOINTASSISTENT PRO - V3.6</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 5px; background: #f0f3f5; color: #2c3e50; font-size: 13px; }
-    .card { max-width: 500px; margin: auto; background: white; padding: 10px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-    
-    #info { background: #1a1a1a; color: #00ff00; padding: 12px; border-radius: 8px; font-family: monospace; margin: 8px 0; border-left: 5px solid #27ae60; }
-    
-    .gear-icon { float: right; font-size: 1.2rem; cursor: pointer; opacity: 0.7; }
-    .highlight { color: #fff; font-weight: bold; font-size: 1.1rem; }
-    .field-yellow { color: #ffff00; font-weight: bold; }
-    .field-green { color: #00ff00; font-weight: bold; }
-    /* NIEUW: Blauwe velden */
-    .field-blue { color: #00bfff; font-weight: bold; }
-    
-    .config-section { background: #ecf0f1; padding: 10px; border-radius: 8px; margin-bottom: 10px; display: none; }
-    .row { display: flex; gap: 5px; align-items: center; margin-bottom: 8px; }
-    
-    button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; color: white; cursor: pointer; flex: 1; }
-    .start { background: #27ae60; flex: 2; } 
-    .pause { background: #f39c12; flex: 2; } 
-    
-    #gpxInput { width:100%; margin-bottom:10px; border:1px dashed #ccc; padding:10px; border-radius:8px; box-sizing: border-box; }
-    
-    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-    td { padding: 6px 4px; border-bottom: 1px solid #f1f1f1; }
-    .strikethrough { text-decoration: line-through; opacity: 0.6; }
-    
-    hr { border: 0; border-top: 1px solid #333; margin: 6px 0; }
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 5px; background: #f0f3f5; color: #2c3e50; font-size: 13px; }
+        .card { max-width: 500px; margin: auto; background: white; padding: 10px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        
+        #info { background: #1a1a1a; color: #00ff00; padding: 12px; border-radius: 8px; font-family: monospace; margin: 8px 0; border-left: 5px solid #27ae60; }
+        
+        .gear-icon { float: right; font-size: 1.2rem; cursor: pointer; opacity: 0.7; }
+        .highlight { color: #fff; font-weight: bold; font-size: 1.1rem; }
+        .field-yellow { color: #ffff00; font-weight: bold; }
+        .field-green { color: #00ff00; font-weight: bold; }
+        .field-blue { color: #00bfff; font-weight: bold; }
+        
+        .config-section { background: #ecf0f1; padding: 10px; border-radius: 8px; margin-bottom: 10px; display: none; }
+        .row { display: flex; gap: 5px; align-items: center; margin-bottom: 8px; }
+        
+        button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; color: white; cursor: pointer; flex: 1; }
+        .start { background: #27ae60; flex: 2; } 
+        .pause { background: #f39c12; flex: 2; } 
+        
+        #gpxInput { width:100%; margin-bottom:10px; border:1px dashed #ccc; padding:10px; border-radius:8px; box-sizing: border-box; }
+        
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        td { padding: 6px 4px; border-bottom: 1px solid #f1f1f1; }
+        .strikethrough { text-decoration: line-through; opacity: 0.6; }
+        
+        hr { border: 0; border-top: 1px solid #333; margin: 6px 0; }
 
-    .coord-container {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 10px;
-        user-select: none;
-        -webkit-user-select: none;
-    }
+        .coord-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
 
-    .copy-btn { 
-        background: #333; 
-        color: #00ff00; 
-        padding: 8px 12px; 
-        font-size: 0.7rem; 
-        border-radius: 6px; 
-        border: 1px solid #00ff00; 
-        cursor: pointer;
-        pointer-events: auto;
-    }
-    .copy-btn:active { background: #00ff00; color: #000; }
-</style>
+        .copy-btn { 
+            background: #333; 
+            color: #00ff00; 
+            padding: 8px 12px; 
+            font-size: 0.7rem; 
+            border-radius: 6px; 
+            border: 1px solid #00ff00; 
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        .copy-btn:active { background: #00ff00; color: #000; }
+    </style>
 </head>
 <body>
 
@@ -72,7 +71,7 @@
     </div>
 
     <div style="margin-bottom: 10px; padding: 5px 0;">
-        OFF-ROUTE: <span id="ui-off-big" style="color:#00ff00; font-weight: bold; transition: all 0.3s ease; display: inline-block;">0m</span>
+        OFF-ROUTE: <span id="ui-off-big" style="color:#00bfff; font-weight: bold; transition: all 0.3s ease; display: inline-block;">0m</span>
     </div>
 
     <input type="file" id="gpxInput" accept=".gpx">
@@ -97,8 +96,7 @@
                 <div>AVG : <span id="ui-avg-speed" class="field-green">0.0 km/u</span></div>
                 <div>KM/U: <span id="ui-speed" class="field-green">0.0</span></div>
                 <div>MET : <span id="ui-met" class="field-green">1.0</span></div>
-                <div>OFF : <span id="ui-off-small" class="field-green">0m</span></div>
-            </div>
+                </div>
             <hr>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                 <div><span id="ui-unit-label">STAPPEN:</span> <span id="ui-steps" class="field-green">0</span></div>
@@ -138,7 +136,7 @@ const DOM = {
     uiKcal: document.getElementById('ui-kcal'),
     uiUnitLabel: document.getElementById('ui-unit-label'), uiMovTime: document.getElementById('ui-mov-time'),
     uiPauseTime: document.getElementById('ui-pause-time'), uiAvgSpeed: document.getElementById('ui-avg-speed'),
-    uiOffBig: document.getElementById('ui-off-big'), uiOffSmall: document.getElementById('ui-off-small'),
+    uiOffBig: document.getElementById('ui-off-big'), 
     uiLat: document.getElementById('ui-lat'), uiLon: document.getElementById('ui-lon'), 
     uiEta: document.getElementById('ui-eta'), uiMet: document.getElementById('ui-met'), 
     uiSpeed: document.getElementById('ui-speed'), liveUi: document.getElementById('live-ui'), 
@@ -277,12 +275,17 @@ function updateUI(lat, lon, R, skmh, eta, avg, met) {
     DOM.uiEta.innerText = eta;
 
     const off = Math.round(R.off);
-    DOM.uiOffSmall.innerText = off + "m";
     DOM.uiOffBig.innerText = off + "m";
+    
+    // Kleur-logica voor de afwijking
     if (off > 40) {
-        DOM.uiOffBig.style.color = 'red'; DOM.uiOffBig.style.fontSize = '2.2rem'; DOM.uiOffBig.style.fontWeight = '900';
+        DOM.uiOffBig.style.color = 'red'; 
+        DOM.uiOffBig.style.fontSize = '2.2rem'; 
+        DOM.uiOffBig.style.fontWeight = '900';
     } else {
-        DOM.uiOffBig.style.color = '#00bfff'; // Hier veranderen naar blauw!
+        DOM.uiOffBig.style.color = '#00bfff'; // Altijd blauw als het goed is
+        DOM.uiOffBig.style.fontSize = '1.6rem';
+        DOM.uiOffBig.style.fontWeight = 'bold';
     }
     updateWPUI();
 }
