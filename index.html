@@ -210,51 +210,51 @@ function startGPS() {
         const etaDate = new Date(Date.now() + etaS * 1000);
         const etaStr = finished ? "FINISH" : etaDate.getHours().toString().padStart(2, '0') + ":" + etaDate.getMinutes().toString().padStart(2, '0');
 
-        // --- WAYPOINT LOGICA ---
+   // --- WAYPOINT LOGICA ---
         waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             const dToWp = getDist(lat, lon, w.lat, w.lon);
             
+            // Controleer of punt bereikt is
             if (dToWp <= CONFIG.radius || (R.pos >= w.routePos && dToWp < 40)) {
+                // Speciale check voor Finish
                 if (w.name === "FINISH" && R.pos < (cumDist.at(-1) * 0.95)) return;
                 
                 w.passed = true;
                 speak(`Waypoint bereikt: ${w.name}`);
 
-                const next = waypoints.find((nw, idx) => !nw.passed && !nw.missed && idx > i);
-                if (next) {
-                    const dNext = Math.round(next.routePos - w.routePos);
+                // Zoek specifiek naar het EERSTVOLGENDE punt dat nog niet gepasseerd is
+                // We filteren de lijst om er zeker van te zijn dat we niet het huidige punt pakken
+                const next = waypoints.find(nw => !nw.passed && !nw.missed);
+                
+                if (next && next.name !== "FINISH") {
+                    const dNext = Math.round(next.routePos - R.pos);
                     let msg;
-                    if (dNext < 50) {
-                        msg = `Bijna bij ${next.name}`;
+                    
+                    if (dNext < 100) {
+                        msg = `Snel gevolgd door ${next.name}`;
                     } else {
                         const phrases = [
+                            `Uw volgende punt is waypoint ${next.name}`,
                             `Ga verder naar waypoint ${next.name}`,
                             `Op naar waypoint ${next.name}`,
-                            `De volgende bestemming is ${next.name}`,
-                            `Je volgende waypoint is ${next.name}`
+                            `Het volgende waypoint is ${next.name}`
                         ];
                         msg = phrases[Math.floor(Math.random() * phrases.length)];
                     }
-                    setTimeout(() => speak(msg), 2000);
+                    // Verhoog de delay iets naar 2.5s zodat de eerste zin zeker klaar is
+                    setTimeout(() => speak(msg), 2500);
                 }
 
                 if (w.name === "FINISH") { 
                     finished = true; 
                     speak("Gefeliciteerd, de finish is bereikt."); 
                 }
-            } else if (R.pos > w.routePos + 100) {
+            } else if (R.pos > w.routePos + 150) { // Iets ruimere marge voor 'missed'
                 w.missed = true;
-                speak(`Waypoint ${w.name} overgeslagen.`);
+                speak(`Waypoint ${w.name} voorbij gereden.`);
             }
         });
-
-        lastPos = { lat, lon };
-        sport.lastTick = now;
-        updateUI(lat, lon, R, skmh, etaStr, getMet(skmh));
-
-    }, err => console.error("GPS Fout:", err), { enableHighAccuracy: true });
-}
 
 function updateUI(lat, lon, R, skmh, eta, met) {
     const next = waypoints.find(w => !w.passed && !w.missed);
