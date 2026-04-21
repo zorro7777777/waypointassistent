@@ -99,7 +99,7 @@
 <script>
 const PROFS = {
     wandelen: { radius: 12, th: 0.67, minJump: 1.5, minSpeed: 0.5 },
-    fietsen:  { radius: 25, th: 2.10, minJump: 3.5, minSpeed: 3.5 }
+    fietsen:  { radius: 25, th: 2.10, minJump: 3.5, minSpeed: 1 }
 };
 
 let CONFIG = { ...PROFS.wandelen };
@@ -250,7 +250,7 @@ function startGPS() {
                 w.passed = true;
                 speak("Bereikt: " + w.name);
                 updateTable();
-            } else if (maxRoutePos > w.routePos + 70) {
+            } else if (maxRoutePos > w.routePos + 25) {
                 w.missed = true;
                 speak("Waypoint gemist: " + w.name);
                 updateTable();
