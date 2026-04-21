@@ -409,64 +409,33 @@ function startGPS() {
                 }
                 lastEtaUpdate = now;
             }
-document.getElementById('display-content').innerHTML = `
-<div class="top-row">
-    <div class="top-box">
-        <div class="label">VOLGEND DOEL</div>
-        <div class="value">${finished ? 'FINISH' : (next ? next.name : '---')}</div>
-    </div>
-    <div class="top-box" style="text-align:right;">
-        <div class="label">AFSTAND</div>
-        <div class="value">${(next && !finished) ? Math.max(0, Math.round(next.routePos - R.pos)) : 0} m</div>
-    </div>
-</div>
-
-<div class="dash-grid">
-    <div class="dash-box">
-        <span class="label">${CONFIG.unit.toUpperCase()}</span>
-        <span class="value">${Math.round(sport.steps)}</span>
-    </div>
-    <div class="dash-box">
-        <span class="label">TRIP AFSTAND</span>
-        <span class="value">${(tripDist/1000).toFixed(3)} km</span>
-    </div>
-    <div class="dash-box">
-        <span class="label">BEWOGEN</span>
-        <span class="value">${fmtT(sport.movingTime)}</span>
-    </div>
-    <div class="dash-box">
-        <span class="label">PAUZE</span>
-        <span class="value">${fmtT(sport.idleTime)}</span>
-    </div>
-    <div class="dash-box">
-        <span class="label">AANKOMST</span>
-        <span class="value">${finished ? 'BEREIKT' : cachedArrival}</span>
-    </div>
-    <div class="dash-box">
-        <span class="label">ENERGIE</span>
-        <span class="value">${Math.round(sport.kcal)} kcal</span>
-    </div>
-</div>
-
-<div class="subinfo">
-    <b>SNELHEID:</b> ${skmh.toFixed(1)} km/u
-    <span style="margin-left:10px;"><b>GEM:</b> ${avgV.toFixed(1)}</span>
-    <br>
-    <b>OFF-TRACK:</b> 
-    <span style="color:${R.off > 35 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)} m</span>
-    <span style="margin-left:10px;"><b>ACC:</b> ${acc.toFixed(0)} m</span>
-    <div class="coords">LAT: ${smoothLat.toFixed(6)} | LON: ${smoothLon.toFixed(6)}</div>
-</div>
-
-<button class="copy-btn" onclick="navigator.clipboard.writeText('${smoothLat.toFixed(6)},${smoothLon.toFixed(6)}')">
-    📍 KOPIEER COÖRDINATEN
-</button>
-            `;
-            lastUiUpdate = now;
-        }
-        sport.lastTick = now;
-    }, e => console.error(e), { enableHighAccuracy: true, maximumAge: 0 });
+        document.getElementById('display-content').innerHTML = `
+            <b style="color:#ffff00">VOLGEND:</b><br>
+            <span class="highlight" style="color:#00ff00;">${finished ? 'FINISH' : (next ? next.name : '---')}</span><br>
+            <b>AFSTAND:</b> <span class="highlight">${(next && !finished) ? Math.max(0, Math.round(next.routePos - R.pos)) : 0}m</span><br>
+            <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
+            <b>${CONFIG.unit.toUpperCase()}:</b> <span class="field-green">${Math.round(sport.steps)}</span><br>
+            <b>TRIP:</b> <span class="field-green">${(tripDist/1000).toFixed(3)} km</span><br>
+            <b>BEWOGEN TIJD:</b> <span class="field-green">${fmtT(sport.movingTime)}</span><br>
+            <b>PAUZE TIJD:</b> <span class="field-green">${fmtT(sport.idleTime)}</span><br>
+            <b>AANKOMST:</b> <span class="field-green">${finished ? 'BEREIKT' : cachedArrival}</span><br>
+            <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
+            <b>SPEED:</b> ${skmh.toFixed(1)} km/u<br>
+            <b>AVG SPEED:</b> ${avgV.toFixed(2)} km/u<br>
+            <b>ENERGIE:</b> ${Math.round(sport.kcal)} kcal<br>
+            <b>POWER:</b> ${metVal.toFixed(1)} MET<br>
+            <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
+            <b>OFF-TRACK:</b> <span style="color:${R.off > 50 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span><br>
+            <b>ACCURACY:</b> ${acc.toFixed(0)}m<br>
+            <span class="field-yellow">LAT: ${smoothLat.toFixed(6)}</span>
+            <span class="field-yellow">LON: ${smoothLon.toFixed(6)}</span>
+            <button class="copy-btn" onclick="navigator.clipboard.writeText('${smoothLat.toFixed(6)},${smoothLon.toFixed(6)}')">📍 KOPIEER COÖRDINATEN</button>
+        `;
+        
+        sport.lastTick = now; // Update tijdstempel voor de volgende meting
+    }, err => console.error(err), { enableHighAccuracy: true, maximumAge: 0 });
 }
+
     
 function copyPos(lat, lon) {
     const txt = `${lat.toFixed(6)},${lon.toFixed(6)}`;
