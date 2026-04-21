@@ -220,7 +220,7 @@ function startGPS() {
         const skmh = (s || 0) * 3.6;
         const met = getMet(skmh);
 
-        if (R.off > 40 && now - lastOffSpeech > 30000) {
+        if (R.off > 40 && now - lastOffSpeech > 20000) {
             speak(`Route alarm: ${Math.round(R.off)} meter`);
             lastOffSpeech = now;
         }
@@ -254,7 +254,7 @@ function startGPS() {
         }
 
         w.passed = true;
-        speak(`Punt bereikt: ${w.name}`);
+        speak(`Je nadert waypoint: ${w.name}`);
         
         const next = waypoints.find(nw => !nw.passed && !nw.missed);
         if (next) {
@@ -267,11 +267,11 @@ function startGPS() {
             finished = true; 
             speak("Gefeliciteerd, finish bereikt."); 
         }
-    } else if (R.pos > w.routePos + 50) { 
+    } else if (R.pos > w.routePos + 15) { 
         // Voorkom dat de FINISH als 'gemist' wordt gemarkeerd aan het begin
         if (w.name !== "FINISH") {
             w.missed = true; 
-            speak(`${w.name} gemist.`); 
+            speak(`Je hebt waypoint ${w.name} gemist.`);
         }
     }
 });
@@ -306,7 +306,7 @@ function updateUI(lat, lon, R, skmh, eta, avg, met) {
         DOM.uiOffBig.style.fontWeight = '900';
     } else {
         DOM.uiOffBig.style.color = '#00bfff'; // Altijd blauw als het goed is
-        DOM.uiOffBig.style.fontSize = '1.8rem';
+        DOM.uiOffBig.style.fontSize = '2.2rem';
         DOM.uiOffBig.style.fontWeight = 'bold';
     }
     updateWPUI();
