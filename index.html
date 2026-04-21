@@ -21,6 +21,8 @@
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
         td { padding: 10px 5px; border-bottom: 1px solid #f1f1f1; }
         hr { border: 0; border-top: 1px solid #333; margin: 8px 0; }
+        .copy-btn { background: #444; color: #00ff00; padding: 4px 8px; font-size: 0.7rem; border-radius: 4px; float: right; cursor: pointer; border: 1px solid #00ff00; }
+        .copy-btn:active { background: #00ff00; color: #000; }
     </style>
 </head>
 <body>
@@ -69,8 +71,11 @@
             <hr>
             <span style="color:#aaa; font-size:0.8rem;" id="ui-unit-label">STAPPEN:</span> <span id="ui-steps" class="field-green">0</span>
             <hr>
-            <span class="field-yellow">LAT: <span id="ui-lat">0.000000</span></span>
-            <span class="field-yellow">LON: <span id="ui-lon">0.000000</span></span>
+            <div style="margin-top:10px;">
+                <span class="copy-btn" id="copyCoords" onclick="copyCoords()">📋 KOPIEER</span>
+                <span class="field-yellow">LAT: <span id="ui-lat">0.000000</span></span>
+                <span class="field-yellow">LON: <span id="ui-lon">0.000000</span></span>
+            </div>
         </div>
     </div>
 
@@ -149,6 +154,22 @@ function getRInfo(lat, lon) {
     return { pos: bP, off: bD };
 }
 
+function copyCoords() {
+    const lat = DOM.uiLat.innerText;
+    const lon = DOM.uiLon.innerText;
+    const text = `${lat}, ${lon}`;
+    
+    // Moderne klembord methode voorkomt de blauwe selectielijn
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyCoords');
+        const originalText = btn.innerText;
+        btn.innerText = "✅ OK!";
+        setTimeout(() => btn.innerText = originalText, 2000);
+    }).catch(err => {
+        console.error("Kopieerfout: ", err);
+    });
+}
+
 function handleStartPause() {
     if (track.length === 0) { alert("Laad eerst een GPX bestand!"); return; }
     initAudio();
@@ -204,7 +225,6 @@ function startGPS() {
         const etaDate = new Date(Date.now() + etaS * 1000);
         const etaStr = finished ? "FINISH" : etaDate.getHours().toString().padStart(2, '0') + ":" + etaDate.getMinutes().toString().padStart(2, '0');
 
-        // --- WAYPOINT LOGICA MET VERFIJNDE SPRAAK ---
         waypoints.forEach((w) => {
             if (w.passed || w.missed) return;
             const dToWp = getDist(lat, lon, w.lat, w.lon);
@@ -219,10 +239,10 @@ function startGPS() {
                 if (volgende && volgende.name !== "FINISH") {
                     setTimeout(() => {
                         const phrases = [
-                            `Het volgende waypoint is ${volgende.name}`,
-                            `Ga verder naar waypoint ${volgende.name}`,
-                            `Op naar volgend waypoint ${volgende.name}`,
-                            `Ga nu naar waypoint ${volgende.name}`
+                            `Volgende punt is ${volgende.name}`,
+                            `Ga verder naar ${volgende.name}`,
+                            `Op naar ${volgende.name}`,
+                            `Koers naar ${volgende.name}`
                         ];
                         const msg = phrases[Math.floor(Math.random() * phrases.length)];
                         speak(msg);
