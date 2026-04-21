@@ -242,10 +242,10 @@ function startGPS() {
                         msg = `Bijna bij ${next.name}`;
                     } else {
                         const phrases = [
-                            `Ga verder naar ${next.name}`,
-                            `Op naar ${next.name}`,
-                            `Volgende bestemming: ${next.name}`,
-                            `Je volgende punt is ${next.name}`
+                            `Ga verder naar waypoint ${next.name}`,
+                            `Op naar waypoint ${next.name}`,
+                            `De volgende bestemming is: ${next.name}`,
+                            `Je volgende waypoint is ${next.name}`
                         ];
                         msg = phrases[Math.floor(Math.random() * phrases.length)];
                     }
