@@ -168,65 +168,124 @@ function getMet(skmh) {
 }
 
 function startGPS() {
+    let lastNextSpeech = 0;
+
     watchId = navigator.geolocation.watchPosition(p => {
         if (finished || isPaused) return;
+
         const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = p.coords;
         if (acc > 25) return;
-        const now = Date.now(), R = getRInfo(lat, lon), skmh = (s || 0) * 3.6;
+
+        const now = Date.now(),
+              R = getRInfo(lat, lon),
+              skmh = (s || 0) * 3.6;
+
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
+        // Off-route detectie
         if (R.off > 40) {
             isOffRoute = true;
             if (now - lastOffSpeech > 20000) {
-                speak(`Je bent van je route ${Math.round(R.off)} meters afgeweken.`);
+                speak(`Je bent van je route ${Math.round(R.off)} meter afgeweken.`);
                 lastOffSpeech = now;
             }
         } else if (isOffRoute && R.off < 20) {
-            isOffRoute = false; speak("Je bent terug op de route aangekomen.");
+            isOffRoute = false;
+            speak("Je bent terug op de route.");
         }
 
         const nextWpIdx = waypoints.findIndex(w => !w.passed && !w.missed);
+
         waypoints.forEach((w, i) => {
             if (w.passed || w.missed || i > nextWpIdx + 1) return;
+
             const dToWp = getDist(lat, lon, w.lat, w.lon);
-            
+
+            // --- WAYPOINT BEREIKT ---
             if (dToWp <= CONFIG.radius || (R.pos >= w.routePos && dToWp < 50)) {
+
                 if (w.name === "FINISH" && R.pos < (cumDist.at(-1) * 0.9)) return;
+
                 w.passed = true;
                 speak(`Waypoint bereikt. ${w.name}`);
-                
+
                 const next = waypoints.find((nw, idx) => !nw.passed && !nw.missed && idx > i);
+
                 if (next) {
                     const dNext = Math.round(next.routePos - w.routePos);
                     const meth = document.getElementById('profile').value;
-                    setTimeout(() => speak(`Ga nu naar waypoint ${next.name}. Het is ongeveer ${dNext} meter ${meth}.`), 1200);
+
+                    setTimeout(() => {
+                        speak(`Ga verder naar ${next.name}. Ongeveer ${dNext} meter ${meth}.`);
+                    }, 1200);
                 }
-                if (w.name === "FINISH") { finished = true; speak("Finish bereikt."); }
+
+                if (w.name === "FINISH") {
+                    finished = true;
+                    speak("Finish bereikt.");
+                }
+
+            // --- WAYPOINT GEMIST ---
             } else if (R.pos > w.routePos + 50 && dToWp > 50) {
+
                 w.missed = true;
                 speak(`Waypoint ${w.name} gemist.`);
+
                 const next = waypoints.find((nw, idx) => !nw.passed && !nw.missed && idx > i);
-                if (next) speak(`Ga naar volgend punt: ${next.name}`);
+
+                if (next) {
+                    const dNext = Math.round(next.routePos - R.pos);
+
+                    let msg;
+
+                    if (dNext < 50) {
+                        msg = `Bijna bij ${next.name}`;
+                    } else {
+                        const phrases = [
+                            `Ga verder naar ${next.name}`,
+                            `Op naar ${next.name}`,
+                            `Volgende bestemming: ${next.name}`,
+                            `Je volgende punt is ${next.name}`
+                        ];
+                        msg = phrases[Math.floor(Math.random() * phrases.length)];
+                    }
+
+                    // Anti-spam (max 1x per 10 sec)
+                    if (Date.now() - lastNextSpeech > 10000) {
+                        speak(msg);
+                        lastNextSpeech = Date.now();
+                    }
+                }
             }
         });
 
+        // Beweging / stats
         if (lastPos && skmh > 1) {
             const d = getDist(lastPos.lat, lastPos.lon, lat, lon);
-            tripDist += d; sport.movingTime += (now - (sport.lastTick || now)) / 1000;
+            tripDist += d;
+            sport.movingTime += (now - (sport.lastTick || now)) / 1000;
             sport.steps += (d / CONFIG.th);
         }
 
+        // ETA
         const avgSpeedMS = sport.movingTime > 0 ? tripDist / sport.movingTime : CONFIG.ms;
         const remD = cumDist[cumDist.length - 1] - R.pos;
         const etaS = remD / (avgSpeedMS > 0.5 ? avgSpeedMS : CONFIG.ms);
-        const etaDate = new Date(Date.now() + etaS * 1000);
-        const etaStr = finished ? "FINISH" : etaDate.getHours().toString().padStart(2, '0') + ":" + etaDate.getMinutes().toString().padStart(2, '0');
 
-        lastPos = { lat, lon }; sport.lastTick = now;
+        const etaDate = new Date(Date.now() + etaS * 1000);
+        const etaStr = finished
+            ? "FINISH"
+            : etaDate.getHours().toString().padStart(2, '0') + ":" +
+              etaDate.getMinutes().toString().padStart(2, '0');
+
+        lastPos = { lat, lon };
+        sport.lastTick = now;
+
         updateUI(lat, lon, R, skmh, etaStr, getMet(skmh));
+
     }, null, { enableHighAccuracy: true });
 }
-
+    
 function updateUI(lat, lon, R, skmh, eta, met) {
     const next = waypoints.find(w => !w.passed && !w.missed);
     DOM.uiNextWp.textContent = next ? next.name : (finished ? "FINISH" : "---");
