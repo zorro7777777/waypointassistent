@@ -12,7 +12,7 @@
         #info { 
             background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; 
             font-family: 'Cascadia Code', 'Source Code Pro', monospace; margin: 10px 0; 
-            min-height: 540px; line-height: 1.4; 
+            min-height: 520px; line-height: 1.4; 
             border-left: 5px solid #27ae60; font-size: 1.05rem; position: relative; 
             overflow: hidden;
         }
@@ -98,7 +98,6 @@
                 <hr>
                 <div style="font-size: 0.85rem;">
                     Snelheid: <span id="ui-speed">0.0</span> km/u (Gem: <span id="ui-avg-speed">0.0</span>)<br>
-                    <b>POWER:</b> <span id="ui-power" class="field-green">0.0</span> MET<br>
                     Nauwkeurigheid: <span id="ui-acc">0m</span> | Off-track: <span id="ui-off" style="color:#00ff00">0m</span>
                 </div>
                 <hr>
@@ -120,6 +119,11 @@
 <script>
 /**
  * --- WAYPOINTASSISTENT PRO V3.1 ---
+ * Updates:
+ * - DOM Caching voor CPU besparing.
+ * - Sliding Window Average Speed voor stabiele ETA.
+ * - Event-based Copy button handling.
+ * - Verbeterde Off-route herkenning.
  */
 
 const PROFS = {
@@ -135,7 +139,7 @@ let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
 let alertTime = 0, isOffRoute = false, isPaused = false;
 let lastEtaUpdate = 0, lastUiUpdate = 0, cachedArrival = "--:--";
 let lastTrackIndex = 0;
-let speedHistory = []; 
+let speedHistory = []; // Voor Sliding Window ETA
 
 // GPS Filtering
 let smoothLat = null, smoothLon = null;
@@ -155,7 +159,6 @@ const DOM = {
     uiKcal: document.getElementById('ui-kcal'),
     uiSpeed: document.getElementById('ui-speed'),
     uiAvgSpeed: document.getElementById('ui-avg-speed'),
-    uiPower: document.getElementById('ui-power'), // Nieuw element in cache
     uiAcc: document.getElementById('ui-acc'),
     uiOff: document.getElementById('ui-off'),
     uiLat: document.getElementById('ui-lat'),
@@ -269,7 +272,7 @@ document.getElementById('gpxInput').onchange = e => {
             let bestD = Infinity, bestP = 0;
             track.forEach((t, idx) => {
                 const d = getDist(w.lat, w.lon, t.lat, t.lon);
-                if (d < bD) { bD = d; bP = cumDist[idx]; }
+                if (d < bestD) { bestD = d; bestP = cumDist[idx]; }
             });
             w.routePos = bestP;
             return w;
@@ -277,7 +280,7 @@ document.getElementById('gpxInput').onchange = e => {
 
         updateWPUI();
         DOM.standbyMsg.innerHTML = `<br><b style="color:white">ROUTE GELADEN</b><br>${(cumDist.at(-1)/1000).toFixed(2)} km<br><br>Druk op START`;
-        speak(`Route geladen.`);
+        speak(`Route geladen. ${(cumDist.at(-1)/1000).toFixed(1)} kilometer.`);
     };
     reader.readAsText(file);
 };
@@ -334,7 +337,7 @@ function startGPS() {
         const R = getRInfo(smoothLat, smoothLon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        // Trip & Energy Calculation
+        // Trip Calculator
         const moving = skmh >= (CONFIG.ms * 3.6) && skmh <= CONFIG.max;
         const weight = parseFloat(document.getElementById('userWeight').value) || 92;
         const metVal = document.getElementById('profile').value === 'wandelen' ? (0.75 * skmh + 0.5) : (0.4 * skmh);
@@ -349,13 +352,15 @@ function startGPS() {
             sport.movingTime += dt;
             sport.steps += ((skmh / 3.6 * dt) / CONFIG.th);
             sport.kcal += (metVal * 3.5 * weight / 200) * (dt / 60);
+            
+            // ETA Window
             speedHistory.push(skmh);
             if (speedHistory.length > 20) speedHistory.shift();
         } else if (dt > 0) {
             sport.idleTime += dt;
         }
 
-        // Waypoint Logic
+        // Waypoints
         waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             const dToWp = getDist(smoothLat, smoothLon, w.lat, w.lon);
@@ -399,7 +404,6 @@ function startGPS() {
             DOM.uiKcal.textContent = Math.round(sport.kcal) + " kcal";
             DOM.uiSpeed.textContent = skmh.toFixed(1);
             DOM.uiAvgSpeed.textContent = avgV.toFixed(1);
-            DOM.uiPower.textContent = metVal.toFixed(1); // Hier wordt de MET-waarde naar het scherm gestuurd
             DOM.uiAcc.textContent = acc.toFixed(0) + "m";
             DOM.uiOff.textContent = Math.round(R.off) + "m";
             DOM.uiOff.style.color = R.off > 50 ? '#e74c3c' : '#00ff00';
