@@ -136,6 +136,7 @@ let watchId = null, lastPos = null, tripDist = 0, finished = false;
 let sport = { steps: 0, kcal: 0, movingTime: 0, pauseTime: 0, lastTick: null };
 let isPaused = false, lastOffSpeech = 0, lastTrackIndex = 0;
 let speechQueue = [], isSpeaking = false;
+let wakeLock = null;
 
 const DOM = {
     uiNextWp: document.getElementById('ui-next-wp'), uiDist: document.getElementById('ui-dist'),
@@ -196,11 +197,23 @@ function copyCoords() {
     });
 }
 
+    async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+            console.log('Scherm blijft aan!');
+        }
+    } catch (err) {
+        console.error('Wake Lock mislukt:', err);
+    }
+}
+
 function handleStartPause() {
     if (track.length === 0) return alert("Laad eerst een GPX!");
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
     if (!watchId) {
         startGPS();
+        requestWakeLock(); 
         DOM.startBtn.innerText = "⏸ PAUZE"; DOM.startBtn.className = "pause";
         DOM.standbyMsg.style.display = 'none'; DOM.liveUi.style.display = 'block';
         speak("Gestart");
