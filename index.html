@@ -232,6 +232,7 @@ function startGPS() {
         const now = Date.now();
         const delta = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
         sport.lastTick = now;
+
         if (isPaused || finished) return;
 
         const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = p.coords;
@@ -246,86 +247,84 @@ function startGPS() {
             lastOffSpeech = now;
         }
 
-      if (lastPos) {
+        // --- AFSTAND + SPORT DATA ---
+        if (lastPos) {
             const d = getDist(lastPos.lat, lastPos.lon, lat, lon);
-            
-            // Logica voor bewegen vs pauze
+
             if (skmh > 0.5 && !isPaused) {
                 tripDist += d;
                 sport.movingTime += delta;
                 sport.steps += (d / CONFIG.th);
+
                 const weight = parseFloat(document.getElementById('userWeight').value) || 92;
                 sport.kcal += (met * 3.5 * weight / 200) * (delta / 60);
             } else {
-                // Als je stilstaat (skmh < 0.5) OF de pauzeknop is ingedrukt:
                 sport.pauseTime += delta;
             }
         }
-        
-// --- STABIELE SNELHEID ---
-const currentSpeed = skmh > 1 ? skmh : avg; // gebruik gps speed, anders avg
 
-// smoothing (low-pass filter)
-smoothSpeed = smoothSpeed * 0.8 + currentSpeed * 0.2;
+        // --- STABIELE SNELHEID ---
+        const avg = sport.movingTime > 0 ? (tripDist / sport.movingTime) * 3.6 : 0;
+        const currentSpeed = skmh > 1 ? skmh : (avg || 0);
 
-// fallback als alles stilvalt
-const effectiveSpeed = smoothSpeed > 1 ? smoothSpeed : CONFIG.ms * 3.6;
+        smoothSpeed = smoothSpeed * 0.8 + currentSpeed * 0.2;
 
-// --- ETA ---
-const distLeft = cumDist.at(-1) - R.pos;
-const etaS = distLeft / (effectiveSpeed / 3.6);
+        const effectiveSpeed = smoothSpeed > 1 ? smoothSpeed : CONFIG.ms * 3.6;
 
-// clamp (optioneel, voorkomt gekke waardes)
-const safeEtaS = Math.min(etaS, 24 * 3600); // max 24u
+        // --- ETA ---
+        const distLeft = (cumDist.at(-1) || 0) - R.pos;
+        const etaS = distLeft / (effectiveSpeed / 3.6);
+        const safeEtaS = Math.min(etaS, 24 * 3600);
 
-const etaStr = new Date(Date.now() + safeEtaS * 1000)
-    .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const etaStr = new Date(Date.now() + safeEtaS * 1000)
+            .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    waypoints.forEach(w => {
-    if (w.passed || w.missed) return;
-    const d = getDist(lat, lon, w.lat, w.lon);
-    
-    // Bereken hoe ver we zijn op de totale route (0.0 tot 1.0)
-    const progress = R.pos / cumDist.at(-1);
+        // --- WAYPOINT LOGICA ---
+        waypoints.forEach(w => {
+            if (w.passed || w.missed) return;
 
-    if (d <= CONFIG.radius || (R.pos >= w.routePos && d < 40)) {
-        
-        // SPECIALE CHECK VOOR DE FINISH:
-        // De finish wordt alleen goedgekeurd als je meer dan 80% van de route hebt afgelegd
-        if (w.name === "FINISH" && progress < 0.8) {
-            return; // We negeren de finish voor nu
-        }
+            const d = getDist(lat, lon, w.lat, w.lon);
+            const progress = R.pos / (cumDist.at(-1) || 1);
 
-        w.passed = true;
-        speak(`Je nadert waypoint: ${w.name}`);
-        
-        const next = waypoints.find(nw => !nw.passed && !nw.missed);
-        if (next) {
-            const sDist = next.routePos - w.routePos;
-            const dTxt = sDist >= 1000 ? `${(sDist/1000).toFixed(1)} km` : `${Math.round(sDist)} meter`;
-            speak(`Het volgende waypoint is: ${next.name}, over ${dTxt}`);
-        }
+            if (d <= CONFIG.radius || (R.pos >= w.routePos && d < 40)) {
 
-        if (w.name === "FINISH") { 
-            finished = true; 
-            speak("Finish bereikt. Activiteit voltooid.");
-        }
-    } else if (R.pos > w.routePos + 30) { 
-        // Voorkom dat de FINISH als 'gemist' wordt gemarkeerd aan het begin
-        if (w.name !== "FINISH") {
-            w.missed = true; 
-            speak(`Je hebt waypoint ${w.name} gemist.`);
-        }
-    }
-});
+                if (w.name === "FINISH" && progress < 0.8) return;
+
+                w.passed = true;
+                speak(`Je nadert waypoint: ${w.name}`);
+
+                const next = waypoints.find(nw => !nw.passed && !nw.missed);
+                if (next) {
+                    const sDist = next.routePos - w.routePos;
+                    const dTxt = sDist >= 1000
+                        ? `${(sDist / 1000).toFixed(1)} km`
+                        : `${Math.round(sDist)} meter`;
+
+                    speak(`Het volgende waypoint is: ${next.name}, over ${dTxt}`);
+                }
+
+                if (w.name === "FINISH") {
+                    finished = true;
+                    speak("Finish bereikt. Activiteit voltooid.");
+                }
+
+            } else if (R.pos > w.routePos + 30) {
+                if (w.name !== "FINISH") {
+                    w.missed = true;
+                    speak(`Je hebt waypoint ${w.name} gemist.`);
+                }
+            }
+        });
 
         lastPos = { lat, lon };
         updateUI(lat, lon, R, skmh, etaStr, avg, met);
+
     }, null, { enableHighAccuracy: true });
 }
 
 function updateUI(lat, lon, R, skmh, eta, avg, met) {
     const next = waypoints.find(w => !w.passed && !w.missed);
+
     DOM.uiNextWp.innerText = next ? next.name : (finished ? "FINISH" : "---");
     DOM.uiDist.innerText = next ? Math.max(0, Math.round(next.routePos - R.pos)) + "m" : "0m";
     DOM.uiTrip.innerText = (tripDist / 1000).toFixed(3) + " km";
@@ -336,36 +335,33 @@ function updateUI(lat, lon, R, skmh, eta, avg, met) {
     DOM.uiAvgSpeed.innerText = avg.toFixed(1) + " km/u";
     DOM.uiMet.innerText = met.toFixed(1);
     DOM.uiSpeed.innerText = skmh.toFixed(1);
-    DOM.uiLat.innerText = lat.toFixed(6); DOM.uiLon.innerText = lon.toFixed(6);
+    DOM.uiLat.innerText = lat.toFixed(6);
+    DOM.uiLon.innerText = lon.toFixed(6);
     DOM.uiEta.innerText = eta;
 
-    // NIEUW: Werk de grote blauwe snelheidsmeter rechtsboven bij
+    // speed meter
     const speedElement = document.getElementById('ui-speed-big');
     if (speedElement) speedElement.innerText = skmh.toFixed(1);
 
+    // OFF-route
     const off = Math.round(R.off);
     DOM.uiOffBig.innerText = off + "m";
-    
-// --- OFF-route visualisatie ---
-const off = Math.round(R.off);
-DOM.uiOffBig.innerText = off + "m";
 
-// Basis stijl (1x zetten)
-DOM.uiOffBig.style.fontSize = '2.2rem';
+    DOM.uiOffBig.style.fontSize = '2.2rem';
 
-// Dynamische kleur + gewicht
-if (off > 80) {
-    DOM.uiOffBig.style.color = 'red';
-    DOM.uiOffBig.style.fontWeight = '900';
-} else if (off > 40) {
-    DOM.uiOffBig.style.color = 'orange';
-    DOM.uiOffBig.style.fontWeight = 'bold';
-} else {
-    DOM.uiOffBig.style.color = '#00bfff'; // blauw
-    DOM.uiOffBig.style.fontWeight = 'bold';
+    if (off > 80) {
+        DOM.uiOffBig.style.color = 'red';
+        DOM.uiOffBig.style.fontWeight = '900';
+    } else if (off > 40) {
+        DOM.uiOffBig.style.color = 'orange';
+        DOM.uiOffBig.style.fontWeight = 'bold';
+    } else {
+        DOM.uiOffBig.style.color = '#00bfff';
+        DOM.uiOffBig.style.fontWeight = 'bold';
+    }
+
+    updateWPUI();
 }
-
-updateWPUI();
 
 function fmt(s) { return new Date(s * 1000).toISOString().substr(11, 8); }
 function getMet(s) { 
