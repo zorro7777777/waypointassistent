@@ -240,23 +240,47 @@ function startGPS() {
         const etaS = remD / (avgSpeedKMH > 1 ? avgSpeedKMH/3.6 : CONFIG.ms);
         const etaStr = new Date(Date.now() + etaS * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
-        waypoints.forEach(w => {
+      waypoints.forEach(w => {
             if (w.passed || w.missed) return;
             const d = getDist(lat, lon, w.lat, w.lon);
+            
+            // Controleer of we het punt bereiken
             if (d <= CONFIG.radius || (R.pos >= w.routePos && d < 40)) {
                 w.passed = true;
-                speak(`Je nadert waypoint: ${w.name}`);
+                speak(`Punt bereikt: ${w.name}`);
+
                 const next = waypoints.find(nw => !nw.passed && !nw.missed);
-                if (next && next.name !== "FINISH") {
+                if (next) {
+                    // Bereken de segmentafstand (afstand tussen huidige punt w en volgende punt next)
+                    const segmentDist = next.routePos - w.routePos;
+                    let distText = "";
+                    
+                    if (segmentDist >= 1000) {
+                        distText = `${(segmentDist / 1000).toFixed(1)} kilometer`;
+                    } else {
+                        distText = `${Math.round(segmentDist)} meter`;
+                    }
+
                     setTimeout(() => {
-                        const ph = [`Het volgende waypoint is: ${next.name}`, `Koers naar waypoint ${next.name}`, `Ga naar waypoint ${next.name}`];
+                        const ph = [
+                            `Volgende punt: ${next.name}, over ${distText}`,
+                            `Koers naar ${next.name}. Afstand: ${distText}`,
+                            `Op naar ${next.name}, dit segment is ${distText}`,
+                            `Ga naar ${next.name}. Nog ${distText} te gaan`
+                        ];
                         speak(ph[Math.floor(Math.random() * ph.length)]);
-                    }, 2000);
+                    }, 3000);
                 }
-                if (w.name === "FINISH") { finished = true; speak("Finish bereikt"); }
-            } else if (R.pos > w.routePos + 5) {
+
+                if (w.name === "FINISH") { 
+                    finished = true; 
+                    speak("Gefeliciteerd, de finish is bereikt."); 
+                }
+            } else if (R.pos > w.routePos + 75) { 
+                // Let op: ik heb de 75m marge behouden om te voorkomen dat 
+                // GPS-ruis een waypoint direct op "gemist" zet.
                 w.missed = true;
-               speak(`Waypoint ${w.name} gemist. Je bent van de route afgeweken.`);
+                speak(`${w.name} gemist.`);
             }
         });
 
