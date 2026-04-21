@@ -431,7 +431,8 @@ function startGPS() {
             <span class="field-yellow">LON: ${smoothLon.toFixed(6)}</span>
             <button class="copy-btn" onclick="navigator.clipboard.writeText('${smoothLat.toFixed(6)},${smoothLon.toFixed(6)}')">📍 KOPIEER COÖRDINATEN</button>
         `;
-        
+        lastUiUpdate = now;
+       }
         sport.lastTick = now; // Update tijdstempel voor de volgende meting
     }, err => console.error(err), { enableHighAccuracy: true, maximumAge: 0 });
 }
