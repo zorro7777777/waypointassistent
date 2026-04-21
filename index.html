@@ -194,10 +194,11 @@ function startGPS() {
             speak("Je bent terug op de route.");
         }
 
-        const nextWpIdx = waypoints.findIndex(w => !w.passed && !w.missed);
+       const nextWpIdx = waypoints.findIndex(w => !w.passed && !w.missed);
+if (nextWpIdx === -1) return; // 🔥 BELANGRIJK
 
-        waypoints.forEach((w, i) => {
-            if (w.passed || w.missed || i > nextWpIdx + 1) return;
+waypoints.forEach((w, i) => {
+    if (w.passed || w.missed || i > nextWpIdx + 2) return;
 
             const dToWp = getDist(lat, lon, w.lat, w.lon);
 
