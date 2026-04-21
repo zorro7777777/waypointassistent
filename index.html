@@ -238,21 +238,43 @@ function startGPS() {
         const etaS = (cumDist.at(-1) - R.pos) / (avg > 1 ? avg/3.6 : CONFIG.ms);
         const etaStr = new Date(Date.now() + etaS * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
-        waypoints.forEach(w => {
-            if (w.passed || w.missed) return;
-            const d = getDist(lat, lon, w.lat, w.lon);
-            if (d <= CONFIG.radius || (R.pos >= w.routePos && d < 40)) {
-                w.passed = true;
-                speak(`Punt bereikt: ${w.name}`);
-                const next = waypoints.find(nw => !nw.passed && !nw.missed);
-                if (next) {
-                    const sDist = next.routePos - w.routePos;
-                    const dTxt = sDist >= 1000 ? `${(sDist/1000).toFixed(1)} km` : `${Math.round(sDist)} meter`;
-                    setTimeout(() => speak(`Het volgende waypoint is: ${next.name}, over ${dTxt}`), 2500);
-                }
-                if (w.name === "FINISH") { finished = true; speak("Finish bereikt."); }
-            } else if (R.pos > w.routePos + 50) { w.missed = true; speak(`${w.name} gemist.`); }
-        });
+    waypoints.forEach(w => {
+    if (w.passed || w.missed) return;
+    const d = getDist(lat, lon, w.lat, w.lon);
+    
+    // Bereken hoe ver we zijn op de totale route (0.0 tot 1.0)
+    const progress = R.pos / cumDist.at(-1);
+
+    if (d <= CONFIG.radius || (R.pos >= w.routePos && d < 40)) {
+        
+        // SPECIALE CHECK VOOR DE FINISH:
+        // De finish wordt alleen goedgekeurd als je meer dan 80% van de route hebt afgelegd
+        if (w.name === "FINISH" && progress < 0.8) {
+            return; // We negeren de finish voor nu
+        }
+
+        w.passed = true;
+        speak(`Punt bereikt: ${w.name}`);
+        
+        const next = waypoints.find(nw => !nw.passed && !nw.missed);
+        if (next) {
+            const sDist = next.routePos - w.routePos;
+            const dTxt = sDist >= 1000 ? `${(sDist/1000).toFixed(1)} km` : `${Math.round(sDist)} meter`;
+            setTimeout(() => speak(`Het volgende waypoint is: ${next.name}, over ${dTxt}`), 2500);
+        }
+
+        if (w.name === "FINISH") { 
+            finished = true; 
+            speak("Gefeliciteerd, finish bereikt."); 
+        }
+    } else if (R.pos > w.routePos + 50) { 
+        // Voorkom dat de FINISH als 'gemist' wordt gemarkeerd aan het begin
+        if (w.name !== "FINISH") {
+            w.missed = true; 
+            speak(`${w.name} gemist.`); 
+        }
+    }
+});
 
         lastPos = { lat, lon };
         updateUI(lat, lon, R, skmh, etaStr, avg, met);
