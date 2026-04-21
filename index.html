@@ -287,7 +287,7 @@ function updateWPUI() {
 function handleStartPause() {
     const btn = document.getElementById('startBtn');
     
-    // CRUCIAAL: Activeer spraak engine bij klik (User Interaction)
+    // Activeer spraak engine
     window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
 
     if (!watchId) {
@@ -295,6 +295,22 @@ function handleStartPause() {
         btn.innerText = "⏸ PAUZEER SYSTEEM"; btn.className = "pause";
         DOM.standbyMsg.style.display = 'none';
         DOM.liveUi.style.display = 'block';
+
+        // --- NIEUW: Kondig direct het volgende doel aan bij de start ---
+        setTimeout(() => {
+            const next = waypoints.find(w => !w.passed && !w.missed);
+            if (next) {
+                // We negeren het startpunt als we dat al geroepen hebben
+                const targetName = (next.name === "START") ? 
+                    waypoints.find((w, index) => index > 0 && !w.passed)?.name : 
+                    next.name;
+                
+                if (targetName) {
+                    speak("Systeem actief. Volgend punt: " + targetName);
+                }
+            }
+        }, 1500); // Korte pauze zodat de "Startpunt" melding eerst klaar is
+
     } else {
         isPaused = !isPaused;
         btn.innerText = isPaused ? "▶ HERVAT SYSTEEM" : "⏸ PAUZEER SYSTEEM";
