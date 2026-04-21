@@ -219,10 +219,10 @@ function startGPS() {
                 if (volgende && volgende.name !== "FINISH") {
                     setTimeout(() => {
                         const phrases = [
-                            `Volgende punt is ${volgende.name}`,
-                            `Ga verder naar ${volgende.name}`,
-                            `Op naar ${volgende.name}`,
-                            `Koers naar ${volgende.name}`
+                            `Het volgende waypoint is ${volgende.name}`,
+                            `Ga verder naar waypoint ${volgende.name}`,
+                            `Op naar volgend waypoint ${volgende.name}`,
+                            `Ga nu naar waypoint ${volgende.name}`
                         ];
                         const msg = phrases[Math.floor(Math.random() * phrases.length)];
                         speak(msg);
