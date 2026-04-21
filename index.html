@@ -194,11 +194,11 @@ function startGPS() {
             speak("Je bent terug op de route.");
         }
 
-       const nextWpIdx = waypoints.findIndex(w => !w.passed && !w.missed);
-if (nextWpIdx === -1) return; // 🔥 BELANGRIJK
+        const nextWpIdx = waypoints.findIndex(w => !w.passed && !w.missed);
+        if (nextWpIdx === -1) return;
 
-waypoints.forEach((w, i) => {
-    if (w.passed || w.missed || i > nextWpIdx + 2) return;
+        waypoints.forEach((w, i) => {
+            if (w.passed || w.missed || i > nextWpIdx + 2) return;
 
             const dToWp = getDist(lat, lon, w.lat, w.lon);
 
@@ -208,6 +208,8 @@ waypoints.forEach((w, i) => {
                 if (w.name === "FINISH" && R.pos < (cumDist.at(-1) * 0.9)) return;
 
                 w.passed = true;
+                lastNextSpeech = 0;
+
                 speak(`Waypoint bereikt. ${w.name}`);
 
                 const next = waypoints.find((nw, idx) => !nw.passed && !nw.missed && idx > i);
@@ -216,9 +218,8 @@ waypoints.forEach((w, i) => {
                     const dNext = Math.round(next.routePos - w.routePos);
                     const meth = document.getElementById('profile').value;
 
-                    setTimeout(() => {
-                        speak(`Ga verder naar ${next.name}. Ongeveer ${dNext} meter ${meth}.`);
-                    }, 1200);
+                    // 🔥 DIRECT in queue (geen setTimeout)
+                    speak(`Ga verder naar ${next.name}. Ongeveer ${dNext} meter ${meth}.`);
                 }
 
                 if (w.name === "FINISH") {
@@ -227,9 +228,11 @@ waypoints.forEach((w, i) => {
                 }
 
             // --- WAYPOINT GEMIST ---
-            } else if (R.pos > w.routePos + 50 && dToWp > 50) {
+            } else if (R.pos > w.routePos + 80 && dToWp > 60) {
 
                 w.missed = true;
+                lastNextSpeech = 0;
+
                 speak(`Waypoint ${w.name} gemist.`);
 
                 const next = waypoints.find((nw, idx) => !nw.passed && !nw.missed && idx > i);
@@ -238,27 +241,28 @@ waypoints.forEach((w, i) => {
                     const dNext = Math.round(next.routePos - R.pos);
 
                     let msg;
-
                     if (dNext < 50) {
                         msg = `Bijna bij ${next.name}`;
                     } else {
                         const phrases = [
                             `Ga verder naar waypoint ${next.name}`,
                             `Op naar waypoint ${next.name}`,
-                            `De volgende bestemming is: ${next.name}`,
+                            `De volgende bestemming is ${next.name}`,
                             `Je volgende waypoint is ${next.name}`
                         ];
                         msg = phrases[Math.floor(Math.random() * phrases.length)];
                     }
 
-                    // Anti-spam (max 1x per 10 sec)
-                    if (Date.now() - lastNextSpeech > 10000) {
+                    if (now - lastNextSpeech > 10000) {
                         speak(msg);
-                        lastNextSpeech = Date.now();
+                        lastNextSpeech = now;
                     }
                 }
             }
         });
+
+    }, null, { enableHighAccuracy: true });
+}
 
         // Beweging / stats
         if (lastPos && skmh > 1) {
