@@ -73,6 +73,8 @@
         <label><input type="checkbox" id="audioToggle" checked> Spraakassistent</label>
     </div>
 
+    <div>OFF : <span id="ui-off" style="color:#00ff00; font-weight: bold; transition: all 0.3s ease;">0m</span></div>
+
     <input type="file" id="gpxInput" accept=".gpx">
     
     <div class="row">
@@ -269,7 +271,7 @@ function startGPS() {
                             `Ga naar ${next.name}. Nog ${distText} te gaan`
                         ];
                         speak(ph[Math.floor(Math.random() * ph.length)]);
-                    }, 3000);
+                    }, 2000);
                 }
 
                 if (w.name === "FINISH") { 
@@ -291,19 +293,36 @@ function startGPS() {
 
 function updateUI(lat, lon, R, skmh, eta, avg) {
     const next = waypoints.find(w => !w.passed && !w.missed);
+
     DOM.uiNextWp.innerText = next ? next.name : (finished ? "FINISH" : "---");
-    DOM.uiDist.innerText = next ? Math.round(next.routePos - R.pos) + "m" : "0m";
-    DOM.uiTrip.innerText = (tripDist/1000).toFixed(3) + "km";
+    DOM.uiDist.innerText = next ? Math.max(0, Math.round(next.routePos - R.pos)) + "m" : "0m";
+
+    DOM.uiTrip.innerText = (tripDist / 1000).toFixed(3) + " km";
     DOM.uiSteps.innerText = Math.round(sport.steps);
     DOM.uiMovTime.innerText = fmt(sport.movingTime);
     DOM.uiPauseTime.innerText = fmt(sport.pauseTime);
     DOM.uiAvgSpeed.innerText = avg.toFixed(1) + " km/u";
-    DOM.uiOff.innerText = Math.round(R.off) + "m";
-    DOM.uiOff.style.color = R.off > 40 ? 'red' : '#00ff00';
+
+    // --- OFF-route weergave ---
+    const off = Math.round(R.off);
+    DOM.uiOff.innerText = off + "m";
+
+    if (off > 40) {
+        DOM.uiOff.style.color = 'red';
+        DOM.uiOff.style.fontSize = '1.2rem';
+        DOM.uiOff.style.fontWeight = '900';
+    } else {
+        DOM.uiOff.style.color = '#00ff00';
+        DOM.uiOff.style.fontSize = '1rem';
+        DOM.uiOff.style.fontWeight = 'bold';
+    }
+
     DOM.uiEta.innerText = eta;
     DOM.uiSpeed.innerText = skmh.toFixed(1);
     DOM.uiMet.innerText = getMet(skmh).toFixed(1);
-    DOM.uiLat.innerText = lat.toFixed(6); DOM.uiLon.innerText = lon.toFixed(6);
+    DOM.uiLat.innerText = lat.toFixed(6);
+    DOM.uiLon.innerText = lon.toFixed(6);
+
     updateWPUI();
 }
 
