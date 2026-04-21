@@ -409,59 +409,65 @@ function startGPS() {
                 }
                 lastEtaUpdate = now;
             }
+document.getElementById('display-content').innerHTML = `
+<div class="top-row">
+    <div class="top-box">
+        <div class="label">VOLGEND DOEL</div>
+        <div class="value">${finished ? 'FINISH' : (next ? next.name : '---')}</div>
+    </div>
+    <div class="top-box" style="text-align:right;">
+        <div class="label">AFSTAND</div>
+        <div class="value">${(next && !finished) ? Math.max(0, Math.round(next.routePos - R.pos)) : 0} m</div>
+    </div>
+</div>
 
-            // Dashboard Update
-            document.getElementById('display-content').innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                    <div>
-                        <b style="color:#ffff00">VOLGEND DOEL:</b><br>
-                        <span class="highlight" style="color:#00ff00;">${finished ? 'FINISH' : (next ? next.name : '---')}</span>
-                    </div>
-                    <div style="text-align:right">
-                        <b style="color:#ffff00">AFSTAND:</b><br>
-                        <span class="highlight">${(next && !finished) ? Math.max(0, Math.round(next.routePos - R.pos)) : 0}m</span>
-                    </div>
-                </div>
+<div class="dash-grid">
+    <div class="dash-box">
+        <span class="label">${CONFIG.unit.toUpperCase()}</span>
+        <span class="value">${Math.round(sport.steps)}</span>
+    </div>
+    <div class="dash-box">
+        <span class="label">TRIP AFSTAND</span>
+        <span class="value">${(tripDist/1000).toFixed(3)} km</span>
+    </div>
+    <div class="dash-box">
+        <span class="label">BEWOGEN</span>
+        <span class="value">${fmtT(sport.movingTime)}</span>
+    </div>
+    <div class="dash-box">
+        <span class="label">PAUZE</span>
+        <span class="value">${fmtT(sport.idleTime)}</span>
+    </div>
+    <div class="dash-box">
+        <span class="label">AANKOMST</span>
+        <span class="value">${finished ? 'BEREIKT' : cachedArrival}</span>
+    </div>
+    <div class="dash-box">
+        <span class="label">ENERGIE</span>
+        <span class="value">${Math.round(sport.kcal)} kcal</span>
+    </div>
+</div>
 
-                <hr style="border:0; border-top:1px solid #444; margin:12px 0;">
-                
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div><b>${CONFIG.unit.toUpperCase()}:</b> <span class="field-green">${Math.round(sport.steps)}</span></div>
-                    <div><b>TRIP:</b> <span class="field-green">${(tripDist/1000).toFixed(3)} km</span></div>
-                    <div><b>BEWOGEN:</b> <span class="field-green">${fmtT(sport.movingTime)}</span></div>
-                    <div><b>PAUZE:</b> <span class="field-green">${fmtT(sport.idleTime)}</span></div>
-                    <div><b>AANKOMST:</b> <span class="field-green">${finished ? 'FINISHED' : cachedArrival}</span></div>
-                    <div><b>ENERGIE:</b> <span class="field-green">${Math.round(sport.kcal)} kcal</span></div>
-                </div>
+<div class="subinfo">
+    <b>SNELHEID:</b> ${skmh.toFixed(1)} km/u
+    <span style="margin-left:10px;"><b>GEM:</b> ${avgV.toFixed(1)}</span>
+    <br>
+    <b>OFF-TRACK:</b> 
+    <span style="color:${R.off > 35 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)} m</span>
+    <span style="margin-left:10px;"><b>ACC:</b> ${acc.toFixed(0)} m</span>
+    <div class="coords">LAT: ${smoothLat.toFixed(6)} | LON: ${smoothLon.toFixed(6)}</div>
+</div>
 
-                <hr style="border:0; border-top:1px solid #444; margin:12px 0;">
-                
-                <div style="font-size:0.9rem; color:#aaa;">
-                    <b>SNELHEID:</b> <span style="color:#fff">${skmh.toFixed(1)}</span> km/u 
-                    <span style="margin-left:10px"><b>GEM:</b> ${avgV.toFixed(1)}</span><br>
-                    <b>OFF-TRACK:</b> <span style="color:${R.off > 30 ? '#e74c3c' : '#00ff00'}">${Math.round(R.off)}m</span>
-                    <span style="margin-left:10px"><b>ACC:</b> ${acc.toFixed(0)}m</span><br>
-                    <span style="font-size:0.75rem; color:#666; margin-top:5px; display:block;">
-                        LAT: ${smoothLat.toFixed(6)} | LON: ${smoothLon.toFixed(6)}
-                    </span>
-                </div>
-
-                <button class="copy-btn" onclick="copyPos(${smoothLat}, ${smoothLon})">📍 KOPIEER COÖRDINATEN</button>
+<button class="copy-btn" onclick="navigator.clipboard.writeText('${smoothLat.toFixed(6)},${smoothLon.toFixed(6)}')">
+    📍 KOPIEER COÖRDINATEN
+</button>
             `;
             lastUiUpdate = now;
         }
-
         sport.lastTick = now;
-    }, err => {
-        console.error(err);
-        speak("GPS signaal verloren.");
-    }, { 
-        enableHighAccuracy: true, 
-        maximumAge: 0, 
-        timeout: 10000 
-    });
+    }, e => console.error(e), { enableHighAccuracy: true, maximumAge: 0 });
 }
-
+    
 function copyPos(lat, lon) {
     const txt = `${lat.toFixed(6)},${lon.toFixed(6)}`;
     navigator.clipboard.writeText(txt).then(() => {
