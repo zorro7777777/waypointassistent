@@ -137,6 +137,7 @@ let sport = { steps: 0, kcal: 0, movingTime: 0, pauseTime: 0, lastTick: null };
 let isPaused = false, lastOffSpeech = 0, lastTrackIndex = 0;
 let speechQueue = [], isSpeaking = false;
 let wakeLock = null;
+let smoothSpeed = 0;
 
 const DOM = {
     uiNextWp: document.getElementById('ui-next-wp'), uiDist: document.getElementById('ui-dist'),
@@ -261,9 +262,24 @@ function startGPS() {
             }
         }
         
-        const avg = sport.movingTime > 0 ? (tripDist / sport.movingTime) * 3.6 : 0;
-        const etaS = (cumDist.at(-1) - R.pos) / (avg > 1 ? avg/3.6 : CONFIG.ms);
-        const etaStr = new Date(Date.now() + etaS * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+// --- STABIELE SNELHEID ---
+const currentSpeed = skmh > 1 ? skmh : avg; // gebruik gps speed, anders avg
+
+// smoothing (low-pass filter)
+smoothSpeed = smoothSpeed * 0.8 + currentSpeed * 0.2;
+
+// fallback als alles stilvalt
+const effectiveSpeed = smoothSpeed > 1 ? smoothSpeed : CONFIG.ms * 3.6;
+
+// --- ETA ---
+const distLeft = cumDist.at(-1) - R.pos;
+const etaS = distLeft / (effectiveSpeed / 3.6);
+
+// clamp (optioneel, voorkomt gekke waardes)
+const safeEtaS = Math.min(etaS, 24 * 3600); // max 24u
+
+const etaStr = new Date(Date.now() + safeEtaS * 1000)
+    .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     waypoints.forEach(w => {
     if (w.passed || w.missed) return;
