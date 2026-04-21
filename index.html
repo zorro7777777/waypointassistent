@@ -3,15 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WAYPOINTASSISTENT PRO - V3.4</title>
+    <title>WAYPOINTASSISTENT PRO - V3.5</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 5px; background: #f0f3f5; color: #2c3e50; font-size: 13px; }
         .card { max-width: 500px; margin: auto; background: white; padding: 10px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
         
-        /* Compact Display */
-        #info { background: #1a1a1a; color: #00ff00; padding: 12px; border-radius: 8px; font-family: monospace; margin: 8px 0; border-left: 5px solid #27ae60; min-height: auto; }
+        #info { background: #1a1a1a; color: #00ff00; padding: 12px; border-radius: 8px; font-family: monospace; margin: 8px 0; border-left: 5px solid #27ae60; }
         
-        .gear-icon { float: right; font-size: 1.2rem; cursor: pointer; opacity: 0.7; margin-bottom: 10px; }
+        .gear-icon { float: right; font-size: 1.2rem; cursor: pointer; opacity: 0.7; }
         .highlight { color: #fff; font-weight: bold; font-size: 1.1rem; }
         .field-yellow { color: #ffff00; font-weight: bold; }
         .field-green { color: #00ff00; font-weight: bold; }
@@ -30,13 +29,31 @@
         .strikethrough { text-decoration: line-through; opacity: 0.6; }
         
         hr { border: 0; border-top: 1px solid #333; margin: 6px 0; }
-        
-        /* Kopieerknop FIX: Geen blauwe lijnen meer */
-        .copy-btn { 
-            background: #444; color: #00ff00; padding: 3px 6px; font-size: 0.65rem; 
-            border-radius: 4px; border: 1px solid #00ff00; cursor: pointer;
-            user-select: none; -webkit-user-select: none; /* Voorkomt blauwe selectie */
+
+        /* COORDINATEN SECTIE FIX */
+        .coord-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            user-select: none; /* Voorkomt selectie (blauwe lijn) */
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
         }
+
+        .copy-btn { 
+            background: #333; 
+            color: #00ff00; 
+            padding: 6px 10px; 
+            font-size: 0.7rem; 
+            border-radius: 6px; 
+            border: 1px solid #00ff00; 
+            cursor: pointer;
+            white-space: nowrap;
+            margin-left: 10px;
+            text-decoration: none !important; /* Forceert geen onderstreping */
+        }
+        .copy-btn:active { background: #00ff00; color: #000; }
     </style>
 </head>
 <body>
@@ -83,20 +100,23 @@
             <hr>
             <div><span id="ui-unit-label">STAPPEN:</span> <span id="ui-steps" class="field-green">0</span></div>
             <hr>
-            <div style="font-size: 0.75rem;">
-                <span class="copy-btn" id="copyCoords" onclick="copyCoords()">📋 KOPIEER</span>
-                <span class="field-yellow">LAT: <span id="ui-lat">0.000000</span></span><br>
-                <span class="field-yellow">LON: <span id="ui-lon">0.000000</span></span>
+            
+            <div class="coord-container">
+                <div style="font-size: 0.8rem;">
+                    <span class="field-yellow">LAT: <span id="ui-lat">0.000000</span></span><br>
+                    <span class="field-yellow">LON: <span id="ui-lon">0.000000</span></span>
+                </div>
+                <div class="copy-btn" id="copyCoords" onclick="copyCoords()">📋 KOPIEER</div>
             </div>
         </div>
     </div>
 
-    <div id="tableCon" style="display:none;"><table id="list"></table></div>
+    <div id="tableCon" style="display:none;"><table id="list" style="width:100%"></table></div>
 </div>
 
 <script>
 const PROFS = {
-    wandelen: { ms: 0.35, max: 7, th: 0.67, radius: 15, unit: "STAPPEN" },
+    wandelen: { ms: 0.36, max: 7, th: 0.67, radius: 15, unit: "STAPPEN" },
     fietsen:  { ms: 5.5, max: 45, th: 2.10, radius: 25, unit: "OMWENTELINGEN" }
 };
 
@@ -160,11 +180,13 @@ function getRInfo(lat, lon) {
 
 function copyCoords() {
     const text = `${DOM.uiLat.innerText}, ${DOM.uiLon.innerText}`;
-    navigator.clipboard.writeText(text).then(() => {
-        const btn = document.getElementById('copyCoords');
-        btn.innerText = "✅ OK!";
-        setTimeout(() => btn.innerText = "📋 KOPIEER", 2000);
-    });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = document.getElementById('copyCoords');
+            btn.innerText = "✅ OK";
+            setTimeout(() => btn.innerText = "📋 KOPIEER", 2000);
+        });
+    }
 }
 
 function handleStartPause() {
@@ -223,18 +245,18 @@ function startGPS() {
             const d = getDist(lat, lon, w.lat, w.lon);
             if (d <= CONFIG.radius || (R.pos >= w.routePos && d < 40)) {
                 w.passed = true;
-                speak(`Punt bereikt: ${w.name}`);
+                speak(`Je nadert waypoint: ${w.name}`);
                 const next = waypoints.find(nw => !nw.passed && !nw.missed);
                 if (next && next.name !== "FINISH") {
                     setTimeout(() => {
-                        const ph = [`Volgende: ${next.name}`, `Koers naar ${next.name}`, `Op naar ${next.name}`];
+                        const ph = [`Het volgende waypoint is: ${next.name}`, `Koers naar waypoint ${next.name}`, `Ga naar waypoint ${next.name}`];
                         speak(ph[Math.floor(Math.random() * ph.length)]);
-                    }, 3000);
+                    }, 2000);
                 }
                 if (w.name === "FINISH") { finished = true; speak("Finish bereikt"); }
-            } else if (R.pos > w.routePos + 150) {
+            } else if (R.pos > w.routePos + 5) {
                 w.missed = true;
-                speak(`${w.name} gemist`);
+               speak(`Waypoint ${w.name} gemist. Je bent van de route afgeweken.`);
             }
         });
 
