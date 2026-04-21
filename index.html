@@ -94,8 +94,23 @@
 
 <script>
 const PROFS = {
-    wandelen: { radius: 12, th: 0.67, minJump: 2.5, minSpeed: 0.37, smooth: 0.65 },
-    fietsen:  { radius: 25, th: 2.10, minJump: 4.5, minSpeed: 4.0, smooth: 0.65 }
+    // Instellingen specifiek voor het wandelen
+    wandelen: { 
+        radius: 12,    // Waypoint-straal in meters: je moet binnen 12m van een punt komen om het te 'raken'.
+        th: 0.67,      // Threshold staplengte: elke afgelegde meter wordt gedeeld door 0.67 om stappen te tellen.
+        minJump: 2.0,  // De minimale afstand (in meters) die een GPS-meting moet verspringen voordat de afstandsteller oploopt.
+        minSpeed: 0.37,// De minimale snelheid (in km/u) die je moet gaan; alles daaronder wordt gezien als stilstand (pauze).
+        smooth: 0.65   // Low-pass filter: 65% van de positie komt van de vorige meting. Hoe hoger, hoe minder 'zigzag' door GPS-ruis.
+    },
+
+    // Instellingen specifiek voor het fietsen (minder gevoelig omdat je sneller gaat)
+    fietsen:  { 
+        radius: 25,    // Grotere straal: op de fiets ga je harder, dus mag de foutmarge bij een waypoint groter zijn.
+        th: 2.10,      // Wielomtrek/stap equivalent: niet direct gebruikt voor stappen, maar als referentie voor beweging.
+        minJump: 4.5,  // Hogere drempel: voorkomt dat kleine trillingen in de fietshouder als afstand worden geteld.
+        minSpeed: 4.0, // Alles onder de 4 km/u wordt bij fietsen vaak gezien als stilstaan voor een stoplicht.
+        smooth: 0.65   // Zelfde smoothing: strijkt de route glad op de kaart.
+    }
 };
 
 let CONFIG = { ...PROFS.wandelen };
