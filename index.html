@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WAYPOINTASSISTENT PRO - V4.0</title>
+    <title>WAYPOINTASSISTENT PRO - V4.2</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
@@ -32,7 +32,7 @@
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0;">WAYPOINTASSISTENT PRO V4.0</h1>
+    <h1 style="text-align:center; font-size:1.1rem; margin:0 0 10px 0;">WAYPOINTASSISTENT PRO V4.2</h1>
 
     <div class="config-section" id="configArea">
         <div class="row">
@@ -91,17 +91,15 @@
     </div>
 
     <div id="tableCon" style="display:none;">
-        <div class="stat-bar" id="statBar">
-            <span style="color:#2ecc71">✅ 0</span> <span style="color:#e74c3c">❌ 0</span> <span style="color:#3498db">⏳ 0</span>
-        </div>
+        <div class="stat-bar" id="statBar"></div>
         <table><tbody id="list"></tbody></table>
     </div>
 </div>
 
 <script>
 const PROFS = {
-    wandelen: { radius: 12, th: 0.67, unit: "Stappen", minJump: 2.0 },
-    fietsen:  { radius: 25, th: 2.10, unit: "Cadans", minJump: 4.0 }
+    wandelen: { radius: 12, th: 0.67, minJump: 1.5, minSpeed: 0.5 },
+    fietsen:  { radius: 25, th: 2.10, minJump: 3.5, minSpeed: 3.5 }
 };
 
 let CONFIG = { ...PROFS.wandelen };
@@ -110,6 +108,7 @@ let watchId = null, maxRoutePos = 0, tripDist = 0;
 let sport = { steps: 0, movingTime: 0, idleTime: 0, lastTick: null, kcal: 0 };
 let isPaused = false, lastTrackIndex = 0, lastAnnouncedWp = -1;
 let smoothLat = null, smoothLon = null;
+let offTrackTriggered = false;
 
 function fmtT(s) {
     const h = Math.floor(s / 3600).toString().padStart(2, '0');
@@ -128,7 +127,7 @@ function getDist(a, b, c, d) {
 
 function getRInfo(lat, lon) {
     let bD = Infinity, bP = 0;
-    let start = Math.max(0, lastTrackIndex - 100), end = Math.min(track.length, lastTrackIndex + 200);
+    let start = Math.max(0, lastTrackIndex - 200), end = Math.min(track.length, lastTrackIndex + 400);
     for (let i = start; i < end; i++) {
         const d = getDist(lat, lon, track[i].lat, track[i].lon);
         if (d < bD) { bD = d; bP = cumDist[i]; lastTrackIndex = i; }
@@ -138,7 +137,7 @@ function getRInfo(lat, lon) {
 
 function speak(text) {
     if (!document.getElementById('audioToggle').checked) return;
-    const msg = new SpeechSynthesisUtterance(text.replace("START", "Startpunt").replace("FINISH", "De Finish"));
+    const msg = new SpeechSynthesisUtterance(text);
     msg.lang = 'nl-NL';
     window.speechSynthesis.speak(msg);
 }
@@ -171,16 +170,15 @@ document.getElementById('gpxInput').onchange = e => {
         });
         waypoints.sort((a,b) => a.routePos - b.routePos);
         
-        const totalLen = (cumDist.at(-1)/1000).toFixed(2);
-        document.getElementById('ui-track-len').innerText = totalLen + " km";
-        document.getElementById('standby-msg').innerHTML = `<b style="color:#27ae60">GPX GELADEN</b><br>${totalLen} km`;
+        document.getElementById('ui-track-len').innerText = (cumDist.at(-1)/1000).toFixed(2) + " km";
+        document.getElementById('standby-msg').innerHTML = `<b style="color:#27ae60">GPX KLAAR</b><br>${(cumDist.at(-1)/1000).toFixed(2)} km`;
         updateTable();
     };
     reader.readAsText(e.target.files[0]);
 };
 
 function handleStartPause() {
-    if (!track.length) return alert("Upload GPX!");
+    if (!track.length) return;
     if (!watchId) {
         startGPS();
         document.getElementById('startBtn').innerText = "⏸ PAUZE";
@@ -189,14 +187,8 @@ function handleStartPause() {
         speak("Systeem gestart.");
     } else {
         isPaused = !isPaused;
-        const btn = document.getElementById('startBtn');
-        if (isPaused) {
-            btn.innerText = "▶ HERVAT";
-            speak("Systeem gepauzeerd.");
-        } else {
-            btn.innerText = "⏸ PAUZE";
-            speak("Systeem hervat.");
-        }
+        speak(isPaused ? "Systeem gepauzeerd." : "Systeem hervat.");
+        document.getElementById('startBtn').innerText = isPaused ? "▶ HERVAT" : "⏸ PAUZE";
     }
 }
 
@@ -212,66 +204,77 @@ function startGPS() {
         document.getElementById('ui-lon').innerText = rLon.toFixed(6);
         document.getElementById('ui-acc').innerText = Math.round(acc) + "m";
 
-        if (acc > 25) return;
+        if (acc > 30) return;
 
-        let curKmh = (s && s > 0.4) ? s * 3.6 : 0;
+        let curKmh = (s && s > 0.2) ? s * 3.6 : 0;
         let met = 0;
+        let movingThisTick = false;
 
         if (smoothLat !== null) {
             const jump = getDist(smoothLat, smoothLon, rLat, rLon);
-            if (curKmh > 1.2) {
-                met = (document.getElementById('profile').value === 'wandelen') ? (0.75 * curKmh + 0.5) : (0.4 * curKmh);
-            }
-
-            if (jump > CONFIG.minJump && curKmh > 1.2) {
+            
+            // VERBETERDE BEWEGINGSDETECTIE (OOK BIJ LAGE SNELHEID)
+            if (jump > CONFIG.minJump || curKmh > CONFIG.minSpeed) {
+                movingThisTick = true;
                 tripDist += jump;
                 sport.movingTime += dt;
                 sport.steps += (jump / CONFIG.th);
+                met = (document.getElementById('profile').value === 'wandelen') ? (0.75 * curKmh + 0.5) : (0.4 * curKmh);
                 sport.kcal += (met * weight * (dt / 3600));
                 smoothLat = rLat; 
                 smoothLon = rLon;
-            } else if (dt > 0) {
+            } else {
                 sport.idleTime += dt;
                 curKmh = 0;
-                met = 0;
             }
         } else { smoothLat = rLat; smoothLon = rLon; }
 
         const R = getRInfo(rLat, rLon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
+        // Spraak: Off-track
+        if (R.off > 40 && !offTrackTriggered) {
+            speak("Let op, u wijkt van de route af.");
+            offTrackTriggered = true;
+        } else if (R.off < 15 && offTrackTriggered) {
+            speak("U bent terug op de route.");
+            offTrackTriggered = false;
+        }
+
+        // WP check
         waypoints.forEach(w => {
             if (w.passed || w.missed) return;
             const d = getDist(rLat, rLon, w.lat, w.lon);
             if (d < CONFIG.radius) w.touched = true;
             if (d < 10 || (R.pos >= w.routePos && w.touched)) {
                 w.passed = true;
-                speak(w.name);
+                speak("Bereikt: " + w.name);
                 updateTable();
-            } else if (maxRoutePos > w.routePos + 100) {
+            } else if (maxRoutePos > w.routePos + 70) {
                 w.missed = true;
+                speak("Waypoint gemist: " + w.name);
                 updateTable();
             }
         });
 
         const nextIdx = waypoints.findIndex(w => !w.passed && !w.missed);
         if (nextIdx !== -1 && nextIdx !== lastAnnouncedWp) {
-            speak("Volgend punt: " + waypoints[nextIdx].name);
+            speak("Volgende bestemming: " + waypoints[nextIdx].name);
             lastAnnouncedWp = nextIdx;
         }
 
         const next = waypoints[nextIdx];
-        const avgS = sport.movingTime > 5 ? (tripDist/1000) / (sport.movingTime/3600) : 0;
+        const avgS = sport.movingTime > 1 ? (tripDist/1000) / (sport.movingTime/3600) : 0;
 
         document.getElementById('ui-next-wp').innerText = next ? next.name : "FINISH";
-        document.getElementById('ui-dist').innerText = next ? Math.round(next.routePos - R.pos) + "m" : "0m";
+        document.getElementById('ui-dist').innerText = next ? Math.max(0, Math.round(next.routePos - R.pos)) + "m" : "0m";
         document.getElementById('ui-trip').innerText = (tripDist/1000).toFixed(3) + " km";
         document.getElementById('ui-steps').innerText = Math.round(sport.steps);
         document.getElementById('ui-mov-time').innerText = fmtT(sport.movingTime);
         document.getElementById('ui-idl-time').innerText = fmtT(sport.idleTime);
         document.getElementById('ui-speed').innerText = curKmh.toFixed(1);
         document.getElementById('ui-avg-speed').innerText = avgS.toFixed(1);
-        document.getElementById('ui-power').innerText = met.toFixed(1);
+        document.getElementById('ui-power').innerText = (movingThisTick ? met.toFixed(1) : "0.0");
         document.getElementById('ui-kcal').innerText = Math.round(sport.kcal);
         document.getElementById('ui-off').innerText = Math.round(R.off) + "m";
 
@@ -301,13 +304,12 @@ function toggleConfig() {
 
 function updateProfile() { 
     CONFIG = { ...PROFS[document.getElementById('profile').value] }; 
-    document.getElementById('ui-unit-label').innerText = CONFIG.unit + ":"; 
 }
 
 function copyCoords() {
     const lat = document.getElementById('ui-lat').innerText;
     const lon = document.getElementById('ui-lon').innerText;
-    navigator.clipboard.writeText(`${lat}, ${lon}`).then(() => alert("📍 Coördinaten gekopieerd!"));
+    navigator.clipboard.writeText(`${lat}, ${lon}`).then(() => alert("📍 Gekopieerd!"));
 }
 </script>
 </body>
