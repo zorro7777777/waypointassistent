@@ -188,12 +188,15 @@ function toggleTable() {
 }
 
 // GPX PARSER
+// GPX PARSER
 document.getElementById('gpxInput').onchange = e => {
     const r = new FileReader();
     r.onload = ev => {
         const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
         const pts = [...xml.getElementsByTagName('trkpt')];
         track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
+        
+        // RESET de index voor de live window search
         lastTrackIndex = 0;
         
         // Bereken gecumuleerde afstand van de route
@@ -209,13 +212,18 @@ document.getElementById('gpxInput').onchange = e => {
             passed: false, missed: false, touched: false
         }));
 
-        // Voeg start en finish toe als waypoints
         tempWps.push({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false, missed: false, touched: false });
         tempWps.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false, touched: false });
         
-        // Sorteer waypoints op basis van hun positie langs de route (niet chronologisch in XML)
+        // SORTERING: Gebruik een FULL SCAN (geen window search!)
         waypoints = tempWps.map(w => {
-            w.routePos = getRInfo(w.lat, w.lon).pos;
+            let bestD = Infinity, bestP = 0;
+            // Scan de hele track om de echte positie te vinden
+            track.forEach((t, idx) => {
+                const d = getDist(w.lat, w.lon, t.lat, t.lon);
+                if (d < bestD) { bestD = d; bestP = cumDist[idx]; }
+            });
+            w.routePos = bestP;
             return w;
         }).sort((a,b) => a.routePos - b.routePos);
 
@@ -226,7 +234,7 @@ document.getElementById('gpxInput').onchange = e => {
     };
     r.readAsText(e.target.files[0]);
 };
-
+    
 function updateWPUI() {
     const p = waypoints.filter(w => w.passed).length;
     const m = waypoints.filter(w => w.missed).length;
