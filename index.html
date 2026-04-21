@@ -3,39 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WAYPOINTASSISTENT PRO - V3.2</title>
+    <title>WAYPOINTASSISTENT PRO - V3.3</title>
     <style>
-        /* --- VISUELE STYLING (Hetzelfde gebleven voor continuïteit) --- */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 10px; background: #f0f3f5; color: #2c3e50; font-size: 14px; }
         .card { max-width: 600px; margin: auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
         #info { 
             background: #1a1a1a; color: #00ff00; padding: 15px; border-radius: 8px; 
-            font-family: 'Cascadia Code', 'Source Code Pro', monospace; margin: 10px 0; 
-            min-height: 520px; line-height: 1.4; border-left: 5px solid #27ae60; position: relative; overflow: hidden;
+            font-family: 'Cascadia Code', monospace; margin: 10px 0; 
+            min-height: 540px; line-height: 1.4; border-left: 5px solid #27ae60; position: relative;
         }
         .gear-icon { position: absolute; top: 10px; right: 10px; font-size: 1.2rem; cursor: pointer; opacity: 0.7; z-index: 10; padding: 5px; }
         .highlight { color: #fff; font-weight: bold; font-size: 1.2rem; }
-        .field-yellow { color: #ffff00; font-weight: bold; font-size: 0.95rem; display: block; margin-top: 2px; }
         .field-green { color: #00ff00; font-weight: bold; }
         .config-section { background: #ecf0f1; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #dcdde1; display: none; }
         .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
-        button { padding: 14px; border: none; border-radius: 8px; font-weight: bold; color: white; cursor: pointer; flex: 1; transition: all 0.2s; }
+        button { padding: 14px; border: none; border-radius: 8px; font-weight: bold; color: white; cursor: pointer; flex: 1; }
         .start { background: #27ae60; flex: 2; } 
         .pause { background: #f39c12; flex: 2; } 
         .toggle-list { background: #3498db; flex: 0.5; font-size: 1.2rem; }
         #resetBtn { background: #e74c3c; flex: 0.5; display: none; }
-        #gpxInput { width:100%; margin-bottom:10px; border:2px dashed #ccc; padding:15px; border-radius:8px; box-sizing: border-box; background: #fafafa; }
+        #gpxInput { width:100%; margin-bottom:10px; border:2px dashed #ccc; padding:15px; border-radius:8px; box-sizing: border-box; }
         #tableCon { margin-top: 15px; border-top: 1px solid #ddd; }
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
         td { padding: 10px 5px; border-bottom: 1px solid #f1f1f1; }
         .dashboard-label { color: #aaa; font-size: 0.8rem; text-transform: uppercase; }
-        .copy-btn { background: #34495e; padding: 10px; font-size: 0.8rem; margin-top: 15px; width: 100%; color: #bdc3c7; border-radius: 5px; border: none; }
+        .copy-btn { background: #34495e; padding: 10px; font-size: 0.8rem; margin-top: 10px; width: 100%; color: #bdc3c7; border-radius: 5px; border: none; }
+        hr { border: 0; border-top: 1px solid #333; margin: 8px 0; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1 style="text-align:center; font-size:1.2rem; margin:0 0 10px 0; color:#2c3e50;">WAYPOINTASSISTENT PRO</h1>
+    <h1 style="text-align:center; font-size:1.2rem; margin:0 0 10px 0;">WAYPOINTASSISTENT PRO</h1>
 
     <div class="config-section" id="configArea">
         <h3 style="margin-top:0; font-size:0.9rem;">CONFIGURATIE</h3>
@@ -44,9 +43,7 @@
                 <option value="wandelen">🚶 Wandelen</option>
                 <option value="fietsen">🚲 Fietsen</option>
             </select>
-            <div style="font-size: 0.9rem;">
-                Massa: <input type="number" id="userWeight" style="width:50px;" value="92"> kg
-            </div>
+            <div>Massa: <input type="number" id="userWeight" style="width:50px;" value="92"> kg</div>
         </div>
         <label><input type="checkbox" id="audioToggle" checked> 🔊 Spraakassistent Actief</label>
     </div>
@@ -62,9 +59,7 @@
     <div id="info">
         <div class="gear-icon" onclick="toggleConfig()">⚙️</div>
         <div id="dashboard">
-            <div id="standby-msg" style="text-align:center; padding-top:150px;">
-                <b>SYSTEEM STATUS: STANDBY</b><br><small>Wacht op GPX...</small>
-            </div>
+            <div id="standby-msg" style="text-align:center; padding-top:150px;"><b>STANDBY</b><br>Wacht op GPX...</div>
             <div id="live-ui" style="display:none;">
                 <span class="dashboard-label">Volgend Punt:</span><br>
                 <span id="ui-next-wp" class="highlight">---</span><br>
@@ -74,80 +69,48 @@
                     <div><span class="dashboard-label">Trip:</span><br><span id="ui-trip" class="field-green">0.00 km</span></div>
                     <div><span class="dashboard-label" id="ui-unit-label">Stappen:</span><br><span id="ui-steps" class="field-green">0</span></div>
                     <div><span class="dashboard-label">Bewogen:</span><br><span id="ui-mov-time" class="field-green">00:00:00</span></div>
+                    <div><span class="dashboard-label">Pauze:</span><br><span id="ui-idl-time" class="field-green">00:00:00</span></div>
                     <div><span class="dashboard-label">ETA:</span><br><span id="ui-eta" class="field-green">--:--</span></div>
+                    <div><span class="dashboard-label">Power:</span><br><span id="ui-power" class="field-green">0.0</span> <small>MET</small></div>
                 </div>
                 <hr>
                 <div style="font-size: 0.85rem;">
-                    Snelheid: <span id="ui-speed">0.0</span> km/u | Power: <span id="ui-power" class="field-green">0.0</span> MET<br>
+                    Snelheid: <span id="ui-speed">0.0</span> km/u (Gem: <span id="ui-avg-speed">0.0</span>)<br>
                     Nauwkeurigheid: <span id="ui-acc">0m</span> | Off-track: <span id="ui-off">0m</span>
                 </div>
-                <button class="copy-btn" id="copyBtn">📍 KOPIEER COÖRDINATEN</button>
+                <button class="copy-btn" onclick="copyCoords()">📍 KOPIEER COÖRDINATEN</button>
             </div>
         </div>
     </div>
 
     <div id="tableCon" style="display:none;">
-        <div id="wp-summary" style="font-size:0.8rem; text-align:center; padding:10px; background:#eee; margin-bottom:10px;"></div>
+        <div id="wp-summary" style="font-size:0.8rem; text-align:center; padding:10px; background:#eee; margin-bottom:10px; font-weight:bold; border-radius:5px;"></div>
         <table><tbody id="list"></tbody></table>
     </div>
 </div>
 
 <script>
-/**
- * --- WAYPOINTASSISTENT PRO V3.2 (Optimized) ---
- */
-
 const PROFS = {
-    wandelen: { ms: 0.5, max: 7, th: 0.67, radius: 12, unit: "Stappen" },
-    fietsen:  { ms: 1.95, max: 45, th: 2.10, radius: 25, unit: "Omwentelingen" }
+    wandelen: { ms: 0.5, max: 7, th: 0.67, radius: 15, unit: "Stappen" },
+    fietsen:  { ms: 1.95, max: 45, th: 2.10, radius: 25, unit: "Cadans" }
 };
 
 let CONFIG = { ...PROFS.wandelen };
 let track = [], waypoints = [], cumDist = [];
 let watchId = null, lastPos = null, maxRoutePos = 0, tripDist = 0, finished = false;
-let sport = { steps: 0, kcal: 0, movingTime: 0, idleTime: 0, lastTick: null };
+let sport = { steps: 0, movingTime: 0, idleTime: 0, lastTick: null };
 let isPaused = false, lastTrackIndex = 0, speedHistory = [];
 let smoothLat = null, smoothLon = null;
 
 const SMOOTHING_FACTOR = 0.35; 
-const ACCURACY_LIMIT = 30; 
 
-const DOM = {
-    uiNextWp: document.getElementById('ui-next-wp'),
-    uiDist: document.getElementById('ui-dist'),
-    uiTrip: document.getElementById('ui-trip'),
-    uiSteps: document.getElementById('ui-steps'),
-    uiUnitLabel: document.getElementById('ui-unit-label'),
-    uiMovTime: document.getElementById('ui-mov-time'),
-    uiEta: document.getElementById('ui-eta'),
-    uiSpeed: document.getElementById('ui-speed'),
-    uiPower: document.getElementById('ui-power'),
-    uiAcc: document.getElementById('ui-acc'),
-    uiOff: document.getElementById('ui-off'),
-    liveUi: document.getElementById('live-ui'),
-    standbyMsg: document.getElementById('standby-msg')
-};
-
-// --- SPRAAK ENGINE ---
-let speechQueue = [];
-let isSpeaking = false;
-
-function speak(text) {
-    if (!document.getElementById('audioToggle').checked) return;
-    speechQueue.push(text.replace("START", "Startpunt").replace("FINISH", "De Finish"));
-    processQueue();
+function fmtT(s) {
+    const h = Math.floor(s / 3600).toString().padStart(2, '0');
+    const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
+    const sec = Math.floor(s % 60).toString().padStart(2, '0');
+    return `${h}:${m}:${sec}`;
 }
 
-function processQueue() {
-    if (isSpeaking || speechQueue.length === 0) return;
-    isSpeaking = true;
-    const msg = new SpeechSynthesisUtterance(speechQueue.shift());
-    msg.lang = 'nl-NL';
-    msg.onend = () => { setTimeout(() => { isSpeaking = false; processQueue(); }, 500); };
-    window.speechSynthesis.speak(msg);
-}
-
-// --- GEOMETRIE & TRACKING ---
 function getDist(a, b, c, d) {
     const R = 6371000;
     const rL = (c - a) * Math.PI / 180;
@@ -158,17 +121,12 @@ function getDist(a, b, c, d) {
 
 function getRInfo(lat, lon) {
     let bD = Infinity, bP = 0, bestIdx = 0;
-    
-    // 1. Lokale scan (Fine-tuning pass)
     let start = Math.max(0, lastTrackIndex - 100);
     let end = Math.min(track.length, lastTrackIndex + 200);
-    
     for (let i = start; i < end; i++) {
         const d = getDist(lat, lon, track[i].lat, track[i].lon);
         if (d < bD) { bD = d; bP = cumDist[i]; bestIdx = i; }
     }
-
-    // 2. Global scan (alleen als we te ver afwijken)
     if (bD > 150) {
         for (let i = 0; i < track.length; i += 10) {
             const d = getDist(lat, lon, track[i].lat, track[i].lon);
@@ -179,39 +137,52 @@ function getRInfo(lat, lon) {
     return { pos: bP, off: bD };
 }
 
-// --- GPX PARSER ---
+// SPRAAK
+let speechQueue = [];
+let isSpeaking = false;
+function speak(text) {
+    if (!document.getElementById('audioToggle').checked) return;
+    speechQueue.push(text.replace("START", "Startpunt").replace("FINISH", "De Finish"));
+    if (!isSpeaking) processQueue();
+}
+function processQueue() {
+    if (speechQueue.length === 0) { isSpeaking = false; return; }
+    isSpeaking = true;
+    const msg = new SpeechSynthesisUtterance(speechQueue.shift());
+    msg.lang = 'nl-NL';
+    msg.onend = () => setTimeout(processQueue, 500);
+    window.speechSynthesis.speak(msg);
+}
+
+// GPX
 document.getElementById('gpxInput').onchange = e => {
     const reader = new FileReader();
     reader.onload = ev => {
         const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
         const pts = [...xml.getElementsByTagName('trkpt')];
-        if (!pts.length) return alert("Geen track gevonden.");
-        
         track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
         cumDist = [0];
         for(let i=0; i<track.length-1; i++) cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
         
-        let tempWps = [...xml.getElementsByTagName('wpt')].map(w => ({
+        waypoints = [...xml.getElementsByTagName('wpt')].map(w => ({
             name: w.getElementsByTagName('name')[0]?.textContent || "Punt",
             lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'),
             passed: false, missed: false, touched: false
         }));
-        
-        tempWps.push({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false, missed: false });
-        tempWps.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false });
+        waypoints.push({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false });
+        waypoints.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false });
 
-        waypoints = tempWps.map(w => {
+        waypoints.forEach(w => {
             let bD = Infinity, bP = 0;
             track.forEach((t, i) => { 
                 const d = getDist(w.lat, w.lon, t.lat, t.lon); 
                 if(d < bD) { bD = d; bP = cumDist[i]; } 
             });
             w.routePos = bP;
-            return w;
-        }).sort((a,b) => a.routePos - b.routePos);
-
+        });
+        waypoints.sort((a,b) => a.routePos - b.routePos);
         updateWPUI();
-        DOM.standbyMsg.innerHTML = `<b>ROUTE OK</b><br>${(cumDist.at(-1)/1000).toFixed(2)} km<br>Druk op START`;
+        document.getElementById('standby-msg').innerHTML = `<b>ROUTE OK</b><br>${(cumDist.at(-1)/1000).toFixed(2)} km`;
         speak("Route geladen.");
     };
     reader.readAsText(e.target.files[0]);
@@ -219,16 +190,11 @@ document.getElementById('gpxInput').onchange = e => {
 
 function handleStartPause() {
     if (!watchId) {
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance("")); // Kickstart
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
         startGPS();
         document.getElementById('startBtn').innerText = "⏸ PAUZE";
-        DOM.liveUi.style.display = 'block';
-        DOM.standbyMsg.style.display = 'none';
-        
-        setTimeout(() => {
-            const next = waypoints.find(w => !w.passed);
-            if (next) speak("Systeem actief. Volgend punt: " + next.name);
-        }, 1200);
+        document.getElementById('live-ui').style.display = 'block';
+        document.getElementById('standby-msg').style.display = 'none';
     } else {
         isPaused = !isPaused;
         document.getElementById('startBtn').innerText = isPaused ? "▶ HERVAT" : "⏸ PAUZE";
@@ -238,83 +204,97 @@ function handleStartPause() {
 function startGPS() {
     watchId = navigator.geolocation.watchPosition(p => {
         if (isPaused || finished) return;
-        const { latitude: rawLat, longitude: rawLon, accuracy: acc, speed: s } = p.coords;
+        const { latitude: rLat, longitude: rLon, accuracy: acc, speed: s } = p.coords;
         const now = Date.now();
         const dt = sport.lastTick ? (now - sport.lastTick) / 1000 : 0;
 
-        if (acc > ACCURACY_LIMIT) return;
+        if (acc > 30) return;
 
-        // --- ANTI-SPIKE CHECK (REPAIRED) ---
         if (smoothLat !== null) {
-            const jump = getDist(smoothLat, smoothLon, rawLat, rawLon);
-            if (dt > 0 && (jump / dt) > 35) return; // Filtert onmogelijke sprongen (>120km/u)
-            smoothLat = (rawLat * SMOOTHING_FACTOR) + (smoothLat * (1 - SMOOTHING_FACTOR));
-            smoothLon = (rawLon * SMOOTHING_FACTOR) + (smoothLon * (1 - SMOOTHING_FACTOR));
+            const jump = getDist(smoothLat, smoothLon, rLat, rLon);
+            if (dt > 0 && (jump / dt) > 35) return;
+            smoothLat = (rLat * SMOOTHING_FACTOR) + (smoothLat * (1 - SMOOTHING_FACTOR));
+            smoothLon = (rLon * SMOOTHING_FACTOR) + (smoothLon * (1 - SMOOTHING_FACTOR));
+            tripDist += jump; // Tripteller optellen
         } else {
-            smoothLat = rawLat; smoothLon = rawLon;
+            smoothLat = rLat; smoothLon = rLon;
         }
 
         const skmh = (s || 0) * 3.6;
         const R = getRInfo(smoothLat, smoothLon);
         if (R.pos > maxRoutePos) maxRoutePos = R.pos;
 
-        // Bewegings logica
+        const met = document.getElementById('profile').value === 'wandelen' ? (0.75 * skmh + 0.5) : (0.4 * skmh);
+
         if (skmh > 1.5 && dt > 0) {
             sport.movingTime += dt;
             sport.steps += ((skmh/3.6 * dt) / CONFIG.th);
             speedHistory.push(skmh);
-            if(speedHistory.length > 15) speedHistory.shift();
+            if(speedHistory.length > 20) speedHistory.shift();
+        } else if (dt > 0) {
+            sport.idleTime += dt; // Pauzetijd optellen
         }
 
-        // --- WAYPOINT TRIGGER ---
-        let wpChanged = false;
+        // Waypoint check
         waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
-            const dToWp = getDist(smoothLat, smoothLon, w.lat, w.lon);
-            if (dToWp < CONFIG.radius) w.touched = true;
-
-            if (dToWp < 8 || (R.pos >= w.routePos && w.touched)) {
+            const d = getDist(smoothLat, smoothLon, w.lat, w.lon);
+            if (d < CONFIG.radius) w.touched = true;
+            if (d < 10 || (R.pos >= w.routePos && w.touched)) {
                 w.passed = true;
-                wpChanged = true;
                 speak(w.name);
+                updateWPUI();
                 if (i === waypoints.length - 1) finished = true;
             } else if (maxRoutePos > w.routePos + 60) {
                 w.missed = true;
-                wpChanged = true;
+                updateWPUI();
             }
         });
-        if (wpChanged) updateWPUI();
 
-        // --- UI UPDATE THROTTLE ---
-        if (now - (window.lastUi || 0) > 1000) {
-            const next = waypoints.find(w => !w.passed && !w.missed);
-            DOM.uiNextWp.innerText = next ? next.name : "FINISH";
-            DOM.uiDist.innerText = next ? Math.round(next.routePos - R.pos) + "m" : "0m";
-            DOM.uiTrip.innerText = (R.pos/1000).toFixed(2) + " km";
-            DOM.uiSteps.innerText = Math.round(sport.steps);
-            DOM.uiMovTime.innerText = new Date(sport.movingTime * 1000).toISOString().substr(11, 8);
-            DOM.uiSpeed.innerText = skmh.toFixed(1);
-            DOM.uiAcc.innerText = Math.round(acc) + "m";
-            DOM.uiOff.innerText = Math.round(R.off) + "m";
-            window.lastUi = now;
-        }
+        // UI Update
+        const next = waypoints.find(w => !w.passed && !w.missed);
+        const avgS = sport.movingTime > 0 ? (tripDist/1000) / (sport.movingTime/3600) : 0;
+
+        document.getElementById('ui-next-wp').innerText = next ? next.name : "FINISH";
+        document.getElementById('ui-dist').innerText = next ? Math.round(next.routePos - R.pos) + "m" : "0m";
+        document.getElementById('ui-trip').innerText = (tripDist/1000).toFixed(2) + " km";
+        document.getElementById('ui-steps').innerText = Math.round(sport.steps);
+        document.getElementById('ui-mov-time').innerText = fmtT(sport.movingTime);
+        document.getElementById('ui-idl-time').innerText = fmtT(sport.idleTime);
+        document.getElementById('ui-speed').innerText = skmh.toFixed(1);
+        document.getElementById('ui-avg-speed').innerText = avgS.toFixed(1);
+        document.getElementById('ui-power').innerText = met.toFixed(1);
+        document.getElementById('ui-acc').innerText = Math.round(acc) + "m";
+        document.getElementById('ui-off').innerText = Math.round(R.off) + "m";
+
         sport.lastTick = now;
     }, null, { enableHighAccuracy: true });
 }
 
 function updateWPUI() {
-    const list = document.getElementById('list');
-    list.innerHTML = waypoints.map(w => `
+    const p = waypoints.filter(w => w.passed).length;
+    const m = waypoints.filter(w => w.missed).length;
+    const r = waypoints.length - p - m;
+    document.getElementById('wp-summary').innerText = `✅ ${p} | ❌ ${m} | ⏳ ${r}`;
+    document.getElementById('list').innerHTML = waypoints.map(w => `
         <tr style="color: ${w.passed ? '#27ae60' : (w.missed ? '#e74c3c' : '#fff')}">
-            <td>${w.passed ? '✔' : '·'}</td>
-            <td>${w.name}</td>
-            <td style="text-align:right">${(w.routePos/1000).toFixed(2)}k</td>
+            <td>${w.passed ? '✔' : '·'}</td><td>${w.name}</td><td style="text-align:right">${(w.routePos/1000).toFixed(2)}k</td>
         </tr>`).join('');
 }
 
-function toggleConfig() { document.getElementById('configArea').style.display = (document.getElementById('configArea').style.display === 'none') ? 'block' : 'none'; }
-function toggleTable() { document.getElementById('tableCon').style.display = (document.getElementById('tableCon').style.display === 'none') ? 'block' : 'none'; }
-function updateProfile() { CONFIG = { ...PROFS[document.getElementById('profile').value] }; DOM.uiUnitLabel.innerText = CONFIG.unit + ":"; }
+function toggleConfig() { 
+    const area = document.getElementById('configArea');
+    const reset = document.getElementById('resetBtn');
+    const isVisible = area.style.display === 'block';
+    area.style.display = isVisible ? 'none' : 'block';
+    reset.style.display = isVisible ? 'none' : 'block';
+}
+function toggleTable() { const c = document.getElementById('tableCon'); c.style.display = c.style.display === 'none' ? 'block' : 'none'; }
+function updateProfile() { CONFIG = { ...PROFS[document.getElementById('profile').value] }; document.getElementById('ui-unit-label').innerText = CONFIG.unit + ":"; }
+function copyCoords() {
+    const t = `${smoothLat.toFixed(6)},${smoothLon.toFixed(6)}`;
+    navigator.clipboard.writeText(t).then(() => alert("Gekopieerd: " + t));
+}
 </script>
 </body>
 </html>
