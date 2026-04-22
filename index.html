@@ -379,7 +379,7 @@ function startGPS() {
     });
 }
     
-function updateUI(lat, lon, R, skmh, eta, avg, met) {
+function updateUI(lat, lon, R, skmh, eta, avg, met, acc) {
     const next = waypoints.find(w => !w.passed && !w.missed);
 
     DOM.uiNextWp.innerText = next ? next.name : (finished ? "FINISH" : "---");
@@ -415,6 +415,23 @@ function updateUI(lat, lon, R, skmh, eta, avg, met) {
     } else {
         DOM.uiOffBig.style.color = '#00bfff';
         DOM.uiOffBig.style.fontWeight = 'bold';
+    }
+
+    // --- GPS NAUWKEURIGHEID (NIEUW) ---
+    const accElement = document.getElementById('ui-acc-big');
+    if (accElement && acc !== undefined) {
+        const roundedAcc = Math.round(acc);
+        accElement.innerText = roundedAcc + "m";
+        
+        // Dynamische kleuren op basis van kwaliteit
+        if (roundedAcc > 30) {
+            accElement.style.color = 'red';     // Slecht signaal
+        } else if (roundedAcc > 15) {
+            accElement.style.color = 'orange';  // Matig signaal
+        } else {
+            accElement.style.color = '#00bfff'; // Goed signaal (blauw)
+        }
+        accElement.style.fontWeight = '900';
     }
 
     updateWPUI();
