@@ -251,33 +251,31 @@ function startGPS() {
 
         if (isPaused || finished) return;
 
+        // 1. Haal de GPS data op
         const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = p.coords;
         const skmh = (s || 0) * 3.6;
         const R = getRInfo(lat, lon);
         let met = getMet(skmh);
         const avg = sport.movingTime > 2 ? (tripDist / sport.movingTime) * 3.6 : 0;
 
-        // --- UPDATE UI ALTIJD ---
-        // Door de UI hier al aan te roepen, zie je de 'GPS +/-' waarde live, 
-        // ook als de nauwkeurigheid slechter is dan 50m.
-        updateUI(lat, lon, R, skmh, (typeof etaStr !== 'undefined' ? etaStr : "--:--"), avg, met, acc);
+        // 2. Maak een tijdelijke ETA (voorkomt crashes)
+        let displayEta = "--:--";
 
-        // --- FILTER ---
-        // Stop de verdere berekeningen voor afstand en waypoints als het signaal te slecht is.
+        // 3. EERSTE UPDATE (Zorgt dat je direct je GPS nauwkeurigheid ziet)
+        updateUI(lat, lon, R, skmh, displayEta, avg, met, acc);
+
+        // 4. FILTER (Bij heel slecht signaal stoppen we hier voor de berekeningen)
         if (acc > 50) return;
 
-        // --- ROUTE ALARM & HERSTEL ---
+        // --- ROUTE ALARM ---
         if (R.off > 40) {
-            if (!isOffRoute) isOffRoute = true; 
+            if (!isOffRoute) isOffRoute = true;
             if (now - lastOffSpeech > 20000) {
                 speak(`Route alarm: ${Math.round(R.off)} meter`);
                 lastOffSpeech = now;
             }
         } else {
-            if (isOffRoute) {
-                speak("Route hersteld");
-                isOffRoute = false; 
-            }
+            if (isOffRoute) { speak("Route hersteld"); isOffRoute = false; }
         }
 
         // --- AFSTAND + SPORT DATA ---
@@ -285,7 +283,7 @@ function startGPS() {
             const d = getDist(lastPos.lat, lastPos.lon, lat, lon);
             const weight = parseFloat(document.getElementById('userWeight').value) || 92;
 
-            if (skmh > 1.8 && !isPaused) { 
+            if (skmh > 1.8 && !isPaused) {
                 tripDist += d;
                 sport.movingTime += delta;
                 sport.steps += (d / CONFIG.th);
@@ -293,10 +291,50 @@ function startGPS() {
                 sport.kcal += kcalPerSeconde * delta;
             } else {
                 sport.pauseTime += delta;
-                met = 1.0; 
+                met = 1.0;
             }
-            sport.currentMet = met; 
+            sport.currentMet = met;
         }
+
+        // --- ETA BEREKENING ---
+        const distLeft = (cumDist.at(-1) || 0) - R.pos;
+        const speedForEta = skmh > 2 ? skmh : (avg > 2 ? avg : CONFIG.ms * 3.6);
+        const etaS = distLeft / (speedForEta / 3.6);
+        if (isFinite(etaS) && etaS > 0) {
+            displayEta = new Date(Date.now() + etaS * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // --- WAYPOINT LOGICA ---
+        waypoints.forEach(w => {
+            if (w.passed || w.missed) return;
+            const d = getDist(lat, lon, w.lat, w.lon);
+            const progress = R.pos / (cumDist.at(-1) || 1);
+            if (d <= CONFIG.radius || (R.pos >= w.routePos && d < 40)) {
+                if (w.name === "FINISH" && progress < 0.8) return;
+                w.passed = true;
+                speak(`Je nadert: ${w.name}`);
+                if (w.name === "FINISH") {
+                    finished = true;
+                    speak("Finish bereikt.");
+                    if (watchId) navigator.geolocation.clearWatch(watchId);
+                }
+            } else if (R.pos > w.routePos + 30 && w.name !== "FINISH") {
+                w.missed = true;
+                speak(`Punt gemist: ${w.name}`);
+            }
+        });
+
+        lastPos = { lat, lon };
+
+        // 5. DEFINITIEVE UPDATE (Met alle berekende data)
+        updateUI(lat, lon, R, skmh, displayEta, avg, met, acc);
+
+    }, err => console.error("GPS Fout:", err), {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+    });
+}
         
         // --- STABIELE SNELHEID & ETA ---
         const currentSpeed = skmh > 1 ? skmh : (avg || 0);
