@@ -252,115 +252,82 @@ function startGPS() {
         if (isPaused || finished) return;
 
         const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = p.coords;
-        if (acc > 50) return;
-
-        const R = getRInfo(lat, lon);
         const skmh = (s || 0) * 3.6;
-        
-        // Bereken de actuele MET op basis van snelheid
+        const R = getRInfo(lat, lon);
         let met = getMet(skmh);
+        const avg = sport.movingTime > 2 ? (tripDist / sport.movingTime) * 3.6 : 0;
+
+        // --- UPDATE UI ALTIJD ---
+        // Door de UI hier al aan te roepen, zie je de 'GPS +/-' waarde live, 
+        // ook als de nauwkeurigheid slechter is dan 50m.
+        updateUI(lat, lon, R, skmh, (typeof etaStr !== 'undefined' ? etaStr : "--:--"), avg, met, acc);
+
+        // --- FILTER ---
+        // Stop de verdere berekeningen voor afstand en waypoints als het signaal te slecht is.
+        if (acc > 50) return;
 
         // --- ROUTE ALARM & HERSTEL ---
         if (R.off > 40) {
-            // We zijn buiten de marge
-            if (!isOffRoute) {
-                // We waren net nog op de route, dus we gaan er nu AF
-                isOffRoute = true; 
-            }
-
+            if (!isOffRoute) isOffRoute = true; 
             if (now - lastOffSpeech > 20000) {
                 speak(`Route alarm: ${Math.round(R.off)} meter`);
                 lastOffSpeech = now;
             }
         } else {
-            // We zijn binnen de 40 meter marge
             if (isOffRoute) {
-                // We waren off-route, maar nu zijn we weer terug!
                 speak("Route hersteld");
                 isOffRoute = false; 
             }
         }
 
-// --- AFSTAND + SPORT DATA ---
+        // --- AFSTAND + SPORT DATA ---
         if (lastPos) {
             const d = getDist(lastPos.lat, lastPos.lon, lat, lon);
             const weight = parseFloat(document.getElementById('userWeight').value) || 92;
 
-            // STRIKTE AUTO-PAUZE: 
-            // We tellen alleen afstand, tijd, stappen en kcal als de snelheid > 1.8 km/u is.
             if (skmh > 1.8 && !isPaused) { 
                 tripDist += d;
                 sport.movingTime += delta;
                 sport.steps += (d / CONFIG.th);
-
-                // Actief verbruik (alleen tijdens beweging)
                 const kcalPerSeconde = (met * weight * 1.05) / 3600;
                 sport.kcal += kcalPerSeconde * delta;
             } else {
-                // HIER IS DE AUTO-PAUZE ACTIEF
-                // We tellen alleen de pauzetijd op. Afstand en KCAL bevriezen volledig.
                 sport.pauseTime += delta;
                 met = 1.0; 
             }
-            
             sport.currentMet = met; 
         }
         
-        // --- STABIELE SNELHEID ---
-        const avg = sport.movingTime > 2 ? (tripDist / sport.movingTime) * 3.6 : 0;
+        // --- STABIELE SNELHEID & ETA ---
         const currentSpeed = skmh > 1 ? skmh : (avg || 0);
         smoothSpeed = smoothSpeed * 0.8 + currentSpeed * 0.2;
-
-        // Beveiliging voor ETA deling
         const effectiveSpeed = smoothSpeed > 0.2 ? smoothSpeed : (CONFIG.ms * 3.6);
-
-        // --- ETA ---
         const distLeft = (cumDist.at(-1) || 0) - R.pos;
         const etaS = distLeft / (effectiveSpeed / 3.6);
         const safeEtaS = isFinite(etaS) ? Math.min(etaS, 24 * 3600) : 0; 
-
-        const etaStr = new Date(Date.now() + safeEtaS * 1000)
-            .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const etaStr = new Date(Date.now() + safeEtaS * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         // --- WAYPOINT LOGICA ---
         waypoints.forEach(w => {
             if (w.passed || w.missed) return;
-
             const d = getDist(lat, lon, w.lat, w.lon);
             const progress = R.pos / (cumDist.at(-1) || 1);
-
             if (d <= CONFIG.radius || (R.pos >= w.routePos && d < 40)) {
-
-                // Finish beveiliging: niet goedkeuren onder de 80% voortgang
                 if (w.name === "FINISH" && progress < 0.8) return;
-
                 w.passed = true;
                 speak(`Je nadert waypoint: ${w.name}`);
-
                 const next = waypoints.find(nw => !nw.passed && !nw.missed);
                 if (next) {
                     const sDist = next.routePos - w.routePos;
-                    const dTxt = sDist >= 1000
-                        ? `${(sDist / 1000).toFixed(1)} km`
-                        : `${Math.round(sDist)} meter`;
-
+                    const dTxt = sDist >= 1000 ? `${(sDist / 1000).toFixed(1)} km` : `${Math.round(sDist)} meter`;
                     speak(`Het volgende waypoint is: ${next.name}, over ${dTxt}`);
                 }
-
                 if (w.name === "FINISH") {
                     finished = true;
                     speak("Finish bereikt. Activiteit voltooid.");
-
-                    if (watchId !== null) {
-                        navigator.geolocation.clearWatch(watchId);
-                        watchId = null;
-                    }
-
-                    if (wakeLock) {
-                        wakeLock.release().then(() => { wakeLock = null; });
-                    }
+                    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+                    if (wakeLock) { wakeLock.release().then(() => { wakeLock = null; }); }
                 }
-
             } else if (R.pos > w.routePos + 30) {
                 if (w.name !== "FINISH") {
                     w.missed = true;
@@ -370,7 +337,9 @@ function startGPS() {
         });
 
         lastPos = { lat, lon };
-        updateUI(lat, lon, R, skmh, etaStr, avg, met);
+        
+        // Tweede update voor de definitieve ETA en waarden
+        updateUI(lat, lon, R, skmh, etaStr, avg, met, acc);
 
     }, err => console.error("GPS Fout:", err), { 
         enableHighAccuracy: true,
