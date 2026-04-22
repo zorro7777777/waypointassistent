@@ -371,7 +371,7 @@ function startGPS() {
         });
 
         lastPos = { lat, lon };
-        updateUI(lat, lon, R, skmh, etaStr, avg, met);
+        updateUI(lat, lon, R, skmh, etaStr, avg, met, acc);
 
     }, err => console.error("GPS Fout:", err), { 
         enableHighAccuracy: true,
