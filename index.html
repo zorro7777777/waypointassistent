@@ -518,12 +518,30 @@ DOM.gpxInput.onchange = e => {
 };
 
 function updateWPUI() {
-    document.getElementById('list').innerHTML = waypoints.map(w => `
-        <tr class="${w.missed ? 'strikethrough' : ''}" style="color: ${w.passed ? '#27ae60' : (w.missed ? '#e74c3c' : '#2c3e50')}">
-            <td>${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
-            <td>${w.name}</td>
-            <td style="text-align:right">${(w.routePos/1000).toFixed(2)}km</td>
+    const listTable = document.getElementById('list');
+    if (!listTable) return;
+
+    listTable.innerHTML = waypoints.map((w, index) => `
+        <tr onclick="speakWaypointDesc(${index})" 
+            class="${w.missed ? 'strikethrough' : ''}" 
+            style="color: ${w.passed ? '#27ae60' : (w.missed ? '#e74c3c' : '#2c3e50')}; cursor: pointer;">
+            <td style="padding: 6px 4px;">${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
+            <td style="padding: 6px 4px; font-weight: bold;">${w.name}</td>
+            <td style="padding: 6px 4px; text-align:right">${(w.routePos/1000).toFixed(2)}km</td>
         </tr>`).join('');
+}
+
+// Deze functie moet je er direct onder (of boven) plaatsen
+function speakWaypointDesc(index) {
+    const w = waypoints[index];
+    if (!w) return;
+
+    // Als er een omschrijving (desc) is, lees die voor. Anders de "Geen info" melding.
+    if (w.desc && w.desc.trim() !== "") {
+        speak(w.desc);
+    } else {
+        speak(`Geen info beschikbaar voor waypoint ${w.name}`);
+    }
 }
 
 function toggleConfig() { 
