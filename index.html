@@ -225,76 +225,38 @@ function getDist(a, b, c, d) {
 }
     
 function getRInfo(lat, lon) {
-    if (!track.length) return { pos: 0, off: 0 };
+    if (track.length === 0) return { pos: 0, off: 0 };
 
-    const latRad = lat * Math.PI / 180;
-    const lonRad = lon * Math.PI / 180;
+    let bD = Infinity;
+    let bP = 0;
+    let bestIdx = 0;
 
-    let bestDist = Infinity;
-    let bestIdx = lastTrackIndex;
-    let bestPos = 0;
+    const start = Math.max(0, lastTrackIndex - 100);
+    const end   = Math.min(track.length, lastTrackIndex + 200);
 
-    // 🔥 kleinere, stabiele range (belangrijk!)
-    const range = 80; // FIXED i.p.v. adaptive
-
-    let start = Math.max(0, lastTrackIndex - range);
-    let end   = Math.min(track.length, lastTrackIndex + range);
-
-    // 🔥 scan met skip (maar minder agressief)
-    for (let i = start; i < end; i += 2) {
+    for (let i = start; i < end; i++) {
         const t = track[i];
 
-        const dLat = t.latRad - latRad;
-        const dLon = t.lonRad - lonRad;
+        // 🔒 safety check (BELANGRIJK tegen Infinity)
+        if (!t || !isFinite(t.lat) || !isFinite(t.lon)) continue;
 
-        const sinDLat = Math.sin(dLat / 2);
-        const sinDLon = Math.sin(dLon / 2);
+        const d = getDist(lat, lon, t.lat, t.lon);
 
-        const a =
-            sinDLat * sinDLat +
-            Math.cos(latRad) * Math.cos(t.latRad) *
-            sinDLon * sinDLon;
+        // 🔒 extra safety
+        if (!isFinite(d)) continue;
 
-        const d = 6371000 * 2 * Math.asin(Math.sqrt(a));
-
-        if (d < bestDist) {
-            bestDist = d;
-            bestIdx = i;
-        }
-    }
-
-    // 🔥 verfijning (ESSENTIEEL voor stabiliteit)
-    const refineStart = Math.max(0, bestIdx - 5);
-    const refineEnd   = Math.min(track.length, bestIdx + 5);
-
-    for (let i = refineStart; i < refineEnd; i++) {
-        const t = track[i];
-
-        const dLat = t.latRad - latRad;
-        const dLon = t.lonRad - lonRad;
-
-        const sinDLat = Math.sin(dLat / 2);
-        const sinDLon = Math.sin(dLon / 2);
-
-        const a =
-            sinDLat * sinDLat +
-            Math.cos(latRad) * Math.cos(t.latRad) *
-            sinDLon * sinDLon;
-
-        const d = 6371000 * 2 * Math.asin(Math.sqrt(a));
-
-        if (d < bestDist) {
-            bestDist = d;
+        if (d < bD) {
+            bD = d;
+            bP = cumDist[i] || 0;
             bestIdx = i;
         }
     }
 
     lastTrackIndex = bestIdx;
-    bestPos = cumDist[bestIdx] || 0;
 
     return {
-        pos: bestPos,
-        off: bestDist
+        pos: bP,
+        off: isFinite(bD) ? bD : 0
     };
 }
     
