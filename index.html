@@ -87,7 +87,7 @@
     </div>
 </div>
 
-// --- Traject: van WP naar WP groen opgemaak boven de knoppen ---
+
 
 <div style="color: #1b5e20; font-size: 0.9rem; margin: 10px 0; font-weight: bold; line-height: 1.4;">
     TRAJECT:<br>
@@ -95,10 +95,9 @@
 </div>
 
 
-// --- Bestandskiezer voor GPX  ---
     <input type="file" id="gpxInput" accept=".gpx">
 
-// --- Knoppencontainer ---    
+
     
     <div class="row">
         <button onclick="handleStartPause()" id="startBtn" class="start">▶ START</button>
@@ -106,14 +105,13 @@
         <button onclick="location.reload()" id="resetBtn" style="background: #e74c3c; flex: 0.4; display: none;">🔄</button>
     </div>
 
-    // --- Info bij laden in het display ---    
+ 
     
     <div id="info">
         <div id="standby-msg" style="text-align:center; padding: 40px 0;">STANDBY - GPX FILE LADEN A.U.B.</div>
 
             <hr>
-        
-    // --- Info displaycontainer ---  
+
             <div style="display:grid; grid-template-columns: 1.2fr 1fr; gap: 4px;">
                 <div>TRIP: <span id="ui-trip" class="field-green">0.000km</span></div>
                 <div>ETA : <span id="ui-eta" class="field-green">--:--</span></div>
@@ -134,7 +132,7 @@
         
             <hr>
         
-         // --- Info Coördinatencontainer ---     
+   
             <div class="coord-container">
                 <div style="font-size: 0.8rem; pointer-events: none;">
                     <span class="field-yellow">LAT: <span id="ui-lat">0.000000</span></span><br>
