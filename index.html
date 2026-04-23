@@ -439,9 +439,26 @@ function updateUI(lat, lon, R, skmh, eta, avg, met, acc) {
         DOM.uiTotalDist.innerText = totalKm + " km";
     }
 
+    // --- TRAJECT LOGICA VOOR DE KOPIEERKNOP ---
+    const prevWP = [...waypoints].reverse().find(w => w.passed);
+    const nextWP = waypoints.find(w => !w.passed && !w.missed);
+    let segmentText = "---";
+
+    if (prevWP && nextWP) {
+        const dist = ((nextWP.routePos - prevWP.routePos) / 1000).toFixed(2);
+        segmentText = `${prevWP.name} ➔ ${nextWP.name} (${dist}km)`;
+    } else if (nextWP) {
+        segmentText = `Onderweg naar ${nextWP.name}`;
+    } else if (finished) {
+        segmentText = "Finish bereikt";
+    }
+
+    const segEl = document.getElementById('ui-segment');
+    if (segEl) segEl.innerText = segmentText;
+
     updateWPUI();
 }
-
+    
 function fmt(s) { return new Date(s * 1000).toISOString().substr(11, 8); }
     
 // VERVANG DE BESTAANDE getMet FUNCTIE DOOR DEZE:
