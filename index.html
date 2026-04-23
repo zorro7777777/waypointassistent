@@ -174,7 +174,22 @@ const DOM = {
 
 function speak(text) {
     if (!DOM.audioToggle.checked) return;
-    speechQueue.push(text.replace("START", "Het Startpunt").replace("FINISH", "De Finish"));
+
+    // 🔒 anti-spam: geen lege of dubbele calls
+    if (!text || text.trim().length < 2) return;
+
+    const cleaned = text
+        .replace("START", "Het Startpunt")
+        .replace("FINISH", "De Finish");
+
+    // 🔒 queue limiet (belangrijk!)
+    if (speechQueue.length > 5) {
+        speechQueue.shift(); // gooi oudste weg
+    }
+
+    speechQueue.push(cleaned);
+
+    // 🔒 alleen starten als niet bezig
     if (!isSpeaking) processQueue();
 }
 
