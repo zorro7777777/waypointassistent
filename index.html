@@ -199,22 +199,23 @@ function getRInfo(lat, lon) {
 }
 
 function copyCoords() {
-    // We voegen de onzichtbare spatie toe na de punt én na het tweede cijfer.
-    // Dit breekt de herkenning voor Google/Apple Maps scanners volledig.
-    const latClean = DOM.uiLat.innerText.replace(".", ".\u200B");
-    const lonClean = DOM.uiLon.innerText.replace(".", ".\u200B");
+    // We halen de ruwe cijfers op
+    const rawLat = DOM.uiLat.innerText;
+    const rawLon = DOM.uiLon.innerText;
+
+    // We breken de herkenning door een onzichtbare spatie NA het eerste cijfer 
+    // EN NA de punt te zetten. Dit stopt de automatische onderstreping op iPhone/Android.
+    const latClean = rawLat.charAt(0) + "\u200B" + rawLat.substring(1).replace(".", ".\u200B");
+    const lonClean = rawLon.charAt(0) + "\u200B" + rawLon.substring(1).replace(".", ".\u200B");
     
-    // Segment info ophalen
     const uiSegment = document.getElementById('ui-segment');
     const segment = uiSegment ? uiSegment.innerText : "---";
     
-    // We bouwen de tekst op. 
-    // De coordinaten bovenin zijn 'veilig' (met \u200B).
-    // De Google link onderaan is de enige echte link.
+    // De shareText met de 'gebroken' tekst bovenin en de werkende link onderin
     const shareText = `Locatie: ${latClean}, ${lonClean}
 Traject: ${segment}
 
-Maps: https://www.google.com/maps?q=${DOM.uiLat.innerText},${DOM.uiLon.innerText}`;
+Maps: https://www.google.com/maps?q=${rawLat},${rawLon}`;
 
     navigator.clipboard.writeText(shareText).then(() => {
         const b = document.getElementById('copyCoords');
