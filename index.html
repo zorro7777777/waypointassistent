@@ -223,6 +223,8 @@ function getDist(a, b, c, d) {
 
     return 2 * R * Math.asin(Math.sqrt(x));
 }
+
+  <!-- Optimaliseer nooit geometrische code zonder het gegevensformaat identiek te houden. -->  
     
 function getRInfo(lat, lon) {
     if (track.length === 0) return { pos: 0, off: 0 };
