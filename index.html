@@ -152,6 +152,7 @@ let speechQueue = [], isSpeaking = false;
 let wakeLock = null;
 let smoothSpeed = 0;
 let isOffRoute = false; // Nieuwe status-tracker
+let lastWpStatusKey = "";
 
 const DOM = {
     uiNextWp: document.getElementById('ui-next-wp'), uiDist: document.getElementById('ui-dist'),
@@ -444,20 +445,21 @@ function updateUI(lat, lon, R, skmh, eta, avg, met, acc) {
         DOM.uiTotalDist.innerText = totalKm + " km";
     }
 
-    // --- TRAJECT LOGICA VOOR DE KOPIEERKNOP ---
+    // --- NIEUW: TRAJECT LOGICA VOOR KOPIEERFUNCTIE ---
+    // We gebruiken hier de variabelen die al in de updateUI berekend zijn
     const prevWP = [...waypoints].reverse().find(w => w.passed);
-    const nextWP = waypoints.find(w => !w.passed && !w.missed);
     let segmentText = "---";
 
-    if (prevWP && nextWP) {
-        const dist = ((nextWP.routePos - prevWP.routePos) / 1000).toFixed(2);
-        segmentText = `${prevWP.name} ➔ ${nextWP.name} (${dist}km)`;
-    } else if (nextWP) {
-        segmentText = `Onderweg naar ${nextWP.name}`;
+    if (prevWP && next) {
+        const dist = ((next.routePos - prevWP.routePos) / 1000).toFixed(2);
+        segmentText = `${prevWP.name} ➔ ${next.name} (${dist}km)`;
+    } else if (next) {
+        segmentText = `Onderweg naar ${next.name}`;
     } else if (finished) {
         segmentText = "Finish bereikt";
     }
 
+    // Update het onzichtbare (of zichtbare) traject-veld
     const segEl = document.getElementById('ui-segment');
     if (segEl) segEl.innerText = segmentText;
 
@@ -529,36 +531,30 @@ function updateWPUI() {
     const listTable = document.getElementById('list');
     if (!listTable) return;
 
+    // Maak een unieke sleutel van de huidige statussen (bijv: "true,false,false...")
+    const currentStatusKey = waypoints.map(w => `${w.passed}-${w.missed}`).join('|');
+
+    // Als de status hetzelfde is als de vorige keer, doe dan helemaal NIKS
+    if (currentStatusKey === lastWpStatusKey) return;
+
+    // Alleen als er iets is veranderd, bouwen we de tabel opnieuw op
+    lastWpStatusKey = currentStatusKey;
+    console.log("Tabel bijgewerkt"); // Zo kun je in de console zien dat hij minder vaak werkt
+
     listTable.innerHTML = waypoints.map((w, index) => {
-        // Controleer of er tekst in de omschrijving staat
         const heeftInfo = w.desc && w.desc.trim() !== "";
-        
-        // Maak een subtiel "INFO" labeltje als er omschrijving beschikbaar is
-        const infoLabel = heeftInfo ? 
-            `<span style="
-                background: #3498db; 
-                color: white; 
-                font-size: 0.6rem; 
-                padding: 1px 4px; 
-                border-radius: 4px; 
-                margin-left: 6px; 
-                vertical-align: middle;
-                font-weight: normal;
-            ">I</span>` : '';
+        const infoLabel = heeftInfo ? `<span style="background: #3498db; color: white; font-size: 0.6rem; padding: 1px 4px; border-radius: 4px; margin-left: 6px; vertical-align: middle;">I</span>` : '';
 
         return `
             <tr onclick="speakWaypointDesc(${index})" 
                 class="${w.missed ? 'strikethrough' : ''}" 
                 style="color: ${w.passed ? '#27ae60' : (w.missed ? '#e74c3c' : '#2c3e50')}; cursor: pointer; border-bottom: 1px solid #f1f1f1;">
                 <td style="padding: 8px 4px;">${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
-                <td style="padding: 8px 4px; font-weight: bold;">
-                    ${w.name}${infoLabel}
-                </td>
+                <td style="padding: 8px 4px; font-weight: bold;">${w.name}${infoLabel}</td>
                 <td style="padding: 8px 4px; text-align:right">${(w.routePos/1000).toFixed(2)}km</td>
             </tr>`;
     }).join('');
 }
-
 // Deze functie moet je er direct onder (of boven) plaatsen
 function speakWaypointDesc(index) {
     const w = waypoints[index];
