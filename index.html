@@ -199,19 +199,22 @@ function getRInfo(lat, lon) {
 }
 
 function copyCoords() {
-    // We halen de tekst op en passen jouw \u200B truc direct toe voor de weergave in de kopie
+    // We voegen de onzichtbare spatie toe na de punt én na het tweede cijfer.
+    // Dit breekt de herkenning voor Google/Apple Maps scanners volledig.
     const latClean = DOM.uiLat.innerText.replace(".", ".\u200B");
     const lonClean = DOM.uiLon.innerText.replace(".", ".\u200B");
     
-    // Segment info ophalen uit de UI
-    const segment = document.getElementById('ui-segment') ? document.getElementById('ui-segment').innerText : "Onbekend";
+    // Segment info ophalen
+    const uiSegment = document.getElementById('ui-segment');
+    const segment = uiSegment ? uiSegment.innerText : "---";
     
-    // De tekst die daadwerkelijk gekopieerd wordt
-    // De link zelf houden we 'schoon' voor Google, de tekst erboven krijgt de \u200B
+    // We bouwen de tekst op. 
+    // De coordinaten bovenin zijn 'veilig' (met \u200B).
+    // De Google link onderaan is de enige echte link.
     const shareText = `Locatie: ${latClean}, ${lonClean}
 Traject: ${segment}
 
-Google Maps: https://www.google.com/maps?q=${DOM.uiLat.innerText},${DOM.uiLon.innerText}`;
+Maps: https://www.google.com/maps?q=${DOM.uiLat.innerText},${DOM.uiLon.innerText}`;
 
     navigator.clipboard.writeText(shareText).then(() => {
         const b = document.getElementById('copyCoords');
@@ -220,7 +223,6 @@ Google Maps: https://www.google.com/maps?q=${DOM.uiLat.innerText},${DOM.uiLon.in
         setTimeout(() => b.innerText = "📋 KOPIEER", 2000);
     });
 }
-
     async function requestWakeLock() {
     try {
         if ('wakeLock' in navigator) {
