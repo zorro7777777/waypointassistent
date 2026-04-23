@@ -207,22 +207,27 @@ function getRInfo(lat, lon) {
 }
 
 function copyCoords() {
-    // Jouw bewezen methode voor de tekstweergave
+    // 1. Maak de tekstversie voor het scherm (met de onzichtbare spatie voor WhatsApp)
     const latDisplay = DOM.uiLat.innerText.replace(".", ".\u200B");
     const lonDisplay = DOM.uiLon.innerText.replace(".", ".\u200B");
     
-    // Segment info ophalen uit de UI
+    // 2. Pak de traject info
     const uiSegment = document.getElementById('ui-segment');
     const segment = uiSegment ? uiSegment.innerText : "---";
 
-    // De complete tekst die we gaan kopiëren
-    // We gebruiken jouw replace-truc voor de bovenste regel
+    // 3. Bouw de tekst (Hier zat de fout bij de Maps link)
+    // We gebruiken ${ } om de echte cijfers in de tekst te zetten
     const text = `Locatie: ${latDisplay}, ${lonDisplay}\nTraject: ${segment}\n\nMaps: https://www.google.com/maps?q=${DOM.uiLat.innerText},${DOM.uiLon.innerText}`;
 
+    // 4. Kopieer naar klembord
     navigator.clipboard.writeText(text).then(() => {
         const b = document.getElementById('copyCoords');
         b.innerText = "✅ OK";
+        
+        // Zorg dat er geen tekst geselecteerd blijft (voor een schone UI)
         window.getSelection().removeAllRanges();
+        
+        // Zet de knop na 2 seconden weer terug
         setTimeout(() => b.innerText = "📋 KOPIEER", 2000);
     });
 }
