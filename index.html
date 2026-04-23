@@ -87,6 +87,12 @@
     </div>
 </div>
 
+    <div style="color: #ffff00; font-size: 0.8rem; margin-bottom: 5px;">
+    TRAJECT: <span id="ui-segment">---</span>
+</div>
+
+
+
     <input type="file" id="gpxInput" accept=".gpx">
     
     <div class="row">
@@ -455,6 +461,22 @@ function updateUI(lat, lon, R, skmh, eta, avg, met, acc) {
 
     const segEl = document.getElementById('ui-segment');
     if (segEl) segEl.innerText = segmentText;
+
+    // Zoek het huidige doel en het vorige punt
+const nextWP = waypoints.find(w => !w.passed && !w.missed);
+const prevWP = [...waypoints].reverse().find(w => w.passed);
+
+let segmentText = "---";
+if (prevWP && nextWP) {
+    const dist = ((nextWP.routePos - prevWP.routePos) / 1000).toFixed(2);
+    segmentText = `${prevWP.name} ➔ ${nextWP.name} (${dist}km)`;
+} else if (nextWP) {
+    segmentText = `Onderweg naar ${nextWP.name}`;
+}
+
+// Zet de tekst in de UI (zorg dat dit ID in je HTML staat!)
+const segEl = document.getElementById('ui-segment');
+if (segEl) segEl.innerText = segmentText;
 
     updateWPUI();
 }
