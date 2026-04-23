@@ -199,12 +199,19 @@ function getRInfo(lat, lon) {
 }
 
 function copyCoords() {
-    const text = `${DOM.uiLat.innerText.replace(".", ".\u200B")}, ${DOM.uiLon.innerText.replace(".", ".\u200B")}`;
-    navigator.clipboard.writeText(text).then(() => {
+    const lat = DOM.uiLat.innerText;
+    const lon = DOM.uiLon.innerText;
+    
+    // We maken een tekstblok met de cijfers én een Google Maps link op een nieuwe regel
+    const shareText = `Mijn locatie:\nLat: ${lat}\nLon: ${lon}\n\nhttps://www.google.com/maps?q=${lat},${lon}`;
+
+    navigator.clipboard.writeText(shareText).then(() => {
         const b = document.getElementById('copyCoords');
-        b.innerText = "✅ OK";
+        b.innerText = "✅ LINK GEKOPIEERD";
         window.getSelection().removeAllRanges();
         setTimeout(() => b.innerText = "📋 KOPIEER", 2000);
+    }).catch(err => {
+        console.error('Kopiëren mislukt', err);
     });
 }
 
