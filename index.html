@@ -422,7 +422,6 @@ function updateUI(lat, lon, R, skmh, eta, avg, met, acc) {
     // OFF-route
     const off = Math.round(R.off);
     DOM.uiOffBig.innerText = off + "m";
-
     DOM.uiOffBig.style.fontSize = '2.2rem';
 
     if (off > 80) {
@@ -436,7 +435,7 @@ function updateUI(lat, lon, R, skmh, eta, avg, met, acc) {
         DOM.uiOffBig.style.fontWeight = 'bold';
     }
 
-    // Update de GPS nauwkeurigheid in het midden-boven blokje
+    // Update de GPS nauwkeurigheid
     if (DOM.uiAccBig) {
         const roundedAcc = Math.round(acc);
         DOM.uiAccBig.innerText = roundedAcc + "m";
@@ -462,47 +461,7 @@ function updateUI(lat, lon, R, skmh, eta, avg, met, acc) {
     const segEl = document.getElementById('ui-segment');
     if (segEl) segEl.innerText = segmentText;
 
-    // Zoek het huidige doel en het vorige punt
-const nextWP = waypoints.find(w => !w.passed && !w.missed);
-const prevWP = [...waypoints].reverse().find(w => w.passed);
-
-let segmentText = "---";
-if (prevWP && nextWP) {
-    const dist = ((nextWP.routePos - prevWP.routePos) / 1000).toFixed(2);
-    segmentText = `${prevWP.name} ➔ ${nextWP.name} (${dist}km)`;
-} else if (nextWP) {
-    segmentText = `Onderweg naar ${nextWP.name}`;
-}
-
-// Zet de tekst in de UI (zorg dat dit ID in je HTML staat!)
-const segEl = document.getElementById('ui-segment');
-if (segEl) segEl.innerText = segmentText;
-
     updateWPUI();
-}
-    
-function fmt(s) { return new Date(s * 1000).toISOString().substr(11, 8); }
-    
-// VERVANG DE BESTAANDE getMet FUNCTIE DOOR DEZE:
-function getMet(s) { 
-    if (s < 1.0) return 1.0; // Echt stilstaan/rust
-    
-    const profile = document.getElementById('profile').value;
-    
-    if (profile === 'wandelen') {
-        // Lineaire schaling: 3.0 bij 4km/u, 4.5 bij 6km/u
-        if (s > 6.5) return 5.0; 
-        if (s > 5.5) return 4.0;
-        if (s > 4.0) return 3.2;
-        return 2.5; // Rustig wandelen
-    } else {
-        // Fietsen (iets conservatiever)
-        if (s > 30) return 11.0;
-        if (s > 25) return 9.0;
-        if (s > 20) return 7.5;
-        if (s > 15) return 5.5;
-        return 3.5; 
-    }
 }
     
 // --- GPX File upload  ---
