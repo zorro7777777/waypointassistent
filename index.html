@@ -187,66 +187,38 @@ function processQueue() {
     window.speechSynthesis.speak(msg);
 }
 
-
-function getDist(a, b) {
+function getDist(a, b, c, d) {
     const R = 6371000;
-    const dLat = b.latRad - a.latRad;
-    const dLon = b.lonRad - a.lonRad;
 
-    const x = Math.sin(dLat/2)**2 +
-              Math.cos(a.latRad) * Math.cos(b.latRad) *
-              Math.sin(dLon/2)**2;
+    // constant voor conversie
+    const toRad = Math.PI / 180;
+
+    const lat1 = a * toRad;
+    const lat2 = c * toRad;
+    const dLat = (c - a) * toRad;
+    const dLon = (d - b) * toRad;
+
+    const sinDLat = Math.sin(dLat / 2);
+    const sinDLon = Math.sin(dLon / 2);
+
+    const x =
+        sinDLat * sinDLat +
+        Math.cos(lat1) * Math.cos(lat2) *
+        sinDLon * sinDLon;
 
     return 2 * R * Math.asin(Math.sqrt(x));
 }
-
+    
 function getRInfo(lat, lon) {
     if (track.length === 0) return { pos: 0, off: 0 };
-
-    const latRad = lat * Math.PI / 180;
-    const lonRad = lon * Math.PI / 180;
-
-    let bestDist = Infinity;
-    let bestPos = 0;
-    let bestIdx = lastTrackIndex;
-
-    // adaptive range
-    const range = Math.max(30, Math.floor(smoothSpeed * 8));
-    let start = Math.max(0, lastTrackIndex - range);
-    let end   = Math.min(track.length, lastTrackIndex + range);
-
-    // coarse scan (skip)
-    for (let i = start; i < end; i += 3) {
-        const d = getDistFast(
-            { latRad, lonRad },
-            track[i]
-        );
-
-        if (d < bestDist) {
-            bestDist = d;
-            bestIdx = i;
-        }
-    }
-
-    // refine scan
-    start = Math.max(0, bestIdx - 5);
-    end   = Math.min(track.length, bestIdx + 5);
-
+    let bD = Infinity, bP = 0, bestIdx = 0;
+    let start = Math.max(0, lastTrackIndex - 100), end = Math.min(track.length, lastTrackIndex + 200);
     for (let i = start; i < end; i++) {
-        const d = getDistFast(
-            { latRad, lonRad },
-            track[i]
-        );
-
-        if (d < bestDist) {
-            bestDist = d;
-            bestPos = cumDist[i];
-            bestIdx = i;
-        }
+        const d = getDist(lat, lon, track[i].lat, track[i].lon);
+        if (d < bD) { bD = d; bP = cumDist[i]; bestIdx = i; }
     }
-
     lastTrackIndex = bestIdx;
-    return { pos: bestPos, off: bestDist };
+    return { pos: bP, off: bD };
 }
 
 function copyCoords() {
