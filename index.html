@@ -521,14 +521,34 @@ function updateWPUI() {
     const listTable = document.getElementById('list');
     if (!listTable) return;
 
-    listTable.innerHTML = waypoints.map((w, index) => `
-        <tr onclick="speakWaypointDesc(${index})" 
-            class="${w.missed ? 'strikethrough' : ''}" 
-            style="color: ${w.passed ? '#27ae60' : (w.missed ? '#e74c3c' : '#2c3e50')}; cursor: pointer;">
-            <td style="padding: 6px 4px;">${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
-            <td style="padding: 6px 4px; font-weight: bold;">${w.name}</td>
-            <td style="padding: 6px 4px; text-align:right">${(w.routePos/1000).toFixed(2)}km</td>
-        </tr>`).join('');
+    listTable.innerHTML = waypoints.map((w, index) => {
+        // Controleer of er tekst in de omschrijving staat
+        const heeftInfo = w.desc && w.desc.trim() !== "";
+        
+        // Maak een subtiel "INFO" labeltje als er omschrijving beschikbaar is
+        const infoLabel = heeftInfo ? 
+            `<span style="
+                background: #3498db; 
+                color: white; 
+                font-size: 0.6rem; 
+                padding: 1px 4px; 
+                border-radius: 4px; 
+                margin-left: 6px; 
+                vertical-align: middle;
+                font-weight: normal;
+            ">INFO</span>` : '';
+
+        return `
+            <tr onclick="speakWaypointDesc(${index})" 
+                class="${w.missed ? 'strikethrough' : ''}" 
+                style="color: ${w.passed ? '#27ae60' : (w.missed ? '#e74c3c' : '#2c3e50')}; cursor: pointer; border-bottom: 1px solid #f1f1f1;">
+                <td style="padding: 8px 4px;">${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
+                <td style="padding: 8px 4px; font-weight: bold;">
+                    ${w.name}${infoLabel}
+                </td>
+                <td style="padding: 8px 4px; text-align:right">${(w.routePos/1000).toFixed(2)}km</td>
+            </tr>`;
+    }).join('');
 }
 
 // Deze functie moet je er direct onder (of boven) plaatsen
