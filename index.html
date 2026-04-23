@@ -199,25 +199,19 @@ function getRInfo(lat, lon) {
 }
 
 function copyCoords() {
-    // We halen de ruwe cijfers op
-    const rawLat = DOM.uiLat.innerText;
-    const rawLon = DOM.uiLon.innerText;
-
-    // We breken de herkenning door een onzichtbare spatie NA het eerste cijfer 
-    // EN NA de punt te zetten. Dit stopt de automatische onderstreping op iPhone/Android.
-    const latClean = rawLat.charAt(0) + "\u200B" + rawLat.substring(1).replace(".", ".\u200B");
-    const lonClean = rawLon.charAt(0) + "\u200B" + rawLon.substring(1).replace(".", ".\u200B");
+    // Jouw bewezen methode voor de tekstweergave
+    const latDisplay = DOM.uiLat.innerText.replace(".", ".\u200B");
+    const lonDisplay = DOM.uiLon.innerText.replace(".", ".\u200B");
     
+    // Segment info ophalen uit de UI
     const uiSegment = document.getElementById('ui-segment');
     const segment = uiSegment ? uiSegment.innerText : "---";
-    
-    // De shareText met de 'gebroken' tekst bovenin en de werkende link onderin
-    const shareText = `Locatie: ${latClean}, ${lonClean}
-Traject: ${segment}
 
-Maps: https://www.google.com/maps?q=${rawLat},${rawLon}`;
+    // De complete tekst die we gaan kopiëren
+    // We gebruiken jouw replace-truc voor de bovenste regel
+    const text = `Locatie: ${latDisplay}, ${lonDisplay}\nTraject: ${segment}\n\nMaps: https://www.google.com/maps?q=${DOM.uiLat.innerText},${DOM.uiLon.innerText}`;
 
-    navigator.clipboard.writeText(shareText).then(() => {
+    navigator.clipboard.writeText(text).then(() => {
         const b = document.getElementById('copyCoords');
         b.innerText = "✅ OK";
         window.getSelection().removeAllRanges();
