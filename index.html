@@ -225,7 +225,7 @@ function getDist(a, b, c, d) {
 }
     
 function getRInfo(lat, lon) {
-    if (track.length === 0) return { pos: 0, off: 0 };
+    if (!track.length) return { pos: 0, off: 0 };
 
     const latRad = lat * Math.PI / 180;
     const lonRad = lon * Math.PI / 180;
@@ -234,24 +234,21 @@ function getRInfo(lat, lon) {
     let bestIdx = lastTrackIndex;
     let bestPos = 0;
 
-    // 🔥 adaptieve zoekrange (belangrijkste winst)
-    const range = Math.max(40, Math.floor(smoothSpeed * 8));
+    // 🔥 kleinere, stabiele range (belangrijk!)
+    const range = 80; // FIXED i.p.v. adaptive
 
-    let start = lastTrackIndex - range;
-    if (start < 0) start = 0;
+    let start = Math.max(0, lastTrackIndex - range);
+    let end   = Math.min(track.length, lastTrackIndex + range);
 
-    let end = lastTrackIndex + range;
-    if (end > track.length) end = track.length;
-
-    // 🔥 1e pass: grove scan (skip stappen)
-    for (let i = start; i < end; i += 3) {
+    // 🔥 scan met skip (maar minder agressief)
+    for (let i = start; i < end; i += 2) {
         const t = track[i];
 
         const dLat = t.latRad - latRad;
         const dLon = t.lonRad - lonRad;
 
-        const sinDLat = Math.sin(dLat * 0.5);
-        const sinDLon = Math.sin(dLon * 0.5);
+        const sinDLat = Math.sin(dLat / 2);
+        const sinDLon = Math.sin(dLon / 2);
 
         const a =
             sinDLat * sinDLat +
@@ -266,21 +263,18 @@ function getRInfo(lat, lon) {
         }
     }
 
-    // 🔥 2e pass: verfijning rond beste punt
-    start = bestIdx - 6;
-    if (start < 0) start = 0;
+    // 🔥 verfijning (ESSENTIEEL voor stabiliteit)
+    const refineStart = Math.max(0, bestIdx - 5);
+    const refineEnd   = Math.min(track.length, bestIdx + 5);
 
-    end = bestIdx + 6;
-    if (end > track.length) end = track.length;
-
-    for (let i = start; i < end; i++) {
+    for (let i = refineStart; i < refineEnd; i++) {
         const t = track[i];
 
         const dLat = t.latRad - latRad;
         const dLon = t.lonRad - lonRad;
 
-        const sinDLat = Math.sin(dLat * 0.5);
-        const sinDLon = Math.sin(dLon * 0.5);
+        const sinDLat = Math.sin(dLat / 2);
+        const sinDLon = Math.sin(dLon / 2);
 
         const a =
             sinDLat * sinDLat +
@@ -296,11 +290,14 @@ function getRInfo(lat, lon) {
     }
 
     lastTrackIndex = bestIdx;
-    bestPos = cumDist[bestIdx];
+    bestPos = cumDist[bestIdx] || 0;
 
-    return { pos: bestPos, off: bestDist };
+    return {
+        pos: bestPos,
+        off: bestDist
+    };
 }
-
+    
 function copyCoords() {
     // 1. Maak de tekstversie voor het scherm (met de onzichtbare spatie voor WhatsApp)
     const latDisplay = DOM.uiLat.innerText.replace(".", ".\u200B");
