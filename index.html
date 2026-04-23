@@ -87,26 +87,33 @@
     </div>
 </div>
 
-<div style="color: #27ae60; font-size: 0.8rem; margin-bottom: 5px; font-weight: bold;">
-    TRAJECT: <span id="ui-segment">---</span>
+// --- Traject: van WP naar WP groen opgemaak boven de knoppen ---
+
+<div style="color: #1b5e20; font-size: 0.9rem; margin: 10px 0; font-weight: bold; line-height: 1.4;">
+    TRAJECT:<br>
+    <span id="ui-segment" style="color: #27ae60; font-size: 1.1rem;">---</span>
 </div>
 
 
-
+// --- Bestandskiezer voor GPX  ---
     <input type="file" id="gpxInput" accept=".gpx">
+
+// --- Knoppencontainer ---    
     
     <div class="row">
         <button onclick="handleStartPause()" id="startBtn" class="start">▶ START</button>
         <button onclick="toggleTable()" style="background: #3498db; flex: 0.4;">📑</button>
         <button onclick="location.reload()" id="resetBtn" style="background: #e74c3c; flex: 0.4; display: none;">🔄</button>
     </div>
+
+    // --- Info bij laden in het display ---    
     
     <div id="info">
         <div id="standby-msg" style="text-align:center; padding: 40px 0;">STANDBY - GPX FILE LADEN A.U.B.</div>
-        
-        <div id="live-ui" style="display:none;">
-            <div>WP: <span id="ui-next-wp" class="highlight">---</span> (<span id="ui-dist">0m</span>)</div>
+
             <hr>
+        
+    // --- Info displaycontainer ---  
             <div style="display:grid; grid-template-columns: 1.2fr 1fr; gap: 4px;">
                 <div>TRIP: <span id="ui-trip" class="field-green">0.000km</span></div>
                 <div>ETA : <span id="ui-eta" class="field-green">--:--</span></div>
@@ -117,13 +124,17 @@
                 <div>MET : <span id="ui-met" class="field-green">1.0</span></div>
                 <div>TRACK: <span id="ui-total-dist" class="field-green">0.000km</span></div>
                 </div>
+        
             <hr>
+        
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                 <div><span id="ui-unit-label">STAPPEN:</span> <span id="ui-steps" class="field-green">0</span></div>
                 <div style="text-align: right;">KCAL: <span id="ui-kcal" class="field-green">0</span></div>
             </div>
+        
             <hr>
-            
+        
+         // --- Info Coördinatencontainer ---     
             <div class="coord-container">
                 <div style="font-size: 0.8rem; pointer-events: none;">
                     <span class="field-yellow">LAT: <span id="ui-lat">0.000000</span></span><br>
@@ -136,13 +147,18 @@
         </div>
     </div>
 </div>
-
+    
+ <hr>
+    
 <script>
+
+    // --- Config profielen ---  
 const PROFS = {
     wandelen: { ms: 0.36, max: 7, th: 0.67, radius: 15, unit: "STAPPEN" },
     fietsen:  { ms: 5.5, max: 45, th: 2.10, radius: 25, unit: "OMWENTELINGEN" }
 };
 
+// --- Declaratiesectie van de variabelen --- 
 let CONFIG = { ...PROFS.wandelen };
 let track = [], waypoints = [], cumDist = [];
 let watchId = null, lastPos = null, tripDist = 0, finished = false;
@@ -153,6 +169,10 @@ let wakeLock = null;
 let smoothSpeed = 0;
 let isOffRoute = false; // Nieuwe status-tracker
 let lastWpStatusKey = "";
+    
+// De technische peer-to-peer uitleg
+// Dit is onze DOM Cache. In plaats van constant de hele pagina te scannen naar elementen,
+// slaan we de referenties hier eenmalig op. Zo houden we de app snel en de code 'DRY'.
 
 const DOM = {
     uiNextWp: document.getElementById('ui-next-wp'), uiDist: document.getElementById('ui-dist'),
@@ -171,12 +191,15 @@ const DOM = {
     gpxInput: document.getElementById('gpxInput'), configArea: document.getElementById('configArea')
 };
 
+ // --- Spraakboodschap Start en einde aankondigen ---    
+
 function speak(text) {
     if (!DOM.audioToggle.checked) return;
     speechQueue.push(text.replace("START", "Het Startpunt").replace("FINISH", "De Finish"));
     if (!isSpeaking) processQueue();
 }
 
+// --- Wachtrij Spraakboodschappen waypoints ---   
 function processQueue() {
     if (speechQueue.length === 0) { isSpeaking = false; return; }
     isSpeaking = true;
@@ -185,6 +208,8 @@ function processQueue() {
     msg.onend = () => setTimeout(processQueue, 500);
     window.speechSynthesis.speak(msg);
 }
+
+// --- Haversine formule afstand berekenen ---  
 
 function getDist(a, b, c, d) {
     const R = 6371000;
@@ -204,6 +229,8 @@ function getRInfo(lat, lon) {
     lastTrackIndex = bestIdx;
     return { pos: bP, off: bD };
 }
+
+// --- Kopierfunctie Coördinaten ---  
 
 function copyCoords() {
     // Jouw bewezen methode voor de tekstweergave
