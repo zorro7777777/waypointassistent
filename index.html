@@ -199,19 +199,25 @@ function getRInfo(lat, lon) {
 }
 
 function copyCoords() {
-    const lat = DOM.uiLat.innerText;
-    const lon = DOM.uiLon.innerText;
+    // We halen de tekst op en passen jouw \u200B truc direct toe voor de weergave in de kopie
+    const latClean = DOM.uiLat.innerText.replace(".", ".\u200B");
+    const lonClean = DOM.uiLon.innerText.replace(".", ".\u200B");
     
-    // We maken een tekstblok met de cijfers én een Google Maps link op een nieuwe regel
-    const shareText = `Mijn locatie:\nLat: ${lat}\nLon: ${lon}\n\nhttps://www.google.com/maps?q=${lat},${lon}`;
+    // Segment info ophalen uit de UI
+    const segment = document.getElementById('ui-segment') ? document.getElementById('ui-segment').innerText : "Onbekend";
+    
+    // De tekst die daadwerkelijk gekopieerd wordt
+    // De link zelf houden we 'schoon' voor Google, de tekst erboven krijgt de \u200B
+    const shareText = `Locatie: ${latClean}, ${lonClean}
+Traject: ${segment}
+
+Google Maps: https://www.google.com/maps?q=${DOM.uiLat.innerText},${DOM.uiLon.innerText}`;
 
     navigator.clipboard.writeText(shareText).then(() => {
         const b = document.getElementById('copyCoords');
-        b.innerText = "✅ LINK GEKOPIEERD";
+        b.innerText = "✅ OK";
         window.getSelection().removeAllRanges();
         setTimeout(() => b.innerText = "📋 KOPIEER", 2000);
-    }).catch(err => {
-        console.error('Kopiëren mislukt', err);
     });
 }
 
