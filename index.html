@@ -226,14 +226,79 @@ function getDist(a, b, c, d) {
     
 function getRInfo(lat, lon) {
     if (track.length === 0) return { pos: 0, off: 0 };
-    let bD = Infinity, bP = 0, bestIdx = 0;
-    let start = Math.max(0, lastTrackIndex - 100), end = Math.min(track.length, lastTrackIndex + 200);
-    for (let i = start; i < end; i++) {
-        const d = getDist(lat, lon, track[i].lat, track[i].lon);
-        if (d < bD) { bD = d; bP = cumDist[i]; bestIdx = i; }
+
+    const latRad = lat * Math.PI / 180;
+    const lonRad = lon * Math.PI / 180;
+
+    let bestDist = Infinity;
+    let bestIdx = lastTrackIndex;
+    let bestPos = 0;
+
+    // 🔥 adaptieve zoekrange (belangrijkste winst)
+    const range = Math.max(40, Math.floor(smoothSpeed * 8));
+
+    let start = lastTrackIndex - range;
+    if (start < 0) start = 0;
+
+    let end = lastTrackIndex + range;
+    if (end > track.length) end = track.length;
+
+    // 🔥 1e pass: grove scan (skip stappen)
+    for (let i = start; i < end; i += 3) {
+        const t = track[i];
+
+        const dLat = t.latRad - latRad;
+        const dLon = t.lonRad - lonRad;
+
+        const sinDLat = Math.sin(dLat * 0.5);
+        const sinDLon = Math.sin(dLon * 0.5);
+
+        const a =
+            sinDLat * sinDLat +
+            Math.cos(latRad) * Math.cos(t.latRad) *
+            sinDLon * sinDLon;
+
+        const d = 6371000 * 2 * Math.asin(Math.sqrt(a));
+
+        if (d < bestDist) {
+            bestDist = d;
+            bestIdx = i;
+        }
     }
+
+    // 🔥 2e pass: verfijning rond beste punt
+    start = bestIdx - 6;
+    if (start < 0) start = 0;
+
+    end = bestIdx + 6;
+    if (end > track.length) end = track.length;
+
+    for (let i = start; i < end; i++) {
+        const t = track[i];
+
+        const dLat = t.latRad - latRad;
+        const dLon = t.lonRad - lonRad;
+
+        const sinDLat = Math.sin(dLat * 0.5);
+        const sinDLon = Math.sin(dLon * 0.5);
+
+        const a =
+            sinDLat * sinDLat +
+            Math.cos(latRad) * Math.cos(t.latRad) *
+            sinDLon * sinDLon;
+
+        const d = 6371000 * 2 * Math.asin(Math.sqrt(a));
+
+        if (d < bestDist) {
+            bestDist = d;
+            bestIdx = i;
+        }
+    }
+
     lastTrackIndex = bestIdx;
-    return { pos: bP, off: bD };
+    bestPos = cumDist[bestIdx];
+
+    return { pos: bestPos, off: bestDist };
 }
 
 function copyCoords() {
