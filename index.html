@@ -575,6 +575,26 @@ function toggleConfig() {
 }
 function toggleTable() { document.getElementById('tableCon').style.display = document.getElementById('tableCon').style.display==='none'?'block':'none'; }
 function updateProfile() { CONFIG = { ...PROFS[document.getElementById('profile').value] }; DOM.uiUnitLabel.innerText = CONFIG.unit + ":"; }
+
+    function getMet(s) { 
+    if (s < 1.0) return 1.0;
+    const profile = document.getElementById('profile').value;
+    if (profile === 'wandelen') {
+        if (s > 6.5) return 5.0; 
+        if (s > 5.5) return 4.0;
+        if (s > 4.0) return 3.2;
+        return 2.5;
+    } else {
+        if (s > 30) return 11.0;
+        if (s > 25) return 9.0;
+        if (s > 20) return 7.5;
+        if (s > 15) return 5.5;
+        return 3.5; 
+    }
+}
+
+function fmt(s) { return new Date(s * 1000).toISOString().substr(11, 8); }
+
 </script>
 </body>
 </html>
