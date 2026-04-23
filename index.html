@@ -460,24 +460,55 @@ DOM.gpxInput.onchange = e => {
     const r = new FileReader();
     r.onload = ev => {
         const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
-        const pts = [...xml.getElementsByTagName('trkpt')];
-        track = pts.map(p => ({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') }));
-        cumDist = [0];
-        for(let i=0; i<track.length-1; i++) cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
         
+        // 1. Verwerk Trackpunten (nu met hoogte 'ele')
+        const pts = [...xml.getElementsByTagName('trkpt')];
+        track = pts.map(p => ({ 
+            lat: +p.getAttribute('lat'), 
+            lon: +p.getAttribute('lon'),
+            ele: +p.getElementsByTagName('ele')[0]?.textContent || 0 
+        }));
+
+        // Afstanden berekenen
+        cumDist = [0];
+        for(let i=0; i<track.length-1; i++) {
+            cumDist[i+1] = cumDist[i] + getDist(track[i].lat, track[i].lon, track[i+1].lat, track[i+1].lon);
+        }
+        
+        // 2. Verwerk Waypoints (nu met 'desc' en 'ele')
         waypoints = [...xml.getElementsByTagName('wpt')].map(w => ({
             name: w.getElementsByTagName('name')[0]?.textContent || "WPT",
-            lat: +w.getAttribute('lat'), lon: +w.getAttribute('lon'), passed: false, missed: false
+            desc: w.getElementsByTagName('desc')[0]?.textContent || "", // Omschrijving
+            ele: +w.getElementsByTagName('ele')[0]?.textContent || 0,   // Hoogte
+            lat: +w.getAttribute('lat'), 
+            lon: +w.getAttribute('lon'), 
+            passed: false, 
+            missed: false
         }));
-        if (!waypoints.find(w => w.name === "START")) waypoints.push({ name: "START", lat: track[0].lat, lon: track[0].lon, passed: false, missed: false });
-        waypoints.push({ name: "FINISH", lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false });
+
+        // Voeg START/FINISH toe als ze ontbreken
+        if (!waypoints.find(w => w.name === "START")) {
+            waypoints.push({ name: "START", desc: "Startpunt", ele: track[0]?.ele || 0, lat: track[0].lat, lon: track[0].lon, passed: false, missed: false });
+        }
+        waypoints.push({ name: "FINISH", desc: "Eindpunt", ele: track.at(-1)?.ele || 0, lat: track.at(-1).lat, lon: track.at(-1).lon, passed: false, missed: false });
         
+        // Koppel waypoints aan de routepositie
         waypoints.forEach(w => {
             let bD = Infinity, bP = 0;
-            track.forEach((t, i) => { const d = getDist(w.lat, w.lon, t.lat, t.lon); if(d<bD) { bD=d; bP=cumDist[i]; }});
+            track.forEach((t, i) => { 
+                const d = getDist(w.lat, w.lon, t.lat, t.lon); 
+                if(d < bD) { bD = d; bP = cumDist[i]; }
+            });
             w.routePos = bP;
         });
+
+        // Sorteren en UI bijwerken
         waypoints.sort((a,b) => a.routePos - b.routePos);
+        
+        // Toon de totale afstand in de UI
+        const totalKm = (cumDist.at(-1) / 1000).toFixed(3);
+        if (DOM.uiTotalDist) DOM.uiTotalDist.innerText = totalKm + " km";
+
         DOM.standbyMsg.innerText = "GELADEN - DRUK START";
         DOM.gpxInput.style.display = 'none';
         updateWPUI();
