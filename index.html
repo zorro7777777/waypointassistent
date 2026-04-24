@@ -382,8 +382,11 @@ gpsHandler(pos) {
         // --- LOGISCHE CHECK (Early Exit) ---
         // Als de sessie niet actief is, updaten we alleen de locatie op de kaart.
         // We sturen 0 voor snelheid en afstand om de tellers in de UI te bevriezen.
+
         if (!CORE.session.isStarted || CORE.session.isPaused || CORE.session.finished) {
-            UI.update(lat, lon, acc, 0, 0, 0); 
+            // FIX 3: Gebruik de laatst bekende bP (meters) in plaats van 0
+            // We halen bP uit de sessie (moeten we wel opslaan onderaan de handler)
+            UI.update(lat, lon, acc, 0, 0, CORE.session.lastRoutePos || 0); 
             return; 
         }
 
@@ -445,27 +448,38 @@ gpsHandler(pos) {
             this.speak("U bent terug op de route.");
         }
 
-        // --- WAYPOINT CHECK ---
+    // --- WAYPOINT CHECK ---
         CORE.route.waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
+            
             const d = LOGIC.getDist(lat, lon, w.lat, w.lon);
+            
+            // Check of we binnen de straal zijn, of het punt al gepasseerd zijn op de route
             if (d < config.radius || (bP > w.routePos && d < 35)) {
-                // Voorkom valse finish melding als we pas net gestart zijn
+                // Veiligheid: Finish niet activeren als we nog maar net onderweg zijn
                 if (w.name === "FINISH" && bP < CORE.route.totalDist * 0.9) return;
                 
                 w.passed = true;
                 this.speak(`Punt bereikt: ${w.name}.`);
-                const next = CORE.route.waypoints.find((nw, idx) => idx > i && !nw.passed);
-                if (next) { 
+                
+                // PERFORMANCE OPTIMALISATIE:
+                // In plaats van .find(), kijken we gewoon naar het volgende item in de lijst
+                const next = CORE.route.waypoints[i + 1]; 
+                if (next && !next.passed) { 
                     this.speak(`Volgend punt is ${next.name} over ${LOGIC.formatVoiceDist(next.routePos - bP)}.`); 
                 }
+                
                 UI.updateTable();
-            } else if (bP > w.routePos + 100) {
+            } 
+            // Als we meer dan 100 meter voorbij het punt zijn zonder het te raken: markeer als gemist
+            else if (bP > w.routePos + 100) {
                 w.missed = true;
                 this.speak(`Waypoint ${w.name} gemist.`);
                 UI.updateTable();
             }
         });
+
+    CORE.session.lastRoutePos = bP; // Cache de positie voor pauze-momenten
 
         // --- FINALE UI UPDATE ---
         // We sturen 'bP' (meters op route) door zodat ETA en afstanden kloppen.
