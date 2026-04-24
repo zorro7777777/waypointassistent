@@ -241,8 +241,12 @@ const APP = {
             document.getElementById('standby-msg').style.display = 'none';
             document.getElementById('live-ui').style.display = 'block';
             document.getElementById('gpxInput').style.display = 'none';
+            
+            // De Stop-knop wordt zichtbaar om de sessie later te kunnen beëindigen
             document.getElementById('stopBtn').style.display = 'inline-block';
-            document.getElementById('resetBtn').style.display = 'inline-block';
+            
+            // De Reset-knop houden we nog even VERBORGEN (veiligheid)
+            document.getElementById('resetBtn').style.display = 'none';
 
             UI.updateTable();
             UI.update();
@@ -267,15 +271,31 @@ const APP = {
         CORE.session.lastTick = Date.now();
     },
 
-    handleStop() {
+handleStop() {
         if (!CORE.session.watchId) return;
+
+        // Verbreek de GPS verbinding volledig
         navigator.geolocation.clearWatch(CORE.session.watchId);
         CORE.session.watchId = null;
         CORE.session.isPaused = false;
+
+        // UI Terugzetten naar start-modus
         document.getElementById('startBtn').innerText = "▶ START";
         document.getElementById('startBtn').style.background = "var(--success)";
-        this.speak("Tracker gestopt. De tellers zijn gepauzeerd.");
-        UI.update(CORE.session.lastLat || 0, CORE.session.lastLon || 0, 0, 0, 0, CORE.session.lastTrackIdx);
+        
+        // --- DE UPGRADE: Knoppen wisselen ---
+        document.getElementById('stopBtn').style.display = 'none';           // Verberg Stop
+        document.getElementById('resetBtn').style.display = 'inline-block';  // Toon Reset
+        
+        this.speak("Tracker gestopt. De resetknop is nu beschikbaar.");
+        
+        // Forceer UI update naar 0 km/u met behoud van de laatste positie
+        UI.update(
+            CORE.session.lastLat || 0,
+            CORE.session.lastLon || 0,
+            0, 0, 0,
+            CORE.session.lastTrackIdx
+        );
     },
 
     gpsHandler(pos) {
