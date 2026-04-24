@@ -128,11 +128,13 @@ const LOGIC = {
         const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1r) * Math.cos(lat2r) * Math.sin(dLon / 2) ** 2;
         return 2 * R * Math.asin(Math.sqrt(a));
     },
+    
     getMET(speed, profile) {
         const table = CORE.met_table[profile];
         for (const entry of table) { if (speed <= entry.max) return entry.met; }
         return 1.0;
     },
+    
     formatVoiceDist(meters) {
         return meters < 1000 ? `${Math.round(meters)} meter` : `${(meters / 1000).toFixed(1)} kilometer`.replace('.', ',');
     }
@@ -175,15 +177,18 @@ const UI = {
         const prev = [...CORE.route.waypoints].reverse().find(w => w.passed);
         document.getElementById('ui-segment').innerText = (prev && nextWp) ? `${prev.name} ➔ ${nextWp.name}` : (nextWp ? `Naar ${nextWp.name}` : "🏁 Bestemming bereikt");
     },
+    
     fmt(s) { return new Date(s * 1000).toISOString().substr(11, 8); },
     toggleConfig() {
         const s = document.getElementById('configArea').style;
         s.display = (s.display === 'block' ? 'none' : 'block');
     },
+    
     toggleTable() {
         const s = document.getElementById('tableCon').style;
         s.display = (s.display === 'none' ? 'block' : 'none');
     },
+    
     updateProfile() { UI.update(); },
     updateTable() {
         document.getElementById('wpList').innerHTML = CORE.route.waypoints.map((w,i) => `
@@ -250,21 +255,47 @@ const APP = {
         reader.readAsText(e.target.files[0]);
     },
 
-    handleStartPause() {
-        if (CORE.route.track.length === 0) return alert("Laad GPX.");
+handleStartPause() {
+        // 1. Veiligheidscheck: is er wel een route geladen?
+        if (CORE.route.track.length === 0) {
+            alert("Laad eerst een GPX bestand voordat je start.");
+            return;
+        }
+
+        // 2. Als er nog geen GPS-tracker loopt (Eerste start)
         if (!CORE.session.watchId) {
-            CORE.session.watchId = navigator.geolocation.watchPosition(p => this.gpsHandler(p), e => alert(e.message), { enableHighAccuracy: true });
+            CORE.session.watchId = navigator.geolocation.watchPosition(
+                p => this.gpsHandler(p), 
+                e => alert("GPS Fout: " + e.message), 
+                { enableHighAccuracy: true }
+            );
+            
+            CORE.session.isStarted = true;
             CORE.session.isPaused = false;
+            CORE.session.lastTick = Date.now(); // Start de tijdmeting
+
             document.getElementById('startBtn').innerText = "⏸ PAUZE";
             document.getElementById('startBtn').style.background = "var(--warning)";
-            this.speak("Tracker geactiveerd.");
-        } else {
+            
+            this.speak("Tracker geactiveerd. Veel plezier.");
+        } 
+        // 3. Als de tracker al loopt (Wisselen tussen Pauze en Hervatten)
+        else {
             CORE.session.isPaused = !CORE.session.isPaused;
-            document.getElementById('startBtn').innerText = CORE.session.isPaused ? "▶ HERVAT" : "⏸ PAUZE";
-            document.getElementById('startBtn').style.background = CORE.session.isPaused ? "var(--success)" : "var(--warning)";
-            this.speak(CORE.session.isPaused ? "Pauze." : "Hervat.");
+            
+            if (CORE.session.isPaused) {
+                // Nu op pauze
+                document.getElementById('startBtn').innerText = "▶ HERVAT";
+                document.getElementById('startBtn').style.background = "var(--success)";
+                this.speak("Pauze.");
+            } else {
+                // Weer aan het wandelen/fietsen
+                CORE.session.lastTick = Date.now(); // Reset tick om tijdsprongen te voorkomen
+                document.getElementById('startBtn').innerText = "⏸ PAUZE";
+                document.getElementById('startBtn').style.background = "var(--warning)";
+                this.speak("Hervat.");
+            }
         }
-        CORE.session.lastTick = Date.now();
     },
 
     handleStop() {
@@ -283,48 +314,86 @@ const APP = {
         UI.update(CORE.session.lastLat || 0, CORE.session.lastLon || 0, 0, 0, 0, CORE.session.lastTrackIdx);
     },
 
-    handleReset() {
+   handleReset() {
+        // 1. GPS echt uitvinken
         if (CORE.session.watchId) {
             navigator.geolocation.clearWatch(CORE.session.watchId);
             CORE.session.watchId = null;
         }
 
+        // 2. Volledige herstart van de sessie-object vlaggen
         Object.assign(CORE.session, {
-            isStarted: false, isPaused: false, isOffRoute: false, finished: false,
-            lastTrackIdx: 0, tripDist: 0, movingTime: 0, pauseTime: 0, kcal: 0,
-            steps: 0, lastTick: null, currentMet: 1.0, lastOffRouteSpeakDist: 0, 
-            moveSeconds: 0, lastLat: 0, lastLon: 0
+            isStarted: false,    // Cruciaal: we staan weer op nul
+            isPaused: false,
+            isOffRoute: false,
+            finished: false,     // Reset ook de finish-vlag
+            lastTrackIdx: 0,
+            tripDist: 0,
+            movingTime: 0,
+            pauseTime: 0,
+            kcal: 0,
+            steps: 0,
+            lastTick: null,
+            currentMet: 1.0,
+            lastOffRouteSpeakDist: 0,
+            moveSeconds: 0,
+            lastLat: 0,
+            lastLon: 0
         });
 
-        CORE.route.waypoints.forEach(w => { w.passed = false; w.missed = false; });
+        // 3. Waypoints herstellen
+        CORE.route.waypoints.forEach(w => {
+            w.passed = false;
+            w.missed = false;
+        });
 
+        // 4. UI herstellen naar 'Gereed voor start'
         document.getElementById('startBtn').innerText = "▶ START";
         document.getElementById('startBtn').style.background = "var(--success)";
+
+        // Zet de knoppen weer in de juiste "klaar voor de start" modus
         document.getElementById('stopBtn').style.display = 'inline-block';
         document.getElementById('resetBtn').style.display = 'none';
+
+        this.speak("Sessie gewist. Klaar voor een nieuwe start.");
 
         UI.update();
         UI.updateTable();
     },
-
-    gpsHandler(pos) {
+    
+gpsHandler(pos) {
         const now = Date.now();
-        const delta = CORE.session.lastTick ? (now - CORE.session.lastTick)/1000 : 0;
+        const delta = CORE.session.lastTick ? (now - CORE.session.lastTick) / 1000 : 0;
         CORE.session.lastTick = now;
 
         const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = pos.coords;
         CORE.session.lastLat = lat;
         CORE.session.lastLon = lon;
 
-        if (CORE.session.isPaused || CORE.session.finished) return;
+        // --- DE LOGISCHE FILTER ---
+        // We berekenen NIETS als:
+        // 1. De sessie nog niet gestart is (isStarted is false)
+        // 2. De sessie gepauzeerd is
+        // 3. De sessie al gefinisht is
+        if (!CORE.session.isStarted || CORE.session.isPaused || CORE.session.finished) {
+            // Update alleen de visuele positie (blauw bolletje/locatie) zonder tellers te verhogen
+            UI.update(lat, lon, acc, 0, 0, CORE.session.lastTrackIdx);
+            return; 
+        }
 
         const speedKmh = (s || 0) * 3.6;
         const profile = document.getElementById('profile').value;
         const config = CORE.settings[profile];
 
+        // Bewegingsdetectie (voorkom 'driften' van GPS bij stilstand)
         const isMovingSignal = (speedKmh > 3.0 && acc < 25);
-        if (isMovingSignal) { CORE.session.moveSeconds += delta; } else { CORE.session.moveSeconds = 0; }
+        if (isMovingSignal) { 
+            CORE.session.moveSeconds += delta; 
+        } else { 
+            CORE.session.moveSeconds = 0; 
+        }
 
+        // Alleen tellers bijwerken als we echt langer dan 3 seconden bewegen
         if (CORE.session.moveSeconds > 3) {
             CORE.session.movingTime += delta;
             CORE.session.tripDist += (s || 0) * delta;
@@ -336,16 +405,22 @@ const APP = {
             CORE.session.currentMet = 1.0;
         }
 
+        // Route matching (waar bevinden we ons op de GPX?)
         let bD = Infinity, bP = 0, bIdx = 0;
         const startIdx = Math.max(0, CORE.session.lastTrackIdx - 50);
         const endIdx = Math.min(CORE.route.track.length, CORE.session.lastTrackIdx + 150);
 
-        for (let i=startIdx; i<endIdx; i++) {
+        for (let i = startIdx; i < endIdx; i++) {
             const d = LOGIC.getDist(lat, lon, CORE.route.track[i].lat, CORE.route.track[i].lon);
-            if (isFinite(d) && d < bD) { bD = d; bP = CORE.route.cumDist[i] || 0; bIdx = i; }
+            if (isFinite(d) && d < bD) { 
+                bD = d; 
+                bP = CORE.route.cumDist[i] || 0; 
+                bIdx = i; 
+            }
         }
         CORE.session.lastTrackIdx = bIdx;
 
+        // Off-route detectie en spraakmeldingen
         if (bD > 50 && CORE.session.moveSeconds > 3) {
             if (!CORE.session.isOffRoute) {
                 CORE.session.isOffRoute = true;
@@ -363,15 +438,20 @@ const APP = {
             this.speak("U bent terug op de route.");
         }
 
+        // Waypoint check
         CORE.route.waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             const d = LOGIC.getDist(lat, lon, w.lat, w.lon);
             if (d < config.radius || (bP > w.routePos && d < 35)) {
+                // Voorkom valse finish melding als we pas net gestart zijn
                 if (w.name === "FINISH" && bP < CORE.route.totalDist * 0.9) return;
+                
                 w.passed = true;
                 this.speak(`Punt bereikt: ${w.name}.`);
                 const next = CORE.route.waypoints.find((nw, idx) => idx > i && !nw.passed);
-                if (next) { this.speak(`Volgend punt is ${next.name} over ${LOGIC.formatVoiceDist(next.routePos - bP)}.`); }
+                if (next) { 
+                    this.speak(`Volgend punt is ${next.name} over ${LOGIC.formatVoiceDist(next.routePos - bP)}.`); 
+                }
                 UI.updateTable();
             } else if (bP > w.routePos + 100) {
                 w.missed = true;
@@ -382,7 +462,7 @@ const APP = {
 
         UI.update(lat, lon, acc, speedKmh, bD, bP);
     },
-
+    
     readWp(i) {
         const w = CORE.route.waypoints[i];
         this.speak(w.desc ? `Info ${w.name}: ${w.desc}` : `Geen info.`);
