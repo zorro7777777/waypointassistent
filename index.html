@@ -139,9 +139,7 @@ const LOGIC = {
         const toRad = Math.PI / 180;
         const dLat = (lat2 - lat1) * toRad;
         const dLon = (lon2 - lon1) * toRad;
-        const lat1r = lat1 * toRad;
-        const lat2r = lat2 * toRad;
-        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1r) * Math.cos(lat2r) * Math.sin(dLon / 2) ** 2;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
         return 2 * R * Math.asin(Math.sqrt(a));
     },
 
@@ -272,6 +270,7 @@ const APP = {
             document.getElementById('live-ui').style.display = 'block';
             document.getElementById('gpxInput').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'inline-block';
+            document.getElementById('startBtn').style.display = 'inline-block';
             UI.updateTable();
             UI.update();
         };
@@ -283,7 +282,7 @@ const APP = {
             CORE.session.watchId = navigator.geolocation.watchPosition(p => this.gpsHandler(p), e => alert(e.message), { enableHighAccuracy: true });
             CORE.session.state = STATES.RUNNING;
             CORE.session.lastTick = Date.now();
-            this.speak("Tracker gestart.");
+            this.speak("Gestart.");
         } else if (CORE.session.state === STATES.RUNNING) {
             CORE.session.state = STATES.PAUSED;
             this.speak("Pauze.");
@@ -296,27 +295,38 @@ const APP = {
     },
 
     updateButtonUI() {
-        const btn = document.getElementById('startBtn');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
         if (CORE.session.state === STATES.RUNNING) {
-            btn.innerText = "⏸ PAUZE";
-            btn.style.background = "var(--warning)";
-        } else {
-            btn.innerText = (CORE.session.state === STATES.PAUSED) ? "▶ HERVAT" : "▶ START";
-            btn.style.background = "var(--success)";
+            startBtn.innerText = "⏸ PAUZE";
+            startBtn.style.background = "var(--warning)";
+            startBtn.style.display = 'inline-block';
+            stopBtn.style.display = 'inline-block';
+            resetBtn.style.display = 'none';
+        } else if (CORE.session.state === STATES.PAUSED) {
+            startBtn.innerText = "▶ HERVAT";
+            startBtn.style.background = "var(--success)";
+            startBtn.style.display = 'inline-block';
+            stopBtn.style.display = 'inline-block';
+            resetBtn.style.display = 'none';
+        } else if (CORE.session.state === STATES.FINISHED) {
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'none';
+            resetBtn.style.display = 'inline-block';
         }
     },
 
     handleStop() {
         if (CORE.session.watchId) navigator.geolocation.clearWatch(CORE.session.watchId);
         CORE.session.state = STATES.FINISHED;
-        document.getElementById('startBtn').style.display = 'none';
-        document.getElementById('stopBtn').style.display = 'none';
-        document.getElementById('resetBtn').style.display = 'inline-block';
+        this.updateButtonUI();
         this.speak("Tracker gestopt.");
     },
 
     handleReset() {
-        location.reload(); // De meest veilige reset voor een webapp
+        location.reload(); 
     },
 
     gpsHandler(pos) {
@@ -337,7 +347,6 @@ const APP = {
         const profile = document.getElementById('profile').value;
         const config = CORE.settings[profile];
 
-        // Bewegingsdetectie
         if (speedKmh > 2.5 && acc < 30) {
             CORE.session.moveSeconds += delta;
             if (CORE.session.moveSeconds > 2) {
@@ -353,11 +362,9 @@ const APP = {
             CORE.session.currentMet = 1.0;
         }
 
-        // --- LINE PROJECTION ENGINE ---
         let bD = Infinity, bP = 0, bIdx = 0;
-        const searchRange = 50;
-        const startIdx = Math.max(0, CORE.session.lastTrackIdx - searchRange);
-        const endIdx = Math.min(CORE.route.track.length - 1, CORE.session.lastTrackIdx + searchRange);
+        const startIdx = Math.max(0, CORE.session.lastTrackIdx - 50);
+        const endIdx = Math.min(CORE.route.track.length - 1, CORE.session.lastTrackIdx + 50);
 
         for (let i = startIdx; i < endIdx; i++) {
             const proj = LOGIC.getLineProj({lat, lon}, CORE.route.track[i], CORE.route.track[i+1]);
@@ -372,7 +379,6 @@ const APP = {
         CORE.session.lastTrackIdx = bIdx;
         CORE.session.lastRoutePos = bP;
 
-        // Off-route check
         if (bD > 50 && CORE.session.moveSeconds > 2) {
             if (!CORE.session.isOffRoute) {
                 CORE.session.isOffRoute = true;
@@ -389,7 +395,6 @@ const APP = {
             this.speak("Terug op route.");
         }
 
-        // Waypoints
         CORE.route.waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             const d = LOGIC.getDist(lat, lon, w.lat, w.lon);
