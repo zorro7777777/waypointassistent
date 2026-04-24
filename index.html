@@ -458,7 +458,7 @@
                 const profile = document.getElementById('profile').value;
                 const config = CORE.settings[profile];
 
-                const isMovingSignal = (speedKmh > 3.0 && acc < 25);
+                const isMovingSignal = (speedKmh > 1.8 && acc < 25);
                 if (isMovingSignal) {
                     CORE.session.moveSeconds += delta;
                 } else {
