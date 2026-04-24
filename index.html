@@ -68,10 +68,11 @@
     </div>
 
     <div class="row">
-        <button id="startBtn" onclick="APP.handleStartPause()" class="btn-start">▶ START</button>
-        <button onclick="UI.toggleTable()" class="btn-blue">📑</button>
-        <button id="resetBtn" onclick="location.reload()" class="btn-red" style="display:none;">🔄</button>
-    </div>
+    <button id="startBtn" onclick="APP.handleStartPause()" class="btn-start">▶ START</button>
+    <button onclick="UI.toggleTable()" class="btn-blue">📑</button>
+    <button id="stopBtn" onclick="APP.handleStop()" class="btn-red" style="background: #7f8c8d; display:none;">⏹ STOP</button>
+    <button id="resetBtn" onclick="location.reload()" class="btn-red" style="display:none;">🔄</button>
+</div>
 
     <div id="console">
         <div id="standby-msg" style="text-align:center; padding: 20px;">Laad een GPX bestand om te beginnen.</div>
@@ -218,7 +219,7 @@ const APP = {
         document.getElementById('gpxInput').onchange = (e) => this.loadGPX(e);
     },
 
-    loadGPX(e) {
+loadGPX(e) {
         const reader = new FileReader();
 
         reader.onload = (ev) => {
@@ -298,9 +299,13 @@ const APP = {
 
             CORE.route.waypoints = wpts.sort((a,b) => a.routePos - b.routePos);
 
+            // UI Elementen tonen/verbergen
             document.getElementById('standby-msg').style.display = 'none';
             document.getElementById('live-ui').style.display = 'block';
             document.getElementById('gpxInput').style.display = 'none';
+            
+            // Beiden knoppen activeren
+            document.getElementById('stopBtn').style.display = 'inline-block';
             document.getElementById('resetBtn').style.display = 'inline-block';
 
             UI.updateTable();
@@ -313,32 +318,43 @@ const APP = {
     handleStartPause() {
         if (CORE.route.track.length === 0) return alert("Laad GPX.");
 
+        // Als de tracker nog niet loopt (na start of na stop)
         if (!CORE.session.watchId) {
             CORE.session.watchId = navigator.geolocation.watchPosition(
                 p => this.gpsHandler(p),
                 e => alert(e.message),
                 { enableHighAccuracy: true }
             );
-
+            CORE.session.isPaused = false;
             document.getElementById('startBtn').innerText = "⏸ PAUZE";
-
-            const firstWp = CORE.route.waypoints.find(w => !w.passed);
-            if (firstWp) {
-                const distStr = LOGIC.formatVoiceDist(firstWp.routePos);
-                this.speak(`Gestart. Ga naar ${firstWp.name} over ${distStr}.`);
-            } else {
-                this.speak("Gestart.");
-            }
-
+            document.getElementById('startBtn').style.background = "var(--warning)";
+            this.speak("Tracker geactiveerd.");
         } else {
+            // Pauzeren of hervatten terwijl de GPS verbinding open blijft
             CORE.session.isPaused = !CORE.session.isPaused;
-            document.getElementById('startBtn').innerText =
-                CORE.session.isPaused ? "▶ HERVAT" : "⏸ PAUZE";
-
+            document.getElementById('startBtn').innerText = CORE.session.isPaused ? "▶ HERVAT" : "⏸ PAUZE";
+            document.getElementById('startBtn').style.background = CORE.session.isPaused ? "var(--success)" : "var(--warning)";
             this.speak(CORE.session.isPaused ? "Pauze." : "Hervat.");
         }
-
         CORE.session.lastTick = Date.now();
+    },
+
+    handleStop() {
+        if (!CORE.session.watchId) return;
+
+        // Verbreek de GPS verbinding volledig
+        navigator.geolocation.clearWatch(CORE.session.watchId);
+        CORE.session.watchId = null;
+        CORE.session.isPaused = false;
+
+        // UI Terugzetten naar start-modus maar met behoud van data
+        document.getElementById('startBtn').innerText = "▶ START";
+        document.getElementById('startBtn').style.background = "var(--success)";
+        
+        this.speak("Tracker gestopt. De tellers zijn gepauzeerd.");
+        
+        // Forceer UI update naar 0 km/u
+        UI.update(0, 0, 0, 0, 0, CORE.session.lastTrackIdx);
     },
 
     gpsHandler(pos) {
