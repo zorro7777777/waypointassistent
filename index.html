@@ -126,8 +126,9 @@ const CORE = {
         lastOffRouteSpeakDist: 0,
         moveSeconds: 0,
         lastLat: 0, lastLon: 0,
-        buffer: [],      // GPS smoothing buffer
-        paceBuffer: []   // Snelheid smoothing buffer
+        buffer: [],
+        paceBuffer: [],
+        _raf: false // UI Throttle
     },
     speech: { queue: [], isSpeaking: false, lastMsg: "" }
 };
@@ -143,18 +144,15 @@ const LOGIC = {
     getPace(speedMs) {
         if (speedMs < 0.6) return "--:--"; 
         const minPerKm = 16.6667 / speedMs;
-        const mins = Math.floor(minPerKm), secs = Math.round((minPerKm - mins) * 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+        return `${Math.floor(minPerKm)}:${Math.round((minPerKm % 1) * 60).toString().padStart(2, '0')}`;
     },
 
     getLineProj(p, a, b) {
         const l2 = ((a.lat - b.lat) ** 2 + (a.lon - b.lon) ** 2);
         if (l2 === 0) return a;
-        let t = ((p.lat - a.lat) * (b.lat - a.lat) + (p.lon - a.lon) * (b.lon - a.lon)) / l2;
-        return { lat: a.lat + (t = Math.max(0, Math.min(1, t))) * (b.lat - a.lat), lon: a.lon + t * (b.lon - a.lon), t: t };
-    },
-
-    formatVoiceDist(m) { return m < 1000 ? `${Math.round(m)} meter` : `${(m / 1000).toFixed(1)} km`.replace('.', ','); }
+        let t = Math.max(0, Math.min(1, ((p.lat - a.lat) * (b.lat - a.lat) + (p.lon - a.lon) * (b.lon - a.lon)) / l2));
+        return { lat: a.lat + t * (b.lat - a.lat), lon: a.lon + t * (b.lon - a.lon), t: t };
+    }
 };
 
 const UI = {
@@ -172,7 +170,7 @@ const UI = {
         document.getElementById('ui-off-big').style.color = offRoute > 45 ? 'var(--danger)' : 'var(--accent)';
         document.getElementById('ui-speed-big').innerText = speed.toFixed(1);
         document.getElementById('ui-acc-big').innerText = Math.round(acc) + "m";
-        document.getElementById('ui-eta').innerText = paceStr; // Hergebruik ETA veld voor PACE of maak apart veld
+        document.getElementById('ui-eta').innerText = paceStr; 
         
         document.getElementById('ui-next-wp').innerText = nextWp ? nextWp.name : "FINISH";
         document.getElementById('ui-dist').innerText = nextWp ? Math.max(0, Math.round(nextWp.routePos - posOnRoute)) + "m" : "0m";
@@ -201,6 +199,7 @@ const APP = {
     init() { 
         document.getElementById('gpxInput').onchange = (e) => this.loadGPX(e);
         document.getElementById('startBtn').disabled = true;
+        console.log("App geïnitialiseerd.");
     },
 
     loadGPX(e) {
@@ -243,7 +242,7 @@ const APP = {
 
     handleStartPause() {
         if (CORE.session.state === STATES.IDLE) {
-            CORE.session.watchId = navigator.geolocation.watchPosition(p => this.gpsHandler(p), null, { enableHighAccuracy: true });
+            CORE.session.watchId = navigator.geolocation.watchPosition(p => this.gpsHandler(p), e => console.warn(e.message), { enableHighAccuracy: true });
             CORE.session.state = STATES.RUNNING;
             this.speak("Gestart.");
         } else {
@@ -256,10 +255,17 @@ const APP = {
 
     updateButtonUI() {
         const s = CORE.session.state, btn = document.getElementById('startBtn');
-        btn.innerText = (s === STATES.RUNNING) ? "⏸ PAUZE" : "▶ HERVAT";
+        btn.innerText = (s === STATES.RUNNING) ? "⏸ PAUZE" : (s === STATES.PAUSED ? "▶ HERVAT" : "▶ START");
         btn.style.background = (s === STATES.RUNNING) ? "var(--warning)" : "var(--success)";
-        document.getElementById('stopBtn').style.display = 'inline-block';
-        if (s === STATES.FINISHED) { btn.style.display = 'none'; document.getElementById('stopBtn').style.display = 'none'; document.getElementById('resetBtn').style.display = 'block'; }
+        document.getElementById('stopBtn').style.display = (s === STATES.FINISHED) ? 'none' : 'inline-block';
+        if (s === STATES.FINISHED) { btn.style.display = 'none'; document.getElementById('resetBtn').style.display = 'block'; }
+    },
+
+    handleStop() {
+        if (CORE.session.watchId) navigator.geolocation.clearWatch(CORE.session.watchId);
+        CORE.session.state = STATES.FINISHED;
+        this.updateButtonUI();
+        this.speak("Einde sessie.");
     },
 
     gpsHandler(pos) {
@@ -267,16 +273,18 @@ const APP = {
         let delta = CORE.session.lastTick ? (now - CORE.session.lastTick) / 1000 : 0;
         CORE.session.lastTick = now;
 
-        // 1. GPS SMOOTHING
+        // GPS SMOOTHING
         CORE.session.buffer.push({lat: pos.coords.latitude, lon: pos.coords.longitude});
         if (CORE.session.buffer.length > 5) CORE.session.buffer.shift();
         const lat = CORE.session.buffer.reduce((a, b) => a + b.lat, 0) / CORE.session.buffer.length;
         const lon = CORE.session.buffer.reduce((a, b) => a + b.lon, 0) / CORE.session.buffer.length;
         const acc = pos.coords.accuracy;
 
-        if (CORE.session.state !== STATES.RUNNING) { UI.update(lat, lon, acc, 0, 0, CORE.session.lastRoutePos, "--:--"); return; }
+        if (CORE.session.state !== STATES.RUNNING) { 
+            UI.update(lat, lon, acc, 0, 0, CORE.session.lastRoutePos, "--:--"); 
+            return; 
+        }
 
-        // 2. SPEED SMOOTHING & PACE
         CORE.session.paceBuffer.push(pos.coords.speed || 0);
         if (CORE.session.paceBuffer.length > 8) CORE.session.paceBuffer.shift();
         const avgS = CORE.session.paceBuffer.reduce((a, b) => a + b, 0) / CORE.session.paceBuffer.length;
@@ -291,11 +299,10 @@ const APP = {
                 CORE.session.movingTime += delta;
                 CORE.session.tripDist += avgS * delta;
                 CORE.session.steps += (avgS / CORE.settings[profile].th) * delta;
-                CORE.session.kcal += (LOGIC.getMET(speedKmh, profile) * parseFloat(document.getElementById('userWeight').value) * 1.05) / 3600 * delta;
+                CORE.session.kcal += (CORE.session.currentMet * parseFloat(document.getElementById('userWeight').value) * 1.05) / 3600 * delta;
             }
         } else { CORE.session.moveSeconds = 0; CORE.session.pauseTime += delta; }
 
-        // 3. SAFE LINE PROJECTION
         let bD = Infinity, bP = 0, bIdx = 0;
         const start = Math.max(0, CORE.session.lastTrackIdx - 40), end = Math.min(CORE.route.track.length, CORE.session.lastTrackIdx + 40);
         for (let i = start; i < end - 1; i++) {
@@ -305,9 +312,8 @@ const APP = {
         }
         CORE.session.lastTrackIdx = bIdx; CORE.session.lastRoutePos = bP;
 
-        // 4. EVENTS (OFF-ROUTE & WAYPOINTS)
-        if (bD > 55 && CORE.session.moveSeconds > 3) {
-            if (!CORE.session.isOffRoute) { CORE.session.isOffRoute = true; this.speak("Route afwijking."); }
+        if (bD > 55 && CORE.session.moveSeconds > 3 && !CORE.session.isOffRoute) {
+            CORE.session.isOffRoute = true; this.speak("Route afwijking.");
         } else if (bD < 25) CORE.session.isOffRoute = false;
 
         CORE.route.waypoints.forEach((w, i) => {
@@ -315,13 +321,18 @@ const APP = {
             const d = LOGIC.getDist(lat, lon, w.lat, w.lon);
             if (d < CORE.settings[profile].radius || (bP > w.routePos && d < 35)) {
                 if (w.name === "FINISH" && bP < CORE.route.totalDist * 0.9) return;
-                w.passed = true;
-                this.speak(`Punt ${w.name}.`);
-                UI.updateTable();
+                w.passed = true; this.speak(`Punt ${w.name}.`); UI.updateTable();
             } else if (bP > w.routePos + 100) { w.missed = true; UI.updateTable(); }
         });
 
-        requestAnimationFrame(() => UI.update(lat, lon, acc, speedKmh, bD, bP, paceStr));
+        // PERFORMANCE THROTTLE
+        if (!CORE.session._raf) {
+            CORE.session._raf = true;
+            requestAnimationFrame(() => {
+                CORE.session._raf = false;
+                UI.update(lat, lon, acc, speedKmh, bD, bP, paceStr);
+            });
+        }
     },
 
     readWp(i) { this.speak(CORE.route.waypoints[i].name); },
@@ -338,7 +349,8 @@ const APP = {
         window.speechSynthesis.speak(u);
     }
 };
-APP.init();
+
+document.addEventListener('DOMContentLoaded', () => APP.init());
 </script>
 </body>
 </html>
