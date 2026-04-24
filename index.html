@@ -23,7 +23,6 @@
         .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
         button { padding: 12px; border: none; border-radius: 8px; font-weight: bold; color: white; cursor: pointer; flex: 1; }
         .btn-start { background: var(--success); flex: 2; }
-        .btn-pause { background: var(--warning); flex: 2; }
         .btn-blue { background: var(--accent); flex: 0.5; }
         .btn-red { background: var(--danger); flex: 0.5; }
         hr { border: 0; border-top: 1px solid #444; margin: 8px 0; }
@@ -220,10 +219,19 @@ const APP = {
     },
     handleStartPause() {
         if(CORE.route.track.length === 0) return alert("Laad GPX.");
+        
         if(!CORE.session.watchId) {
             CORE.session.watchId = navigator.geolocation.watchPosition(p => this.gpsHandler(p), e => alert(e.message), { enableHighAccuracy: true });
             document.getElementById('startBtn').innerText = "⏸ PAUZE";
-            this.speak("Gestart.");
+            
+            // DIRECTE AANKONDIGING BIJ START
+            const firstWp = CORE.route.waypoints.find(w => !w.passed);
+            if(firstWp) {
+                const distStr = (firstWp.routePos / 1000).toFixed(1);
+                this.speak(`Gestart. Ga naar ${firstWp.name} over ${distStr} kilometer.`);
+            } else {
+                this.speak("Gestart.");
+            }
         } else {
             CORE.session.isPaused = !CORE.session.isPaused;
             document.getElementById('startBtn').innerText = CORE.session.isPaused ? "▶ HERVAT" : "⏸ PAUZE";
@@ -242,7 +250,6 @@ const APP = {
         const profile = document.getElementById('profile').value;
         const config = CORE.settings[profile];
 
-        // 1. Route Matching
         let bD=Infinity, bP=0, bIdx=0;
         const startIdx = Math.max(0, CORE.session.lastTrackIdx - 50);
         const endIdx = Math.min(CORE.route.track.length, CORE.session.lastTrackIdx + 150);
@@ -253,7 +260,6 @@ const APP = {
         }
         CORE.session.lastTrackIdx = bIdx;
 
-        // 2. DYNAMISCHE OFF-ROUTE LOGICA
         if (bD > 50) {
             if (!CORE.session.isOffRoute) {
                 CORE.session.isOffRoute = true;
@@ -271,7 +277,6 @@ const APP = {
             this.speak("U bent terug op de route.");
         }
 
-        // 3. STATS
         if(speedKmh > 1.8) {
             CORE.session.movingTime += delta;
             CORE.session.tripDist += (s || 0) * delta;
@@ -280,18 +285,15 @@ const APP = {
             CORE.session.kcal += (CORE.session.currentMet * parseFloat(document.getElementById('userWeight').value) * 1.05) / 3600 * delta;
         } else { CORE.session.pauseTime += delta; }
 
-        // 4. WAYPOINT CHECK
         CORE.route.waypoints.forEach((w, i) => {
             if(w.passed || w.missed) return;
             const distToWp = LOGIC.getDist(lat, lon, w.lat, w.lon);
             
             if(distToWp < config.radius || (bP > w.routePos && distToWp < 35)) {
                 if(w.name === "FINISH" && bP < CORE.route.totalDist * 0.9) return;
-                
                 w.passed = true;
                 this.speak(`Punt bereikt: ${w.name}.`);
                 
-                // AANKONDIGING VOLGEND PUNT
                 const next = CORE.route.waypoints.find((nw, idx) => idx > i && !nw.passed);
                 if(next) {
                     const distToNext = ((next.routePos - bP) / 1000).toFixed(1);
