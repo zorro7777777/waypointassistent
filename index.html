@@ -318,73 +318,80 @@ const UI = {
             ? (CORE.session.tripDist / CORE.session.movingTime) * 3.6
             : 0;
 
-        const profile = document.getElementById('profile')?.value || "wandelen";
+        const profileEl = document.getElementById('profile');
+        const profile = profileEl ? profileEl.value : "wandelen";
         const config = CORE.settings[profile];
 
-        document.getElementById('ui-total-len').innerText =
-            `Track: ${(CORE.route.totalDist / 1000 || 0).toFixed(2)} km`;
+        const set = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = val;
+        };
 
-        document.getElementById('ui-off-big').innerText =
-            Math.round(offRoute || 0) + "m";
+        const setColor = (id, cond, color) => {
+            const el = document.getElementById(id);
+            if (el) el.style.color = cond ? color : 'var(--accent)';
+        };
 
-        document.getElementById('ui-off-big').style.color =
-            (offRoute || 0) > 45 ? 'var(--danger)' : 'var(--accent)';
+        set('ui-total-len', `Track: ${(CORE.route.totalDist / 1000 || 0).toFixed(2)} km`);
 
-        document.getElementById('ui-speed-big').innerText =
-            (speed || 0).toFixed(1);
+        set('ui-off-big', Math.round(offRoute || 0) + "m");
+        setColor('ui-off-big', (offRoute || 0) > 45, 'var(--danger)');
 
-        document.getElementById('ui-acc-big').innerText =
-            Math.round(acc || 0) + "m";
+        set('ui-speed-big', (speed || 0).toFixed(1));
+        set('ui-acc-big', Math.round(acc || 0) + "m");
 
-        document.getElementById('ui-next-wp').innerText =
-            nextWp ? nextWp.name : "FINISH";
+        set('ui-next-wp', nextWp ? nextWp.name : "FINISH");
 
-        document.getElementById('ui-dist').innerText =
+        set('ui-dist',
             nextWp
                 ? Math.max(0, Math.round((nextWp.routePos || 0) - (posOnRoute || 0))) + "m"
-                : "0m";
+                : "0m"
+        );
 
-        document.getElementById('ui-trip').innerText =
-            ((CORE.session.tripDist || 0) / 1000).toFixed(3) + " km";
+        set('ui-trip', ((CORE.session.tripDist || 0) / 1000).toFixed(3) + " km");
 
-        document.getElementById('ui-mov-time').innerText =
-            this.fmt(CORE.session.movingTime || 0);
+        set('ui-mov-time', this.fmt(CORE.session.movingTime || 0));
+        set('ui-pau-time', this.fmt(CORE.session.pauseTime || 0));
 
-        document.getElementById('ui-pau-time').innerText =
-            this.fmt(CORE.session.pauseTime || 0);
+        set('ui-kcal', Math.round(CORE.session.kcal || 0));
+        set('ui-met', (CORE.session.currentMet || 1).toFixed(1));
 
-        document.getElementById('ui-kcal').innerText =
-            Math.round(CORE.session.kcal || 0);
+        set('ui-avg-speed', avgSpeed.toFixed(1));
+        set('ui-steps', Math.floor(CORE.session.steps || 0));
 
-        document.getElementById('ui-met').innerText =
-            (CORE.session.currentMet || 1).toFixed(1);
-
-        document.getElementById('ui-avg-speed').innerText =
-            avgSpeed.toFixed(1);
-
-        document.getElementById('ui-steps').innerText =
-            Math.floor(CORE.session.steps || 0);
-
-        document.getElementById('ui-count-label').innerText =
-            config?.label || "";
+        set('ui-count-label', config?.label || "");
     },
 
     fmt(s) {
         return new Date((s || 0) * 1000).toISOString().substr(11, 8);
     },
 
-    updateTable() {
-        document.getElementById('wpList').innerHTML =
-            CORE.route.waypoints.map((w, i) => `
-                <tr onclick="APP.readWp(${i})"
-                    class="${w.missed ? 'strikethrough' : ''}"
-                    style="color:${w.passed ? 'var(--success)' : '#333'}">
+    toggleConfig() {
+        const el = document.getElementById('configArea');
+        if (!el) return;
 
-                    <td>${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
-                    <td><b>${w.name}</b></td>
-                    <td align="right">${(w.routePos / 1000).toFixed(2)}km</td>
-                </tr>
-            `).join('');
+        el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+    },
+
+updateProfile() {
+    const profile = document.getElementById('profile')?.value;
+    if (!profile) return;
+}
+
+    updateTable() {
+        const el = document.getElementById('wpList');
+        if (!el) return;
+
+        el.innerHTML = CORE.route.waypoints.map((w, i) => `
+            <tr onclick="APP.readWp(${i})"
+                class="${w.missed ? 'strikethrough' : ''}"
+                style="color:${w.passed ? 'var(--success)' : '#333'}">
+
+                <td>${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
+                <td><b>${w.name}</b></td>
+                <td align="right">${(w.routePos / 1000).toFixed(2)}km</td>
+            </tr>
+        `).join('');
     }
 };
 
