@@ -67,11 +67,12 @@
         <span id="ui-segment" style="font-weight:bold; font-size: 0.95rem;">Wacht op GPX...</span>
     </div>
 
-    <div class="row">
-        <button id="startBtn" onclick="APP.handleStartPause()" class="btn-start">▶ START</button>
-        <button onclick="UI.toggleTable()" class="btn-blue">📑</button>
-        <button id="resetBtn" onclick="location.reload()" class="btn-red" style="display:none;">🔄</button>
-    </div>
+ <div class="row">
+    <button id="startBtn" onclick="APP.handleStartPause()" class="btn-start">▶ START</button>
+    <button onclick="UI.toggleTable()" class="btn-blue">📑</button>
+    <button id="stopBtn" onclick="APP.stop()" class="btn-red" style="display:none;">⏹ STOP</button>
+    <button id="resetBtn" onclick="location.reload()" class="btn-red" style="display:none;">🔄</button>
+</div>
 
     <div id="console">
         <div id="standby-msg" style="text-align:center; padding: 20px;">Laad een GPX bestand om te beginnen.</div>
@@ -310,37 +311,41 @@ const APP = {
         reader.readAsText(e.target.files[0]);
     },
 
-    handleStartPause() {
-        if (CORE.route.track.length === 0) return alert("Laad GPX.");
+  handleStartPause() {
+    if (CORE.route.track.length === 0) return alert("Laad GPX.");
 
-        if (!CORE.session.watchId) {
-            CORE.session.watchId = navigator.geolocation.watchPosition(
-                p => this.gpsHandler(p),
-                e => alert(e.message),
-                { enableHighAccuracy: true }
-            );
+    if (!CORE.session.watchId) {
 
-            document.getElementById('startBtn').innerText = "⏸ PAUZE";
+        // 👇 STOP knop pas tonen bij echte start
+        document.getElementById('stopBtn').style.display = "inline-block";
 
-            const firstWp = CORE.route.waypoints.find(w => !w.passed);
-            if (firstWp) {
-                const distStr = LOGIC.formatVoiceDist(firstWp.routePos);
-                this.speak(`Gestart. Ga naar ${firstWp.name} over ${distStr}.`);
-            } else {
-                this.speak("Gestart.");
-            }
+        CORE.session.watchId = navigator.geolocation.watchPosition(
+            p => this.gpsHandler(p),
+            e => alert(e.message),
+            { enableHighAccuracy: true }
+        );
 
+        document.getElementById('startBtn').innerText = "⏸ PAUZE";
+
+        const firstWp = CORE.route.waypoints.find(w => !w.passed);
+        if (firstWp) {
+            const distStr = LOGIC.formatVoiceDist(firstWp.routePos);
+            this.speak(`Gestart. Ga naar ${firstWp.name} over ${distStr}.`);
         } else {
-            CORE.session.isPaused = !CORE.session.isPaused;
-            document.getElementById('startBtn').innerText =
-                CORE.session.isPaused ? "▶ HERVAT" : "⏸ PAUZE";
-
-            this.speak(CORE.session.isPaused ? "Pauze." : "Hervat.");
+            this.speak("Gestart.");
         }
 
-        CORE.session.lastTick = Date.now();
-    },
+    } else {
+        CORE.session.isPaused = !CORE.session.isPaused;
 
+        document.getElementById('startBtn').innerText =
+            CORE.session.isPaused ? "▶ HERVAT" : "⏸ PAUZE";
+
+        this.speak(CORE.session.isPaused ? "Pauze." : "Hervat.");
+    }
+
+    CORE.session.lastTick = Date.now();
+}
     gpsHandler(pos) {
         const now = Date.now();
         const delta = CORE.session.lastTick ? (now - CORE.session.lastTick)/1000 : 0;
@@ -468,6 +473,29 @@ const APP = {
 
         window.speechSynthesis.speak(u);
     }
+
+    stop() {
+    if (!CORE.session.watchId) return;
+
+    navigator.geolocation.clearWatch(CORE.session.watchId);
+    CORE.session.watchId = null;
+
+    // HARD PAUSE STATE (behouden data)
+    CORE.session.isPaused = true;
+    CORE.session.finished = true;
+
+    // stop audio cleanly
+    window.speechSynthesis.cancel();
+    CORE.speech.queue = [];
+    CORE.speech.isSpeaking = false;
+
+    // UI update
+    document.getElementById('startBtn').innerText = "▶ START";
+    document.getElementById('stopBtn').style.display = "none";
+
+    this.speak("Tracking gestopt. Statistieken behouden.");
+}
+// Einde    
 };
 
 APP.init();
