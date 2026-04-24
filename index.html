@@ -310,59 +310,79 @@ const LOGIC = {
 };
 
 const UI = {
-    update(lat=0, lon=0, acc=0, speed=0, offRoute=0, posOnRoute=0) {
+    update(lat = 0, lon = 0, acc = 0, speed = 0, offRoute = 0, posOnRoute = 0) {
 
         const nextWp = CORE.route.waypoints.find(w => !w.passed && !w.missed);
+
         const avgSpeed = CORE.session.movingTime > 2
             ? (CORE.session.tripDist / CORE.session.movingTime) * 3.6
             : 0;
 
-        const profile = document.getElementById('profile').value;
+        const profile = document.getElementById('profile')?.value || "wandelen";
         const config = CORE.settings[profile];
 
         document.getElementById('ui-total-len').innerText =
-            `Track: ${(CORE.route.totalDist/1000).toFixed(2)} km`;
+            `Track: ${(CORE.route.totalDist / 1000 || 0).toFixed(2)} km`;
 
         document.getElementById('ui-off-big').innerText =
-            Math.round(offRoute) + "m";
+            Math.round(offRoute || 0) + "m";
 
         document.getElementById('ui-off-big').style.color =
-            offRoute > 45 ? 'var(--danger)' : 'var(--accent)';
+            (offRoute || 0) > 45 ? 'var(--danger)' : 'var(--accent)';
 
-        document.getElementById('ui-speed-big').innerText = speed.toFixed(1);
-        document.getElementById('ui-acc-big').innerText = Math.round(acc) + "m";
+        document.getElementById('ui-speed-big').innerText =
+            (speed || 0).toFixed(1);
+
+        document.getElementById('ui-acc-big').innerText =
+            Math.round(acc || 0) + "m";
 
         document.getElementById('ui-next-wp').innerText =
             nextWp ? nextWp.name : "FINISH";
 
         document.getElementById('ui-dist').innerText =
-            nextWp ? Math.max(0, Math.round(nextWp.routePos - posOnRoute)) + "m" : "0m";
+            nextWp
+                ? Math.max(0, Math.round((nextWp.routePos || 0) - (posOnRoute || 0))) + "m"
+                : "0m";
 
         document.getElementById('ui-trip').innerText =
-            (CORE.session.tripDist / 1000).toFixed(3) + " km";
+            ((CORE.session.tripDist || 0) / 1000).toFixed(3) + " km";
 
-        document.getElementById('ui-mov-time').innerText = this.fmt(CORE.session.movingTime);
-        document.getElementById('ui-pau-time').innerText = this.fmt(CORE.session.pauseTime);
-        document.getElementById('ui-kcal').innerText = Math.round(CORE.session.kcal);
-        document.getElementById('ui-met').innerText = CORE.session.currentMet.toFixed(1);
-        document.getElementById('ui-avg-speed').innerText = avgSpeed.toFixed(1);
-        document.getElementById('ui-steps').innerText = Math.floor(CORE.session.steps);
-        document.getElementById('ui-count-label').innerText = config.label;
+        document.getElementById('ui-mov-time').innerText =
+            this.fmt(CORE.session.movingTime || 0);
+
+        document.getElementById('ui-pau-time').innerText =
+            this.fmt(CORE.session.pauseTime || 0);
+
+        document.getElementById('ui-kcal').innerText =
+            Math.round(CORE.session.kcal || 0);
+
+        document.getElementById('ui-met').innerText =
+            (CORE.session.currentMet || 1).toFixed(1);
+
+        document.getElementById('ui-avg-speed').innerText =
+            avgSpeed.toFixed(1);
+
+        document.getElementById('ui-steps').innerText =
+            Math.floor(CORE.session.steps || 0);
+
+        document.getElementById('ui-count-label').innerText =
+            config?.label || "";
     },
 
     fmt(s) {
-        return new Date(s * 1000).toISOString().substr(11, 8);
+        return new Date((s || 0) * 1000).toISOString().substr(11, 8);
     },
 
     updateTable() {
         document.getElementById('wpList').innerHTML =
-            CORE.route.waypoints.map((w,i) => `
+            CORE.route.waypoints.map((w, i) => `
                 <tr onclick="APP.readWp(${i})"
-                    class="${w.missed?'strikethrough':''}"
-                    style="color:${w.passed?'var(--success)':'#333'}">
-                    <td>${w.passed?'✅':(w.missed?'❌':'⏳')}</td>
+                    class="${w.missed ? 'strikethrough' : ''}"
+                    style="color:${w.passed ? 'var(--success)' : '#333'}">
+
+                    <td>${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
                     <td><b>${w.name}</b></td>
-                    <td align="right">${(w.routePos/1000).toFixed(2)}km</td>
+                    <td align="right">${(w.routePos / 1000).toFixed(2)}km</td>
                 </tr>
             `).join('');
     }
