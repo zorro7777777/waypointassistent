@@ -111,7 +111,7 @@ const CORE = {
         isStarted: false, isPaused: false, isOffRoute: false, finished: false,
         lastTrackIdx: 0, tripDist: 0, movingTime: 0, pauseTime: 0, kcal: 0,
         metSum: 0, metCount: 0, steps: 0, lastTick: null, watchId: null, currentMet: 1.0,
-        lastOffRouteSpeakDist: 0
+        lastOffRouteSpeakDist: 0, moveSeconds: 0 // Teller voor verificatie van werkelijke beweging
     },
     speech: { queue: [], isSpeaking: false, lastMsg: "" }
 };
@@ -245,7 +245,7 @@ const APP = {
         }
         CORE.session.lastTick = Date.now();
     },
-    gpsHandler(pos) {
+  gpsHandler(pos) {
         const now = Date.now();
         const delta = CORE.session.lastTick ? (now - CORE.session.lastTick)/1000 : 0;
         CORE.session.lastTick = now;
@@ -256,6 +256,30 @@ const APP = {
         const profile = document.getElementById('profile').value;
         const config = CORE.settings[profile];
 
+        // --- STILSTAND- EN RUISFILTER ---
+        // Alleen als de nauwkeurigheid goed is (< 25m) en de snelheid > 3.0 km/u
+        const isMovingSignal = (speedKmh > 3.0 && acc < 25);
+
+        if (isMovingSignal) {
+            CORE.session.moveSeconds = (CORE.session.moveSeconds || 0) + delta;
+        } else {
+            CORE.session.moveSeconds = 0; // Reset teller bij stilstand of slechte GPS
+        }
+
+        // We verwerken beweging pas als we 3 seconden stabiele snelheid zien
+        if(CORE.session.moveSeconds > 3) {
+            CORE.session.movingTime += delta;
+            CORE.session.tripDist += (s || 0) * delta;
+            CORE.session.steps += (s / config.th) * delta;
+            CORE.session.currentMet = LOGIC.getMET(speedKmh, profile);
+            CORE.session.kcal += (CORE.session.currentMet * parseFloat(document.getElementById('userWeight').value) * 1.05) / 3600 * delta;
+        } else { 
+            CORE.session.pauseTime += delta; 
+            CORE.session.currentMet = 1.0;
+        }
+        // --- EINDE FILTER ---
+
+        // Bepaal positie op de route
         let bD=Infinity, bP=0, bIdx=0;
         const startIdx = Math.max(0, CORE.session.lastTrackIdx - 50);
         const endIdx = Math.min(CORE.route.track.length, CORE.session.lastTrackIdx + 150);
@@ -266,7 +290,8 @@ const APP = {
         }
         CORE.session.lastTrackIdx = bIdx;
 
-        if (bD > 50) {
+        // Off-route logica (alleen waarschuwen als we echt aan het bewegen zijn)
+        if (bD > 50 && CORE.session.moveSeconds > 3) {
             if (!CORE.session.isOffRoute) {
                 CORE.session.isOffRoute = true;
                 this.speak("Opgelet, u bent van de route afgeweken.");
@@ -283,14 +308,7 @@ const APP = {
             this.speak("U bent terug op de route.");
         }
 
-        if(speedKmh > 1.8) {
-            CORE.session.movingTime += delta;
-            CORE.session.tripDist += (s || 0) * delta;
-            CORE.session.steps += (s / config.th) * delta;
-            CORE.session.currentMet = LOGIC.getMET(speedKmh, profile);
-            CORE.session.kcal += (CORE.session.currentMet * parseFloat(document.getElementById('userWeight').value) * 1.05) / 3600 * delta;
-        } else { CORE.session.pauseTime += delta; }
-
+        // Waypoint check
         CORE.route.waypoints.forEach((w, i) => {
             if(w.passed || w.missed) return;
             const distToWp = LOGIC.getDist(lat, lon, w.lat, w.lon);
