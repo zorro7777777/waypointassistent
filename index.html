@@ -132,7 +132,6 @@ const CORE = {
     speech: { queue: [], isSpeaking: false, lastMsg: "" }
 };
 
-// --- LOGICA & WISKUNDE ---
 const LOGIC = {
     getDist(lat1, lon1, lat2, lon2) {
         const R = 6371000;
@@ -162,7 +161,6 @@ const LOGIC = {
     }
 };
 
-// --- GEBRUIKERSINTERFACE ---
 const UI = {
     toggleConfig() {
         const el = document.getElementById('configArea');
@@ -188,8 +186,12 @@ const UI = {
         const config = CORE.settings[profile];
 
         document.getElementById('ui-total-len').innerText = `Track: ${(CORE.route.totalDist/1000).toFixed(2)} km`;
-        document.getElementById('ui-off-big').innerText = Math.round(offRoute) + "m";
-        document.getElementById('ui-off-big').style.color = offRoute > 45 ? 'var(--danger)' : 'var(--accent)';
+        
+        // Verbeterde off-route feedback
+        const offEl = document.getElementById('ui-off-big');
+        offEl.innerText = Math.round(offRoute) + "m";
+        offEl.style.color = offRoute > 45 ? 'var(--danger)' : 'var(--accent)';
+        
         document.getElementById('ui-speed-big').innerText = speed.toFixed(1);
         document.getElementById('ui-acc-big').innerText = Math.round(acc) + "m";
 
@@ -206,7 +208,8 @@ const UI = {
         document.getElementById('ui-count-label').innerText = config.label;
 
         let etaStr = "--:--";
-        if (speed > 2.0 && nextWp) {
+        // Filter op extreme GPS noise voor ETA
+        if (speed > 1.5 && speed < 45 && nextWp) {
             const sec = (CORE.route.totalDist - posOnRoute) / (speed / 3.6);
             if (isFinite(sec)) {
                 const arrival = new Date(Date.now() + sec * 1000);
@@ -224,17 +227,19 @@ const UI = {
     updateTable() {
         document.getElementById('wpList').innerHTML = CORE.route.waypoints.map((w,i) => `
             <tr onclick="APP.readWp(${i})" class="${w.missed?'strikethrough':''}" style="color:${w.passed?'var(--success)':'#333'}">
-                <td style="width:30px">${w.passed?'✅':(w.missed?'❌':'⏳')}</td>
-                <td><b>${w.name}</b>${w.desc?' <span class="info-badge">i</span>':''}</td>
+                <td style="width:30px">${w.passed?'✅':(w.missed?'⏳')}</td>
+                <td><b>${w.name === "FINISH" ? "🏁 FINISH" : w.name}</b>${w.desc?' <span class="info-badge">i</span>':''}</td>
                 <td align="right">${(w.routePos/1000).toFixed(2)}km</td>
             </tr>`).join('');
     }
 };
 
-// --- HOOFD APPLICATIE ---
 const APP = {
     init() {
         document.getElementById('gpxInput').onchange = (e) => this.loadGPX(e);
+        // Startknop uitschakelen tot GPX geladen is
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('startBtn').style.opacity = "0.5";
     },
 
     loadGPX(e) {
@@ -269,8 +274,10 @@ const APP = {
             document.getElementById('standby-msg').style.display = 'none';
             document.getElementById('live-ui').style.display = 'block';
             document.getElementById('gpxInput').style.display = 'none';
-            document.getElementById('stopBtn').style.display = 'inline-block';
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('startBtn').style.opacity = "1";
             document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('stopBtn').style.display = 'inline-block';
             UI.updateTable();
             UI.update();
         };
@@ -347,7 +354,8 @@ const APP = {
         const profile = document.getElementById('profile').value;
         const config = CORE.settings[profile];
 
-        if (speedKmh > 2.5 && acc < 30) {
+        // --- GPS ROBUUSTHEID FILTER ---
+        if (speedKmh > 2.5 && speedKmh < 50 && acc < 40) {
             CORE.session.moveSeconds += delta;
             if (CORE.session.moveSeconds > 2) {
                 CORE.session.movingTime += delta;
@@ -357,16 +365,18 @@ const APP = {
                 CORE.session.kcal += (CORE.session.currentMet * parseFloat(document.getElementById('userWeight').value) * 1.05) / 3600 * delta;
             }
         } else {
+            // Reset beweging bij stilstand of slechte GPS
             CORE.session.moveSeconds = 0;
             CORE.session.pauseTime += delta;
             CORE.session.currentMet = 1.0;
         }
 
+        // --- LINE PROJECTION (SAFE INDEX) ---
         let bD = Infinity, bP = 0, bIdx = 0;
         const startIdx = Math.max(0, CORE.session.lastTrackIdx - 50);
-        const endIdx = Math.min(CORE.route.track.length - 1, CORE.session.lastTrackIdx + 50);
+        const endIdx = Math.min(CORE.route.track.length, CORE.session.lastTrackIdx + 50);
 
-        for (let i = startIdx; i < endIdx; i++) {
+        for (let i = startIdx; i < endIdx - 1; i++) { // endIdx - 1 voorkomt undefined i+1
             const proj = LOGIC.getLineProj({lat, lon}, CORE.route.track[i], CORE.route.track[i+1]);
             const d = LOGIC.getDist(lat, lon, proj.lat, proj.lon);
             if (d < bD) {
@@ -379,7 +389,8 @@ const APP = {
         CORE.session.lastTrackIdx = bIdx;
         CORE.session.lastRoutePos = bP;
 
-        if (bD > 50 && CORE.session.moveSeconds > 2) {
+        // Off-route check met lichte demping
+        if (bD > 55 && CORE.session.moveSeconds > 3) {
             if (!CORE.session.isOffRoute) {
                 CORE.session.isOffRoute = true;
                 this.speak("Route afwijking.");
@@ -390,15 +401,17 @@ const APP = {
                 this.speak(`${step} meter.`);
                 CORE.session.lastOffRouteSpeakDist = step;
             }
-        } else if (CORE.session.isOffRoute && bD < 20) {
+        } else if (CORE.session.isOffRoute && bD < 25) {
             CORE.session.isOffRoute = false;
             this.speak("Terug op route.");
         }
 
+        // Waypoint afhandeling
         CORE.route.waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             const d = LOGIC.getDist(lat, lon, w.lat, w.lon);
             if (d < config.radius || (bP > w.routePos && d < 35)) {
+                // Anti-cheat finish
                 if (w.name === "FINISH" && bP < CORE.route.totalDist * 0.9) return;
                 w.passed = true;
                 this.speak(`Punt ${w.name}.`);
