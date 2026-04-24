@@ -112,7 +112,7 @@ const CORE = {
         isStarted: false, isPaused: false, isOffRoute: false, finished: false,
         lastTrackIdx: 0, tripDist: 0, movingTime: 0, pauseTime: 0, kcal: 0,
         steps: 0, lastTick: null, watchId: null, currentMet: 1.0,
-        lastOffRouteSpeakDist: 0, moveSeconds: 0
+        lastOffRouteSpeakDist: 0, moveSeconds: 0, lastLat: 0, lastLon: 0 // <-- Voeg dit toe voor de zekerheid
     },
     speech: { queue: [], isSpeaking: false, lastMsg: "" }
 };
@@ -354,13 +354,27 @@ loadGPX(e) {
         this.speak("Tracker gestopt. De tellers zijn gepauzeerd.");
         
         // Forceer UI update naar 0 km/u
-        UI.update(0, 0, 0, 0, 0, CORE.session.lastTrackIdx);
+        UI.update(
+    CORE.session.lastLat || 0,
+    CORE.session.lastLon || 0,
+    0,
+    0,
+    0,
+    CORE.session.lastTrackIdx
+);
     },
 
-    gpsHandler(pos) {
-        const now = Date.now();
-        const delta = CORE.session.lastTick ? (now - CORE.session.lastTick)/1000 : 0;
-        CORE.session.lastTick = now;
+gpsHandler(pos) {
+    const now = Date.now();
+    const delta = CORE.session.lastTick ? (now - CORE.session.lastTick)/1000 : 0;
+    CORE.session.lastTick = now;
+
+    // Haal de gegevens uit de GPS
+    const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = pos.coords;
+
+    // 🔴 VOEG DEZE TWEE REGELS TOE
+    CORE.session.lastLat = lat;
+    CORE.session.lastLon = lon;
 
         if (CORE.session.isPaused || CORE.session.finished) return;
 
