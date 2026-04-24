@@ -298,22 +298,31 @@ handleStartPause() {
         }
     },
 
-    handleStop() {
-        if (!CORE.session.watchId) return;
-        navigator.geolocation.clearWatch(CORE.session.watchId);
-        CORE.session.watchId = null;
-        CORE.session.isPaused = false;
+   handleStop() {
+    if (!CORE.session.watchId) return;
 
-        document.getElementById('startBtn').innerText = "▶ START";
-        document.getElementById('startBtn').style.background = "var(--success)";
-        document.getElementById('stopBtn').style.display = 'none';
-        document.getElementById('resetBtn').style.display = 'inline-block';
-        
-        this.speak("Tracker gestopt. De resetknop is nu beschikbaar.");
-        
-        UI.update(CORE.session.lastLat || 0, CORE.session.lastLon || 0, 0, 0, 0, CORE.session.lastTrackIdx);
-    },
+    navigator.geolocation.clearWatch(CORE.session.watchId);
+    CORE.session.watchId = null;
+    
+    // --- FIX 2 & 4: Zet de sessie vlaggen uit ---
+    CORE.session.isStarted = false; 
+    CORE.session.isPaused = false;
 
+    document.getElementById('startBtn').innerText = "▶ START";
+    document.getElementById('startBtn').style.background = "var(--success)";
+    
+    document.getElementById('stopBtn').style.display = 'none';
+    document.getElementById('resetBtn').style.display = 'inline-block';
+    
+    this.speak("Tracker gestopt. De resetknop is nu beschikbaar.");
+    
+    // --- FIX 1: Geef 0 door voor afstand ipv lastTrackIdx ---
+    UI.update(
+        CORE.session.lastLat || 0,
+        CORE.session.lastLon || 0,
+        0, 0, 0, 0 
+    );
+},
    handleReset() {
         // 1. GPS echt uitvinken
         if (CORE.session.watchId) {
@@ -370,14 +379,11 @@ gpsHandler(pos) {
         CORE.session.lastLat = lat;
         CORE.session.lastLon = lon;
 
-        // --- DE LOGISCHE FILTER ---
-        // We berekenen NIETS als:
-        // 1. De sessie nog niet gestart is (isStarted is false)
-        // 2. De sessie gepauzeerd is
-        // 3. De sessie al gefinisht is
+        // --- LOGISCHE CHECK (Early Exit) ---
+        // Als de sessie niet actief is, updaten we alleen de locatie op de kaart.
+        // We sturen 0 voor snelheid en afstand om de tellers in de UI te bevriezen.
         if (!CORE.session.isStarted || CORE.session.isPaused || CORE.session.finished) {
-            // Update alleen de visuele positie (blauw bolletje/locatie) zonder tellers te verhogen
-            UI.update(lat, lon, acc, 0, 0, CORE.session.lastTrackIdx);
+            UI.update(lat, lon, acc, 0, 0, 0); 
             return; 
         }
 
@@ -405,7 +411,8 @@ gpsHandler(pos) {
             CORE.session.currentMet = 1.0;
         }
 
-        // Route matching (waar bevinden we ons op de GPX?)
+        // --- ROUTE MATCHING ---
+        // Zoek waar op de track de gebruiker zich bevindt
         let bD = Infinity, bP = 0, bIdx = 0;
         const startIdx = Math.max(0, CORE.session.lastTrackIdx - 50);
         const endIdx = Math.min(CORE.route.track.length, CORE.session.lastTrackIdx + 150);
@@ -414,13 +421,13 @@ gpsHandler(pos) {
             const d = LOGIC.getDist(lat, lon, CORE.route.track[i].lat, CORE.route.track[i].lon);
             if (isFinite(d) && d < bD) { 
                 bD = d; 
-                bP = CORE.route.cumDist[i] || 0; 
+                bP = CORE.route.cumDist[i] || 0; // Meters op de route
                 bIdx = i; 
             }
         }
         CORE.session.lastTrackIdx = bIdx;
 
-        // Off-route detectie en spraakmeldingen
+        // --- OFF-ROUTE DETECTIE ---
         if (bD > 50 && CORE.session.moveSeconds > 3) {
             if (!CORE.session.isOffRoute) {
                 CORE.session.isOffRoute = true;
@@ -438,7 +445,7 @@ gpsHandler(pos) {
             this.speak("U bent terug op de route.");
         }
 
-        // Waypoint check
+        // --- WAYPOINT CHECK ---
         CORE.route.waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             const d = LOGIC.getDist(lat, lon, w.lat, w.lon);
@@ -460,6 +467,8 @@ gpsHandler(pos) {
             }
         });
 
+        // --- FINALE UI UPDATE ---
+        // We sturen 'bP' (meters op route) door zodat ETA en afstanden kloppen.
         UI.update(lat, lon, acc, speedKmh, bD, bP);
     },
     
