@@ -237,9 +237,10 @@
 <script>
 const CORE = {
     settings: {
-        wandelen: { ms: 0.36, th: 0.67, radius: 20, label: "STAPPEN" },
-        fietsen:  { ms: 5.5, th: 2.10, radius: 35, label: "OMWENTELINGEN" }
+        wandelen: { ms: 0.36, th: 0.67, radius: 25, label: "STAPPEN" },
+        fietsen:  { ms: 5.5, th: 2.10, radius: 40, label: "OMWENTELINGEN" }
     },
+
     met_table: {
         wandelen: [
             {max: 1.5, met: 1.0},
@@ -254,26 +255,27 @@ const CORE = {
             {max: Infinity, met: 8.0}
         ]
     },
+
     route: { track: [], waypoints: [], cumDist: [], totalDist: 0 },
+
     session: {
         isStarted: false,
         isPaused: false,
-        isOffRoute: false,
         finished: false,
-        lastTrackIdx: 0,
+        watchId: null,
         tripDist: 0,
         movingTime: 0,
         pauseTime: 0,
         kcal: 0,
         steps: 0,
         lastTick: null,
-        watchId: null,
-        currentMet: 1.0,
-        lastOffRouteSpeakDist: 0,
-        moveSeconds: 0
+        currentMet: 1.0
     },
-    speech: { queue: [], isSpeaking: false, lastMsg: "" }
+
+    speech: { queue: [], isSpeaking: false }
 };
+
+// ---------------- LOGIC ----------------
 
 const LOGIC = {
     getDist(lat1, lon1, lat2, lon2) {
@@ -283,117 +285,80 @@ const LOGIC = {
         const dLat = (lat2 - lat1) * toRad;
         const dLon = (lon2 - lon1) * toRad;
 
-        const lat1r = lat1 * toRad;
-        const lat2r = lat2 * toRad;
-
         const a =
-            Math.sin(dLat / 2) ** 2 +
-            Math.cos(lat1r) * Math.cos(lat2r) *
-            Math.sin(dLon / 2) ** 2;
+            Math.sin(dLat/2)**2 +
+            Math.cos(lat1*toRad) * Math.cos(lat2*toRad) *
+            Math.sin(dLon/2)**2;
 
         return 2 * R * Math.asin(Math.sqrt(a));
-    },
-
-    getMET(speed, profile) {
-        const table = CORE.met_table[profile];
-        for (const entry of table) {
-            if (speed <= entry.max) return entry.met;
-        }
-        return 1.0;
-    },
-
-    formatVoiceDist(meters) {
-        return meters < 1000
-            ? `${Math.round(meters)} meter`
-            : `${(meters / 1000).toFixed(1)} kilometer`.replace('.', ',');
     }
 };
 
+// ---------------- NAV ENGINE ----------------
+
+const NAV = {
+
+    getNearestTrackIndex(lat, lon) {
+        let min = Infinity;
+        let idx = 0;
+
+        for (let i = 0; i < CORE.route.track.length; i++) {
+            const p = CORE.route.track[i];
+            const d = LOGIC.getDist(lat, lon, p.lat, p.lon);
+            if (d < min) {
+                min = d;
+                idx = i;
+            }
+        }
+
+        return { idx, dist: min };
+    },
+
+    getRoutePosition(idx) {
+        return CORE.route.cumDist[idx] || 0;
+    },
+
+    updateWaypoints(posOnRoute) {
+        CORE.route.waypoints.forEach(wp => {
+
+            if (wp.passed) return;
+
+            if (posOnRoute >= wp.routePos - 25) {
+                wp.passed = true;
+                APP.speak(wp.name);
+            }
+        });
+    }
+};
+
+// ---------------- UI ----------------
+
 const UI = {
-    update(lat = 0, lon = 0, acc = 0, speed = 0, offRoute = 0, posOnRoute = 0) {
+    update(lat=0, lon=0, acc=0, speed=0, offRoute=0, posOnRoute=0) {
 
-        const nextWp = CORE.route.waypoints.find(w => !w.passed && !w.missed);
-
-        const avgSpeed = CORE.session.movingTime > 2
-            ? (CORE.session.tripDist / CORE.session.movingTime) * 3.6
-            : 0;
-
-        const profileEl = document.getElementById('profile');
-        const profile = profileEl ? profileEl.value : "wandelen";
-        const config = CORE.settings[profile];
+        const nextWp = CORE.route.waypoints.find(w => !w.passed);
 
         const set = (id, val) => {
             const el = document.getElementById(id);
             if (el) el.innerText = val;
         };
 
-        const setColor = (id, cond, color) => {
-            const el = document.getElementById(id);
-            if (el) el.style.color = cond ? color : 'var(--accent)';
-        };
-
-        set('ui-total-len', `Track: ${(CORE.route.totalDist / 1000 || 0).toFixed(2)} km`);
-
-        set('ui-off-big', Math.round(offRoute || 0) + "m");
-        setColor('ui-off-big', (offRoute || 0) > 45, 'var(--danger)');
-
-        set('ui-speed-big', (speed || 0).toFixed(1));
-        set('ui-acc-big', Math.round(acc || 0) + "m");
+        set('ui-total-len', `Track: ${(CORE.route.totalDist/1000).toFixed(2)} km`);
+        set('ui-off-big', Math.round(offRoute) + "m");
+        set('ui-speed-big', speed.toFixed(1));
+        set('ui-acc-big', Math.round(acc) + "m");
 
         set('ui-next-wp', nextWp ? nextWp.name : "FINISH");
 
         set('ui-dist',
             nextWp
-                ? Math.max(0, Math.round((nextWp.routePos || 0) - (posOnRoute || 0))) + "m"
+                ? Math.max(0, Math.round(nextWp.routePos - posOnRoute)) + "m"
                 : "0m"
         );
-
-        set('ui-trip', ((CORE.session.tripDist || 0) / 1000).toFixed(3) + " km");
-
-        set('ui-mov-time', this.fmt(CORE.session.movingTime || 0));
-        set('ui-pau-time', this.fmt(CORE.session.pauseTime || 0));
-
-        set('ui-kcal', Math.round(CORE.session.kcal || 0));
-        set('ui-met', (CORE.session.currentMet || 1).toFixed(1));
-
-        set('ui-avg-speed', avgSpeed.toFixed(1));
-        set('ui-steps', Math.floor(CORE.session.steps || 0));
-
-        set('ui-count-label', config?.label || "");
-    },
-
-    fmt(s) {
-        return new Date((s || 0) * 1000).toISOString().substr(11, 8);
-    },
-
-    toggleConfig() {
-        const el = document.getElementById('configArea');
-        if (!el) return;
-
-        el.style.display = (el.style.display === 'block') ? 'none' : 'block';
-    },
-
-updateProfile() {
-    const profile = document.getElementById('profile')?.value;
-    if (!profile) return;
-}
-
-    updateTable() {
-        const el = document.getElementById('wpList');
-        if (!el) return;
-
-        el.innerHTML = CORE.route.waypoints.map((w, i) => `
-            <tr onclick="APP.readWp(${i})"
-                class="${w.missed ? 'strikethrough' : ''}"
-                style="color:${w.passed ? 'var(--success)' : '#333'}">
-
-                <td>${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
-                <td><b>${w.name}</b></td>
-                <td align="right">${(w.routePos / 1000).toFixed(2)}km</td>
-            </tr>
-        `).join('');
     }
 };
+
+// ---------------- APP ----------------
 
 const APP = {
 
@@ -405,10 +370,9 @@ const APP = {
         const reader = new FileReader();
 
         reader.onload = ev => {
+
             const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
             const pts = [...xml.getElementsByTagName('trkpt')];
-
-            if (pts.length < 2) return alert("Foutieve GPX.");
 
             CORE.route.track = pts.map(p => ({
                 lat: +p.getAttribute('lat'),
@@ -417,7 +381,7 @@ const APP = {
 
             CORE.route.cumDist = [0];
 
-            for (let i=0; i<CORE.route.track.length-1; i++) {
+            for (let i=0;i<CORE.route.track.length-1;i++){
                 CORE.route.cumDist[i+1] =
                     CORE.route.cumDist[i] +
                     LOGIC.getDist(
@@ -430,53 +394,50 @@ const APP = {
 
             CORE.route.totalDist = CORE.route.cumDist.at(-1);
 
-            document.getElementById('standby-msg').style.display = 'none';
-            document.getElementById('live-ui').style.display = 'block';
+            CORE.route.waypoints = [
+                { name:"Start", routePos:0, passed:false },
+                { name:"Midden", routePos:CORE.route.totalDist/2, passed:false },
+                { name:"Einde", routePos:CORE.route.totalDist, passed:false }
+            ];
+
+            UI.update();
+
+            document.getElementById('standby-msg').style.display='none';
+            document.getElementById('live-ui').style.display='block';
         };
 
         reader.readAsText(e.target.files[0]);
     },
 
     handleStartPause() {
-        if (!CORE.session.watchId) {
-
-            document.getElementById('stopBtn').style.display = "inline-block";
-
-            CORE.session.watchId = navigator.geolocation.watchPosition(
-                p => this.gpsHandler(p),
-                e => alert(e.message),
-                { enableHighAccuracy: true }
-            );
-
-        } else {
-            CORE.session.isPaused = !CORE.session.isPaused;
-        }
-
-        CORE.session.lastTick = Date.now();
+        CORE.session.watchId = navigator.geolocation.watchPosition(
+            p => this.gpsHandler(p),
+            e => alert(e.message),
+            { enableHighAccuracy:true }
+        );
     },
 
     gpsHandler(pos) {
-        const now = Date.now();
-        const delta = CORE.session.lastTick ? (now - CORE.session.lastTick)/1000 : 0;
-        CORE.session.lastTick = now;
 
-        if (CORE.session.isPaused || CORE.session.finished) return;
+        const { latitude:lat, longitude:lon, accuracy:acc, speed:s } = pos.coords;
+        const speedKmh = (s||0)*3.6;
 
-        const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = pos.coords;
-        const speedKmh = (s || 0) * 3.6;
+        const nearest = NAV.getNearestTrackIndex(lat, lon);
 
-        UI.update(lat, lon, acc, speedKmh, 0, 0);
-    },
+        const posOnRoute = NAV.getRoutePosition(nearest.idx);
+        const offRoute = nearest.dist;
 
-    readWp(i) {
-        const w = CORE.route.waypoints[i];
-        this.speak(w?.name || "Geen info");
+        NAV.updateWaypoints(posOnRoute);
+
+        UI.update(lat, lon, acc, speedKmh, offRoute, posOnRoute);
     },
 
     speak(t) {
         if (!t) return;
         CORE.speech.queue.push(t);
-        if (!CORE.speech.isSpeaking) this.play();
+
+        if (CORE.speech.isSpeaking) return;
+        this.play();
     },
 
     play() {
@@ -489,24 +450,9 @@ const APP = {
 
         const u = new SpeechSynthesisUtterance(CORE.speech.queue.shift());
         u.lang = "nl-NL";
-        u.onend = () => setTimeout(() => this.play(), 400);
+        u.onend = () => this.play();
 
         speechSynthesis.speak(u);
-    },
-
-    stop() {
-        if (!CORE.session.watchId) return;
-
-        navigator.geolocation.clearWatch(CORE.session.watchId);
-        CORE.session.watchId = null;
-
-        CORE.session.finished = true;
-        CORE.session.isPaused = true;
-
-        speechSynthesis.cancel();
-        CORE.speech.queue = [];
-
-        document.getElementById('stopBtn').style.display = "none";
     }
 };
 
