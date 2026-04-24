@@ -67,11 +67,11 @@
         <span id="ui-segment" style="font-weight:bold; font-size: 0.95rem;">Wacht op GPX...</span>
     </div>
 
-    <div class="row">
+<div class="row">
     <button id="startBtn" onclick="APP.handleStartPause()" class="btn-start">▶ START</button>
     <button onclick="UI.toggleTable()" class="btn-blue">📑</button>
-    <button id="stopBtn" onclick="APP.handleStop()" class="btn-red" style="background: #7f8c8d; display:none;">⏹ STOP</button>
-    <button id="resetBtn" onclick="location.reload()" class="btn-red" style="display:none;">🔄</button>
+    <button id="stopBtn" onclick="APP.handleStop()" class="btn-red" style="display:none;">⏹ STOP</button>
+    <button id="resetBtn" onclick="APP.handleReset()" class="btn-red" style="display:none;">🔄</button>
 </div>
 
     <div id="console">
@@ -241,11 +241,7 @@ const APP = {
             document.getElementById('standby-msg').style.display = 'none';
             document.getElementById('live-ui').style.display = 'block';
             document.getElementById('gpxInput').style.display = 'none';
-            
-            // De Stop-knop wordt zichtbaar om de sessie later te kunnen beëindigen
             document.getElementById('stopBtn').style.display = 'inline-block';
-            
-            // De Reset-knop houden we nog even VERBORGEN (veiligheid)
             document.getElementById('resetBtn').style.display = 'none';
 
             UI.updateTable();
@@ -271,31 +267,44 @@ const APP = {
         CORE.session.lastTick = Date.now();
     },
 
-handleStop() {
+    handleStop() {
         if (!CORE.session.watchId) return;
-
-        // Verbreek de GPS verbinding volledig
         navigator.geolocation.clearWatch(CORE.session.watchId);
         CORE.session.watchId = null;
         CORE.session.isPaused = false;
 
-        // UI Terugzetten naar start-modus
         document.getElementById('startBtn').innerText = "▶ START";
         document.getElementById('startBtn').style.background = "var(--success)";
-        
-        // --- DE UPGRADE: Knoppen wisselen ---
-        document.getElementById('stopBtn').style.display = 'none';           // Verberg Stop
-        document.getElementById('resetBtn').style.display = 'inline-block';  // Toon Reset
+        document.getElementById('stopBtn').style.display = 'none';
+        document.getElementById('resetBtn').style.display = 'inline-block';
         
         this.speak("Tracker gestopt. De resetknop is nu beschikbaar.");
         
-        // Forceer UI update naar 0 km/u met behoud van de laatste positie
-        UI.update(
-            CORE.session.lastLat || 0,
-            CORE.session.lastLon || 0,
-            0, 0, 0,
-            CORE.session.lastTrackIdx
-        );
+        UI.update(CORE.session.lastLat || 0, CORE.session.lastLon || 0, 0, 0, 0, CORE.session.lastTrackIdx);
+    },
+
+    handleReset() {
+        if (CORE.session.watchId) {
+            navigator.geolocation.clearWatch(CORE.session.watchId);
+            CORE.session.watchId = null;
+        }
+
+        Object.assign(CORE.session, {
+            isStarted: false, isPaused: false, isOffRoute: false, finished: false,
+            lastTrackIdx: 0, tripDist: 0, movingTime: 0, pauseTime: 0, kcal: 0,
+            steps: 0, lastTick: null, currentMet: 1.0, lastOffRouteSpeakDist: 0, 
+            moveSeconds: 0, lastLat: 0, lastLon: 0
+        });
+
+        CORE.route.waypoints.forEach(w => { w.passed = false; w.missed = false; });
+
+        document.getElementById('startBtn').innerText = "▶ START";
+        document.getElementById('startBtn').style.background = "var(--success)";
+        document.getElementById('stopBtn').style.display = 'inline-block';
+        document.getElementById('resetBtn').style.display = 'none';
+
+        UI.update();
+        UI.updateTable();
     },
 
     gpsHandler(pos) {
@@ -398,7 +407,6 @@ handleStop() {
 };
 
 APP.init();
-
 </script>
 </body>
 </html>
