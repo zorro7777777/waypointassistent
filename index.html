@@ -126,6 +126,13 @@ const LOGIC = {
         const table = CORE.met_table[profile];
         for (const entry of table) { if (speed <= entry.max) return entry.met; }
         return 1.0;
+    },
+    formatVoiceDist(meters) {
+        if (meters < 1000) {
+            return `${Math.round(meters)} meter`;
+        } else {
+            return `${(meters / 1000).toFixed(1)} kilometer`.replace('.', ',');
+        }
     }
 };
 
@@ -224,11 +231,10 @@ const APP = {
             CORE.session.watchId = navigator.geolocation.watchPosition(p => this.gpsHandler(p), e => alert(e.message), { enableHighAccuracy: true });
             document.getElementById('startBtn').innerText = "⏸ PAUZE";
             
-            // DIRECTE AANKONDIGING BIJ START
             const firstWp = CORE.route.waypoints.find(w => !w.passed);
             if(firstWp) {
-                const distStr = (firstWp.routePos / 1000).toFixed(1);
-                this.speak(`Gestart. Ga naar ${firstWp.name} over ${distStr} kilometer.`);
+                const distStr = LOGIC.formatVoiceDist(firstWp.routePos);
+                this.speak(`Gestart. Ga naar ${firstWp.name} over ${distStr}.`);
             } else {
                 this.speak("Gestart.");
             }
@@ -296,8 +302,9 @@ const APP = {
                 
                 const next = CORE.route.waypoints.find((nw, idx) => idx > i && !nw.passed);
                 if(next) {
-                    const distToNext = ((next.routePos - bP) / 1000).toFixed(1);
-                    this.speak(`Volgend punt is ${next.name} over ${distToNext} kilometer.`);
+                    const distToNextMeters = next.routePos - bP;
+                    const distStr = LOGIC.formatVoiceDist(distToNextMeters);
+                    this.speak(`Volgend punt is ${next.name} over ${distStr}.`);
                 }
                 UI.updateTable();
             } else if (bP > w.routePos + 100) { 
