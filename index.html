@@ -114,9 +114,22 @@ const CORE = {
     },
     route: { track: [], waypoints: [], cumDist: [], totalDist: 0 },
     session: {
-        isStarted: false, isPaused: false, isOffRoute: false, finished: false,
-        lastTrackIdx: 0, tripDist: 0, movingTime: 0, pauseTime: 0, kcal: 0,
-        metSum: 0, metCount: 0, steps: 0, lastTick: null, watchId: null, currentMet: 1.0
+        isStarted: false, 
+        isPaused: false, 
+        isOffRoute: false, 
+        finished: false,
+        lastTrackIdx: 0, 
+        tripDist: 0, 
+        movingTime: 0, 
+        pauseTime: 0, 
+        kcal: 0,
+        metSum: 0, 
+        metCount: 0, 
+        steps: 0, 
+        lastTick: null, 
+        watchId: null, 
+        currentMet: 1.0,
+        lastOffRouteSpeakDist: 0 // Toegevoegd voor dynamische spraakmeldingen bij afwijken
     },
     speech: { queue: [], isSpeaking: false, lastMsg: "" }
 };
@@ -236,49 +249,87 @@ const APP = {
         }
         CORE.session.lastTick = Date.now();
     },
-    gpsHandler(pos) {
-        const now = Date.now();
-        const delta = CORE.session.lastTick ? (now - CORE.session.lastTick)/1000 : 0;
-        CORE.session.lastTick = now;
-        if(CORE.session.isPaused || CORE.session.finished) return;
+   gpsHandler(pos) {
+    const now = Date.now();
+    const delta = CORE.session.lastTick ? (now - CORE.session.lastTick)/1000 : 0;
+    CORE.session.lastTick = now;
+    if(CORE.session.isPaused || CORE.session.finished) return;
 
-        const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = pos.coords;
-        const speedKmh = (s || 0) * 3.6;
-        const profile = document.getElementById('profile').value;
-        const config = CORE.settings[profile];
+    const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = pos.coords;
+    const speedKmh = (s || 0) * 3.6;
+    const profile = document.getElementById('profile').value;
+    const config = CORE.settings[profile];
 
-        let bD=Infinity, bP=0, bIdx=0;
-        const startIdx = Math.max(0, CORE.session.lastTrackIdx - 50);
-        const endIdx = Math.min(CORE.route.track.length, CORE.session.lastTrackIdx + 150);
-        for(let i=startIdx; i<endIdx; i++){
-            const d = LOGIC.getDist(lat, lon, CORE.route.track[i].lat, CORE.route.track[i].lon);
-            if(d<bD){ bD=d; bP=CORE.route.cumDist[i]; bIdx=i; }
+    // 1. Route Matching (Waar ben ik op de track?)
+    let bD=Infinity, bP=0, bIdx=0;
+    const startIdx = Math.max(0, CORE.session.lastTrackIdx - 50);
+    const endIdx = Math.min(CORE.route.track.length, CORE.session.lastTrackIdx + 150);
+    
+    for(let i=startIdx; i<endIdx; i++){
+        const d = LOGIC.getDist(lat, lon, CORE.route.track[i].lat, CORE.route.track[i].lon);
+        if(d < bD){ bD = d; bP = CORE.route.cumDist[i]; bIdx = i; }
+    }
+    CORE.session.lastTrackIdx = bIdx;
+
+    // 2. DYNAMISCHE OFF-ROUTE LOGICA (Nieuw)
+    if (bD > 50) {
+        if (!CORE.session.isOffRoute) {
+            CORE.session.isOffRoute = true;
+            this.speak("Opgelet, u bent van de route afgeweken.");
+            CORE.session.lastOffRouteSpeakDist = 50; 
         }
-        CORE.session.lastTrackIdx = bIdx;
+        
+        // Meld elke 50 meter extra afwijking
+        let currentOffStep = Math.floor(bD / 50) * 50;
+        if (currentOffStep > (CORE.session.lastOffRouteSpeakDist || 50)) {
+            this.speak(`Afwijking nu ${currentOffStep} meter.`);
+            CORE.session.lastOffRouteSpeakDist = currentOffStep;
+        }
+    } else if (CORE.session.isOffRoute && bD < 20) {
+        CORE.session.isOffRoute = false;
+        CORE.session.lastOffRouteSpeakDist = 0;
+        this.speak("U bent terug op de route.");
+    }
 
-        if(speedKmh > 1.8) {
-            CORE.session.movingTime += delta;
-            CORE.session.tripDist += (s || 0) * delta;
-            CORE.session.steps += (s / config.th) * delta; // De stappenteller
-            CORE.session.currentMet = LOGIC.getMET(speedKmh, profile);
-            CORE.session.kcal += (CORE.session.currentMet * parseFloat(document.getElementById('userWeight').value) * 1.05) / 3600 * delta;
-        } else { CORE.session.pauseTime += delta; }
+    // 3. STATS (MET, Kcal, Stappen)
+    if(speedKmh > 1.8) {
+        CORE.session.movingTime += delta;
+        CORE.session.tripDist += (s || 0) * delta;
+        CORE.session.steps += (s / config.th) * delta;
+        CORE.session.currentMet = LOGIC.getMET(speedKmh, profile);
+        CORE.session.kcal += (CORE.session.currentMet * parseFloat(document.getElementById('userWeight').value) * 1.05) / 3600 * delta;
+    } else { CORE.session.pauseTime += delta; }
 
-        CORE.route.waypoints.forEach((w, i) => {
-            if(w.passed || w.missed) return;
-            const dist = LOGIC.getDist(lat, lon, w.lat, w.lon);
-            if(dist < config.radius || (bP > w.routePos && dist < 35)) {
-                if(w.name === "FINISH" && bP < CORE.route.totalDist * 0.9) return;
-                w.passed = true;
-                this.speak(w.name + " bereikt.");
-                UI.updateTable();
-            } else if (bP > w.routePos + 80) {
-                w.missed = true;
-                UI.updateTable();
+    // 4. WAYPOINT CHECK (Passed, Next, Missed)
+    CORE.route.waypoints.forEach((w, i) => {
+        if(w.passed || w.missed) return;
+        const distToWp = LOGIC.getDist(lat, lon, w.lat, w.lon);
+        
+        // Check: BEREIKT
+        if(distToWp < config.radius || (bP > w.routePos && distToWp < 35)) {
+            if(w.name === "FINISH" && bP < CORE.route.totalDist * 0.9) return;
+            
+            w.passed = true;
+            this.speak(`Je nadert waypoint: ${w.name}.`);
+            
+            // AANKONDIGING VOLGEND PUNT
+            const next = CORE.route.waypoints.find((nw, idx) => idx > i && !nw.passed);
+            if(next) {
+                const distToNext = ((next.routePos - bP) / 1000).toFixed(1);
+                this.speak(`Het Volgend waypoint is ${next.name} over ${distToNext} kilometer.`);
             }
-        });
-        UI.update(lat, lon, acc, speedKmh, bD, bP);
-    },
+            UI.updateTable();
+        } 
+        // Check: GEMIST (Spraak toegevoegd)
+        else if (bP > w.routePos + 100) { 
+            w.missed = true;
+            this.speak(`Waypoint ${w.name} gemist.`);
+            UI.updateTable();
+        }
+    });
+
+    UI.update(lat, lon, acc, speedKmh, bD, bP);
+}
     readWp(i) {
         const w = CORE.route.waypoints[i];
         this.speak(w.desc ? `Info ${w.name}: ${w.desc}` : `Geen info.`);
