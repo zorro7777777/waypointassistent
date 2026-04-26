@@ -3,7 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WAYPOINTASSISTENT PRO - V4.7</title>
+    <title>WAYPOINTASSISTENT PRO - V4.8</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <!-- Leaflet Rotated Marker (kaart meedraaien) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
         :root {
             --bg-dark:   #1a1a1a;
@@ -12,7 +18,7 @@
             --warning:   #f39c12;
             --danger:    #e74c3c;
             --text-main: #2c3e50;
-            --tab-h:     58px;   /* hoogte van de tabbalk onderaan */
+            --tab-h:     58px;
         }
 
         * { box-sizing: border-box; }
@@ -23,11 +29,9 @@
             color: var(--text-main);
             font-size: 13px;
             margin: 0;
-            /* ruimte onderaan zodat content niet achter de tabbalk valt */
             padding-bottom: calc(var(--tab-h) + 8px);
         }
 
-        /* ── Hoofdkaart ── */
         .card {
             max-width: 500px;
             margin: 8px auto 0;
@@ -37,7 +41,6 @@
             box-shadow: 0 8px 20px rgba(0,0,0,.15);
         }
 
-        /* ── Console (donker vlak) ── */
         #console {
             background: var(--bg-dark);
             color: #00ff00;
@@ -49,7 +52,6 @@
             min-height: 100px;
         }
 
-        /* ── Stat-raster (3 kolommen bovenaan) ── */
         .stat-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -69,7 +71,6 @@
             text-transform: uppercase;
         }
 
-        /* ── Config-sectie (achter tandwiel) ── */
         .config-section {
             background: #ecf0f1;
             padding: 10px;
@@ -78,7 +79,6 @@
             display: none;
         }
 
-        /* ── Flex-rij voor knoppen / inputs ── */
         .row {
             display: flex;
             gap: 8px;
@@ -86,7 +86,6 @@
             margin-bottom: 10px;
         }
 
-        /* ── Knoppen ── */
         button {
             padding: 12px;
             border: none;
@@ -102,25 +101,31 @@
 
         hr { border: 0; border-top: 1px solid #444; margin: 8px 0; }
 
-        /* ── Waypointtabel ── */
+        /* Waypoint tabel */
         table { width: 100%; border-collapse: collapse; font-size: .85rem; }
         td    { padding: 10px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
         .strikethrough { text-decoration: line-through; opacity: .5; color: var(--danger); }
+
+        /* [FIX] Info-badge altijd perfect rond */
         .info-badge {
-            background: var(--accent); color: white;
-            font-size: .6rem; padding: 2px 5px;
-            border-radius: 50%; margin-left: 5px; font-weight: bold;
+            background: var(--accent);
+            color: white;
+            font-size: .6rem;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 4px;
+            border-radius: 50px;
+            margin-left: 5px;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        /* ════════════════════════════════════════
-           TAB-SYSTEEM
-           ════════════════════════════════════════ */
-
-        /* Elk tabpaneel is standaard verborgen */
+        /* ════ TAB SYSTEEM ════ */
         .tab-panel { display: none; }
         .tab-panel.active { display: block; }
 
-        /* Tabbalk — vast onderaan het scherm */
         #tab-bar {
             position: fixed;
             bottom: 0; left: 0; right: 0;
@@ -130,13 +135,12 @@
             display: flex;
             justify-content: space-around;
             align-items: stretch;
-            z-index: 100;
+            z-index: 1000;
             box-shadow: 0 -4px 12px rgba(0,0,0,.08);
             max-width: 500px;
             margin: 0 auto;
         }
 
-        /* Individuele tabknop */
         .tab-btn {
             flex: 1;
             display: flex;
@@ -157,25 +161,10 @@
             transition: color .18s, border-color .18s;
         }
         .tab-btn .tab-icon { font-size: 1.3rem; line-height: 1; }
-        .tab-btn.active {
-            color: var(--accent);
-            border-top-color: var(--accent);
-        }
+        .tab-btn.active { color: var(--accent); border-top-color: var(--accent); }
 
-        /* ── Kaart-tab placeholder ── */
-        #map-placeholder {
-            text-align: center;
-            padding: 40px 20px;
-            color: #95a5a6;
-        }
-        #map-placeholder .map-icon { font-size: 3rem; margin-bottom: 12px; }
-        #map-placeholder p { margin: 4px 0; font-size: .85rem; }
-
-        /* ── Aankondiging-tab: logboek van spraakberichten ── */
-        #announce-log {
-            list-style: none;
-            margin: 0; padding: 0;
-        }
+        /* Aankondigingen */
+        #announce-log { list-style: none; margin: 0; padding: 0; }
         #announce-log li {
             padding: 10px 8px;
             border-bottom: 1px solid #eee;
@@ -184,47 +173,164 @@
             align-items: flex-start;
             font-size: .85rem;
         }
-        #announce-log li .ann-time {
-            color: #95a5a6;
+        #announce-log li .ann-time  { color: #95a5a6; font-size: .75rem; white-space: nowrap; padding-top: 2px; }
+        #announce-log li .ann-icon  { font-size: 1rem; }
+        #announce-log li .ann-text  { flex: 1; }
+        #announce-log .ann-empty    { text-align: center; color: #95a5a6; padding: 30px 0; font-size: .85rem; }
+
+        /* ════ KAART TAB ════ */
+        #tab-map { padding: 0; }
+        #tab-map .card { padding: 0; overflow: hidden; }
+
+        /* De Leaflet kaart zelf */
+        #map {
+            width: 100%;
+            height: 340px;
+            background: #e8e8e8;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Laagkiezer overlay op de kaart */
+        #layer-switcher {
+            position: absolute;
+            top: 8px; right: 8px;
+            z-index: 500;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.2);
+            padding: 6px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+        #layer-switcher label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            padding: 2px 0;
+        }
+
+        /* Kompas op de kaart */
+        #compass {
+            position: absolute;
+            bottom: 8px; right: 8px;
+            z-index: 500;
+            width: 44px; height: 44px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            transition: transform .3s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        /* Kaart-controls onderaan de kaartpanel */
+        #map-controls {
+            padding: 10px 12px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+        }
+        #map-controls button {
+            flex: none;
+            padding: 7px 12px;
+            font-size: 11px;
+            background: var(--accent);
+        }
+        #map-controls .map-info {
+            flex: 1;
             font-size: .75rem;
-            white-space: nowrap;
-            padding-top: 2px;
+            color: #7f8c8d;
         }
-        #announce-log li .ann-icon { font-size: 1rem; }
-        #announce-log li .ann-text { flex: 1; }
-        #announce-log .ann-empty {
-            text-align: center;
+
+        /* Toggle kaart meedraait */
+        .toggle-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+        .toggle-pill input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; }
+
+        /* ════ HOOGTEPROFIEL ════ */
+        #elevation-section {
+            padding: 10px 12px 6px;
+        }
+        #elevation-section h4 {
+            margin: 0 0 6px;
+            font-size: .75rem;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+        #elevation-canvas {
+            width: 100%;
+            height: 80px;
+            border-radius: 6px;
+            display: block;
+            background: #f8f9fa;
+        }
+        #elevation-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 6px;
+            font-size: .75rem;
+            color: #7f8c8d;
+        }
+        #elevation-stats span strong { color: var(--text-main); }
+
+        /* Legende polyline kleuren */
+        #map-legend {
+            display: flex;
+            gap: 12px;
+            padding: 6px 12px 8px;
+            font-size: .72rem;
+            color: #7f8c8d;
+            align-items: center;
+        }
+        .legend-line {
+            width: 24px; height: 4px;
+            border-radius: 2px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+
+        /* Geen kaartdata placeholder */
+        #map-no-gpx {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
             color: #95a5a6;
-            padding: 30px 0;
             font-size: .85rem;
+            gap: 8px;
         }
-        .info-badge {
-    /* voeg toe: */
-    min-width: 16px;
-    height: 16px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
+        #map-no-gpx .big { font-size: 2.5rem; }
     </style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════
-     TAB 1 — HOME (dashboard + knoppen)
-     ══════════════════════════════════════ -->
+<!-- ══════════════════ TAB 1 — HOME ══════════════════ -->
 <div id="tab-home" class="tab-panel active">
     <div class="card">
-
-        <!-- Koptekst + tandwiel -->
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <h2 style="margin:0; font-size:1.1rem;">
-                WAYPOINTASSISTENT <span style="color:var(--accent)">PRO V4.7</span>
+                WAYPOINTASSISTENT <span style="color:var(--accent)">PRO V4.8</span>
             </h2>
             <span onclick="UI.toggleConfig()" style="cursor:pointer; font-size:1.2rem;">⚙️</span>
         </div>
 
-        <!-- Configuratiepaneel (verborgen achter tandwiel) -->
         <div id="configArea" class="config-section">
             <div class="row">
                 <select id="profile" onchange="UI.updateProfile()" style="padding:8px; flex:1;">
@@ -238,23 +344,12 @@
             <input type="file" id="gpxInput" accept=".gpx" style="width:100%;">
         </div>
 
-        <!-- Drie grote statistieken bovenaan -->
         <div class="stat-grid">
-            <div>
-                <span class="stat-label">Off-Route</span>
-                <span id="ui-off-big" class="stat-value">0m</span>
-            </div>
-            <div>
-                <span class="stat-label">KM/U</span>
-                <span id="ui-speed-big" class="stat-value">0.0</span>
-            </div>
-            <div>
-                <span class="stat-label">GPS Acc</span>
-                <span id="ui-acc-big" class="stat-value">0m</span>
-            </div>
+            <div><span class="stat-label">Off-Route</span><span id="ui-off-big" class="stat-value">0m</span></div>
+            <div><span class="stat-label">KM/U</span><span id="ui-speed-big" class="stat-value">0.0</span></div>
+            <div><span class="stat-label">GPS Acc</span><span id="ui-acc-big" class="stat-value">0m</span></div>
         </div>
 
-        <!-- Segmentbalk: vorig ➔ volgend waypoint -->
         <div style="background:#e8f4fd; padding:10px; border-radius:8px; border-left:4px solid var(--accent); margin-bottom:10px;">
             <div style="display:flex; justify-content:space-between; align-items:baseline;">
                 <span class="stat-label">Traject:</span>
@@ -263,7 +358,6 @@
             <span id="ui-segment" style="font-weight:bold; font-size:.95rem;">Wacht op GPX...</span>
         </div>
 
-        <!-- Knoppen: START / lijst / stop / reset -->
         <div class="row">
             <button id="startBtn"  onclick="APP.handleStartPause()" class="btn-start">▶ START</button>
             <button id="stopBtn"   onclick="APP.handleStop()"       class="btn-red"
@@ -272,7 +366,6 @@
                     style="display:none;">🔄</button>
         </div>
 
-        <!-- Console: live GPS-data -->
         <div id="console">
             <div id="standby-msg" style="text-align:center; padding:20px;">
                 Laad een GPX bestand om te beginnen.
@@ -284,48 +377,34 @@
                 </div>
                 <hr>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:.8rem;">
-                    <div>TRIP:     <span id="ui-trip"      style="color:#00ff00">0.000 km</span></div>
-                    <div>ETA:      <span id="ui-eta"       style="color:#00ff00">--:--</span></div>
-                    <div>MOVE:     <span id="ui-mov-time"  style="color:#00ff00">00:00:00</span></div>
-                    <div>PAUZE:    <span id="ui-pau-time"  style="color:#00ff00">00:00:00</span></div>
-                    <div>KCAL:     <span id="ui-kcal"      style="color:#00ff00">0</span></div>
-                    <div>MET:      <span id="ui-met"       style="color:#00ff00">1.0</span></div>
-                    <div>AVG KM/U: <span id="ui-avg-speed" style="color:#00ff00">0.0</span></div>
-                    <div>
-                        <span id="ui-count-label">STAPPEN</span>:
-                        <span id="ui-steps" style="color:#00ff00">0</span>
-                    </div>
+                    <div>TRIP:     <span id="ui-trip"       style="color:#00ff00">0.000 km</span></div>
+                    <div>ETA:      <span id="ui-eta"        style="color:#00ff00">--:--</span></div>
+                    <div>MOVE:     <span id="ui-mov-time"   style="color:#00ff00">00:00:00</span></div>
+                    <div>PAUZE:    <span id="ui-pau-time"   style="color:#00ff00">00:00:00</span></div>
+                    <div>KCAL:     <span id="ui-kcal"       style="color:#00ff00">0</span></div>
+                    <div>MET:      <span id="ui-met"        style="color:#00ff00">1.0</span></div>
+                    <div>AVG KM/U: <span id="ui-avg-speed"  style="color:#00ff00">0.0</span></div>
+                    <div><span id="ui-count-label">STAPPEN</span>: <span id="ui-steps" style="color:#00ff00">0</span></div>
                 </div>
             </div>
         </div>
+    </div>
+</div>
 
-    </div><!-- /card -->
-</div><!-- /tab-home -->
-
-
-<!-- ══════════════════════════════════════
-     TAB 2 — AANKONDIGINGEN (logboek)
-     ══════════════════════════════════════ -->
+<!-- ══════════════════ TAB 2 — MELDINGEN ══════════════════ -->
 <div id="tab-announce" class="tab-panel">
     <div class="card">
-        <h3 style="margin:0 0 12px; font-size:.95rem; color:var(--text-main);">
-            📢 Aankondigingen
-        </h3>
+        <h3 style="margin:0 0 12px; font-size:.95rem;">📢 Aankondigingen</h3>
         <ul id="announce-log">
             <li class="ann-empty">Nog geen aankondigingen.<br>Start de tracker om berichten te zien.</li>
         </ul>
     </div>
 </div>
 
-
-<!-- ══════════════════════════════════════
-     TAB 3 — WAYPOINTS (overzichtslijst)
-     ══════════════════════════════════════ -->
+<!-- ══════════════════ TAB 3 — WAYPOINTS ══════════════════ -->
 <div id="tab-waypoints" class="tab-panel">
     <div class="card">
-        <h3 style="margin:0 0 12px; font-size:.95rem; color:var(--text-main);">
-            📍 Waypoints
-        </h3>
+        <h3 style="margin:0 0 12px; font-size:.95rem;">📍 Waypoints</h3>
         <div id="wp-empty" style="text-align:center; color:#95a5a6; padding:30px 0; font-size:.85rem;">
             Laad een GPX bestand om de waypoints te zien.
         </div>
@@ -333,223 +412,567 @@
     </div>
 </div>
 
-
-<!-- ══════════════════════════════════════
-     TAB 4 — KAART (placeholder)
-     ══════════════════════════════════════ -->
+<!-- ══════════════════ TAB 4 — KAART ══════════════════ -->
 <div id="tab-map" class="tab-panel">
     <div class="card">
-        <div id="map-placeholder">
-            <div class="map-icon">🗺️</div>
-            <p><strong>Kaartweergave</strong></p>
-            <p>Nog niet beschikbaar in deze versie.</p>
-            <p style="margin-top:12px; font-size:.75rem;">
-                Tip: exporteer je GPX naar
-                <a href="https://www.gpxstudio.org" target="_blank" style="color:var(--accent)">gpxstudio.org</a>
-                voor een volledige kaartweergave.
-            </p>
+
+        <!-- Kaartcontrols bovenaan -->
+        <div id="map-controls">
+            <button onclick="MAP.centerOnUser()" style="background:var(--success);">📍 Centreer</button>
+            <button onclick="MAP.fitRoute()" style="background:var(--accent);">🗺️ Hele route</button>
+            <div class="toggle-pill">
+                <input type="checkbox" id="rotateToggle" onchange="MAP.toggleRotate(this.checked)">
+                <label for="rotateToggle">Kaart meedraaien</label>
+            </div>
         </div>
+
+        <!-- Leaflet kaartcontainer (positie: relative voor overlay-elementen) -->
+        <div style="position:relative;">
+            <div id="map"></div>
+
+            <!-- Laagkiezer (OSM + Waymarked Trails overlay) -->
+            <div id="layer-switcher">
+                <label>
+                    <input type="radio" name="baselayer" value="osm" checked
+                           onchange="MAP.setBaseLayer('osm')"> OSM
+                </label>
+                <label>
+                    <input type="radio" name="baselayer" value="topo"
+                           onchange="MAP.setBaseLayer('topo')"> Topo
+                </label>
+                <label style="margin-top:4px; border-top:1px solid #eee; padding-top:4px;">
+                    <input type="checkbox" id="trailsOverlay"
+                           onchange="MAP.toggleTrails(this.checked)"> Wandelpaden
+                </label>
+            </div>
+
+            <!-- Kompas symbool — draait mee met de heading -->
+            <div id="compass" title="Kompas — klik om naar noorden te richten"
+                 onclick="MAP.resetNorth()">🧭</div>
+        </div>
+
+        <!-- Legende: reeds gelopen vs nog te lopen -->
+        <div id="map-legend">
+            <span><span class="legend-line" style="background:#7f8c8d;"></span>Gelopen</span>
+            <span><span class="legend-line" style="background:var(--accent);"></span>Te lopen</span>
+            <span><span class="legend-line" style="background:var(--danger);"></span>Off-route</span>
+        </div>
+
+        <!-- Placeholder als er nog geen GPX geladen is -->
+        <div id="map-no-gpx">
+            <span class="big">🗺️</span>
+            <span>Laad een GPX bestand om de kaart te activeren.</span>
+        </div>
+
+        <!-- Hoogteprofiel sectie (verborgen tot GPX met hoogte geladen is) -->
+        <div id="elevation-section" style="display:none;">
+            <h4>📈 Hoogteprofiel</h4>
+            <canvas id="elevation-canvas"></canvas>
+            <div id="elevation-stats">
+                <span>↑ Stijging: <strong id="elev-up">--</strong>m</span>
+                <span>↓ Daling: <strong id="elev-down">--</strong>m</span>
+                <span>⛰ Max: <strong id="elev-max">--</strong>m</span>
+                <span>🏖 Min: <strong id="elev-min">--</strong>m</span>
+            </div>
+        </div>
+
     </div>
 </div>
 
-
-<!-- ══════════════════════════════════════
-     TABBALK (vast onderaan)
-     ══════════════════════════════════════ -->
+<!-- ══════════════════ TABBALK ══════════════════ -->
 <nav id="tab-bar">
-    <button class="tab-btn active" onclick="TAB.show('home')" id="tbtn-home">
+    <button class="tab-btn active" onclick="TAB.show('home')"      id="tbtn-home">
         <span class="tab-icon">🏠</span>Home
     </button>
-    <button class="tab-btn" onclick="TAB.show('announce')" id="tbtn-announce">
+    <button class="tab-btn" onclick="TAB.show('announce')"         id="tbtn-announce">
         <span class="tab-icon">📢</span>Meldingen
     </button>
-    <button class="tab-btn" onclick="TAB.show('waypoints')" id="tbtn-waypoints">
+    <button class="tab-btn" onclick="TAB.show('waypoints')"        id="tbtn-waypoints">
         <span class="tab-icon">📍</span>Waypoints
     </button>
-    <button class="tab-btn" onclick="TAB.show('map')" id="tbtn-map">
+    <button class="tab-btn" onclick="TAB.show('map'); MAP.resize()" id="tbtn-map">
         <span class="tab-icon">🗺️</span>Kaart
     </button>
 </nav>
 
 
-<!-- ══════════════════════════════════════
-     JAVASCRIPT
-     ══════════════════════════════════════ -->
 <script>
-
 // =============================================================================
-// TAB — beheert de onderste navigatiebalk
+// TAB — onderste navigatiebalk
 // =============================================================================
 const TAB = {
-    // Wisselt naar het opgegeven tabpaneel en activeert de bijbehorende knop
     show(name) {
-        // Verberg alle panelen en deactiveer alle knoppen
         document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-
-        // Activeer het gewenste paneel en de bijbehorende knop
         document.getElementById('tab-' + name).classList.add('active');
         document.getElementById('tbtn-' + name).classList.add('active');
     }
 };
 
 // =============================================================================
-// CORE — centrale datastore: instellingen, route en sessie-staat
+// MAP — Leaflet kaartlogica
 // =============================================================================
-const CORE = {
-    settings: {
-        wandelen: { ms: 0.36, th: 0.67, radius: 20, label: "STAPPEN"        },
-        fietsen:  { ms: 5.5,  th: 2.10, radius: 35, label: "OMWENTELINGEN"  }
+const MAP = {
+    map:           null,   // Leaflet kaartinstantie
+    baseLayers:    {},     // Basiskaartlagen (OSM, Topo)
+    trailsLayer:   null,   // Waymarked Trails overlay
+    userMarker:    null,   // Blauwe positiemarker (met richting)
+    accuracyCircle:null,   // Blauwe accuraatheidsring
+    wpMarkers:     [],     // Waypoint-markers op de kaart
+    polyDone:      null,   // Gelopen deel van de route (grijs)
+    polyTodo:      null,   // Nog te lopen deel (blauw)
+    arrows:        [],     // Richtingspijltjes langs de route
+    rotateEnabled: false,  // Of de kaart meedraait met de heading
+    currentHeading:0,      // Huidige kompasrichting in graden
+    initialized:   false,  // Of de kaart al opgebouwd is
+
+    // Initialiseer de Leaflet kaart — wordt één keer aangeroepen bij GPX-laden
+    init() {
+        if (this.initialized) return;
+        this.initialized = true;
+
+        // Verberg de placeholder, toon de kaartdiv
+        document.getElementById('map-no-gpx').style.display = 'none';
+        document.getElementById('map').style.display = 'block';
+
+        // Maak de Leaflet kaart aan, gecentreerd op België als fallback
+        this.map = L.map('map', {
+            zoomControl: true,
+            attributionControl: true,
+            rotate: false   // native rotatie via CSS transform
+        }).setView([50.85, 4.35], 13);
+
+        // ── Basislagen ──
+        this.baseLayers.osm = L.tileLayer(
+            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+            { attribution: '© OpenStreetMap', maxZoom: 19 }
+        ).addTo(this.map);
+
+        this.baseLayers.topo = L.tileLayer(
+            'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+            { attribution: '© OpenTopoMap', maxZoom: 17 }
+        );
+
+        // ── Waymarked Trails overlay (wandelpaden) ──
+        this.trailsLayer = L.tileLayer(
+            'https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png',
+            { attribution: '© Waymarked Trails', maxZoom: 19, opacity: 0.7 }
+        );
     },
 
-    met_table: {
-        wandelen: [
-            { max: 1.5,      met: 1.0 },
-            { max: 4.0,      met: 3.0 },
-            { max: 5.5,      met: 3.5 },
-            { max: Infinity, met: 4.5 }
-        ],
-        fietsen: [
-            { max: 1.5,      met: 1.0 },
-            { max: 15,       met: 5.0 },
-            { max: 20,       met: 6.5 },
-            { max: Infinity, met: 8.0 }
-        ]
-    },
-
-    route:   { track: [], waypoints: [], cumDist: [], totalDist: 0 },
-
-    session: {
-        isStarted: false, isPaused: false, isOffRoute: false, finished: false,
-        lastTrackIdx: 0, tripDist: 0, movingTime: 0, pauseTime: 0, kcal: 0,
-        steps: 0, lastTick: null, watchId: null, currentMet: 1.0,
-        lastOffRouteSpeakDist: 0, moveSeconds: 0
-    },
-
-    speech: { queue: [], isSpeaking: false, lastMsg: "" }
-};
-
-// =============================================================================
-// LOGIC — pure hulpfuncties zonder neveneffecten
-// =============================================================================
-const LOGIC = {
-
-    // Haversine-formule: rechte afstand in meters tussen twee GPS-coördinaten
-    getDist(lat1, lon1, lat2, lon2) {
-        const R     = 6371000;
-        const toRad = Math.PI / 180;
-        const dLat  = (lat2 - lat1) * toRad;
-        const dLon  = (lon2 - lon1) * toRad;
-        const lat1r = lat1 * toRad;
-        const lat2r = lat2 * toRad;
-        const a = Math.sin(dLat / 2) ** 2
-                + Math.cos(lat1r) * Math.cos(lat2r) * Math.sin(dLon / 2) ** 2;
-        return 2 * R * Math.asin(Math.sqrt(a));
-    },
-
-    // Geeft de juiste MET-waarde terug voor de huidige snelheid en het profiel
-    getMET(speed, profile) {
-        for (const entry of CORE.met_table[profile]) {
-            if (speed <= entry.max) return entry.met;
+    // Wisselt de basiskaartlaag (OSM ↔ Topo)
+    setBaseLayer(name) {
+        Object.values(this.baseLayers).forEach(l => this.map.removeLayer(l));
+        this.baseLayers[name].addTo(this.map);
+        // Zorg dat wandelpaden overlay bovenop blijft
+        if (this.map.hasLayer(this.trailsLayer)) {
+            this.trailsLayer.bringToFront();
         }
-        return 1.0;
     },
 
-    // Formateert een afstand in meters naar een leesbare Nederlandse string
-    formatVoiceDist(meters) {
-        return meters < 1000
-            ? `${Math.round(meters)} meter`
-            : `${(meters / 1000).toFixed(1)} kilometer`.replace('.', ',');
+    // Zet de Waymarked Trails overlay aan of uit
+    toggleTrails(on) {
+        if (on) {
+            this.trailsLayer.addTo(this.map);
+        } else {
+            this.map.removeLayer(this.trailsLayer);
+        }
     },
 
-    // Geeft het huidige tijdstip terug als HH:MM string (voor het aankondigingslogboek)
-    nowStr() {
-        const d = new Date();
-        return d.getHours().toString().padStart(2, '0') + ':'
-             + d.getMinutes().toString().padStart(2, '0');
+    // Schakel kaart-meedraaien met heading aan of uit
+    toggleRotate(on) {
+        this.rotateEnabled = on;
+        if (!on) this.resetNorth(); // bij uitschakelen terugzetten naar noorden
+    },
+
+    // Zet de kaart terug naar noorden (0°)
+    resetNorth() {
+        this.currentHeading = 0;
+        this.map.getContainer().style.transform = '';
+        document.getElementById('compass').style.transform = '';
+    },
+
+    // Forceert Leaflet om de kaartgrootte opnieuw te berekenen
+    // (nodig bij wisselen van tab want de div was verborgen)
+    resize() {
+        if (this.map) setTimeout(() => this.map.invalidateSize(), 50);
+    },
+
+    // Centreert de kaart op de huidige GPS-positie van de gebruiker
+    centerOnUser() {
+        if (this.userMarker) {
+            this.map.setView(this.userMarker.getLatLng(), 16);
+        }
+    },
+
+    // Past de kaartweergave aan zodat de volledige route zichtbaar is
+    fitRoute() {
+        const track = CORE.route.track;
+        if (track.length === 0) return;
+        const bounds = L.latLngBounds(track.map(p => [p.lat, p.lon]));
+        this.map.fitBounds(bounds, { padding: [20, 20] });
+    },
+
+    // Tekent de volledige GPX-route op de kaart:
+    // - twee polylines (gelopen grijs + te lopen blauw)
+    // - richtingspijltjes langs de route
+    // - waypoint-markers (START vlag, FINISH vlag, tussenpunten)
+    drawRoute() {
+        const track = CORE.route.track;
+        const wpts  = CORE.route.waypoints;
+        if (!this.map || track.length === 0) return;
+
+        // Verwijder oude lagen als die er al zijn (bv. bij reload)
+        if (this.polyDone)  this.map.removeLayer(this.polyDone);
+        if (this.polyTodo)  this.map.removeLayer(this.polyTodo);
+        this.arrows.forEach(a => this.map.removeLayer(a));
+        this.wpMarkers.forEach(m => this.map.removeLayer(m));
+        this.arrows    = [];
+        this.wpMarkers = [];
+
+        const latlngs = track.map(p => [p.lat, p.lon]);
+
+        // Gelopen deel (grijs) — begint leeg, groeit tijdens de wandeling
+        this.polyDone = L.polyline([], {
+            color: '#7f8c8d', weight: 5, opacity: 0.7
+        }).addTo(this.map);
+
+        // Te lopen deel (blauw) — bevat bij start de volledige route
+        this.polyTodo = L.polyline(latlngs, {
+            color: '#00bfff', weight: 5, opacity: 0.9
+        }).addTo(this.map);
+
+        // ── Richtingspijltjes langs de route ──
+        // Elk N-de trackpunt krijgt een klein driehoekje in de rijrichting
+        const arrowInterval = Math.max(5, Math.floor(track.length / 30));
+        for (let i = arrowInterval; i < track.length - 1; i += arrowInterval) {
+            const p1  = track[i - 1];
+            const p2  = track[i];
+            // Bereken hoek van het pijltje (atan2 in graden)
+            const ang = Math.atan2(p2.lon - p1.lon, p2.lat - p1.lat) * 180 / Math.PI;
+
+            const arrowIcon = L.divIcon({
+                html: `<div style="
+                    transform: rotate(${ang}deg);
+                    color: #00bfff;
+                    font-size: 14px;
+                    line-height: 1;
+                    text-shadow: 0 0 3px white;
+                ">▲</div>`,
+                iconSize:   [14, 14],
+                iconAnchor: [7, 7],
+                className:  ''
+            });
+
+            const arrow = L.marker([p2.lat, p2.lon], { icon: arrowIcon, interactive: false });
+            arrow.addTo(this.map);
+            this.arrows.push(arrow);
+        }
+
+        // ── Waypoint-markers ──
+        wpts.forEach((w, i) => {
+            let html, size;
+
+            if (w.name === 'START') {
+                // Groene vlag voor start
+                html = `<div style="font-size:22px; line-height:1; filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));">🚩</div>`;
+                size = [22, 22];
+            } else if (w.name === 'FINISH') {
+                // Geblokte vlag voor finish
+                html = `<div style="font-size:22px; line-height:1; filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));">🏁</div>`;
+                size = [22, 22];
+            } else {
+                // Genummerde blauwe pin voor tussenpunten
+                html = `<div style="
+                    background: var(--accent);
+                    color: white;
+                    border-radius: 50%;
+                    width: 22px; height: 22px;
+                    display: flex; align-items: center; justify-content: center;
+                    font-size: 10px; font-weight: bold;
+                    box-shadow: 0 2px 4px rgba(0,0,0,.3);
+                    border: 2px solid white;
+                ">${i}</div>`;
+                size = [22, 22];
+            }
+
+            const icon   = L.divIcon({ html, iconSize: size, iconAnchor: [11, 11], className: '' });
+            const marker = L.marker([w.lat, w.lon], { icon })
+                .bindPopup(`<b>${w.name}</b>${w.desc ? '<br>' + w.desc : ''}<br><small>${(w.routePos/1000).toFixed(2)} km</small>`)
+                .addTo(this.map);
+
+            this.wpMarkers.push(marker);
+        });
+
+        // Pas de kaart aan op de volledige route
+        this.fitRoute();
+    },
+
+    // Bijwerken van de gebruikermarker en het gesplitste pad tijdens de wandeling.
+    // Wordt aangeroepen vanuit UI.update() bij elke GPS-update.
+    updatePosition(lat, lon, acc, heading, posOnRoute) {
+        if (!this.map) return;
+
+        // ── Gebruikersmarker (blauwe stip met richting) ──
+        const userIcon = L.divIcon({
+            html: `<div style="
+                width: 18px; height: 18px;
+                background: #2980b9;
+                border: 3px solid white;
+                border-radius: 50%;
+                box-shadow: 0 0 0 2px #2980b9;
+                position: relative;
+            ">
+                <div style="
+                    position: absolute;
+                    top: -8px; left: 50%;
+                    transform: translateX(-50%) rotate(${heading || 0}deg);
+                    width: 0; height: 0;
+                    border-left: 4px solid transparent;
+                    border-right: 4px solid transparent;
+                    border-bottom: 8px solid #2980b9;
+                    transform-origin: bottom center;
+                "></div>
+            </div>`,
+            iconSize:   [18, 18],
+            iconAnchor: [9, 9],
+            className:  ''
+        });
+
+        const latlng = [lat, lon];
+        if (!this.userMarker) {
+            this.userMarker     = L.marker(latlng, { icon: userIcon, zIndexOffset: 1000 }).addTo(this.map);
+            this.accuracyCircle = L.circle(latlng, { radius: acc, color: '#2980b9', fillOpacity: 0.08, weight: 1 }).addTo(this.map);
+        } else {
+            this.userMarker.setLatLng(latlng).setIcon(userIcon);
+            this.accuracyCircle.setLatLng(latlng).setRadius(acc);
+        }
+
+        // ── Gesplitste polyline bijwerken ──
+        // Zoek het trackpunt dat het dichtst bij de huidige routepositie ligt
+        const idx  = CORE.session.lastTrackIdx;
+        const done = CORE.route.track.slice(0, idx + 1).map(p => [p.lat, p.lon]);
+        const todo = CORE.route.track.slice(idx).map(p => [p.lat, p.lon]);
+        if (this.polyDone) this.polyDone.setLatLngs(done);
+        if (this.polyTodo) this.polyTodo.setLatLngs(todo);
+
+        // ── Kaart meedraaien met heading ──
+        if (this.rotateEnabled && heading != null) {
+            this.currentHeading = heading;
+            // CSS-rotatie op de kaartcontainer (geen Leaflet-native rotatie)
+            const container = this.map.getContainer();
+            container.style.transformOrigin = 'center center';
+            container.style.transform       = `rotate(${-heading}deg)`;
+            // Kompas draait omgekeerd mee zodat het altijd naar noorden wijst
+            document.getElementById('compass').style.transform = `rotate(${heading}deg)`;
+        }
+
+        // ── Waypoint-marker kleuren bijwerken ──
+        CORE.route.waypoints.forEach((w, i) => {
+            const marker = this.wpMarkers[i];
+            if (!marker) return;
+            if (w.passed) {
+                // Gepasseerd → groen
+                marker.setOpacity(0.5);
+            } else if (w.missed) {
+                // Gemist → rood
+                marker.setOpacity(0.3);
+            }
+        });
     }
 };
 
 // =============================================================================
-// UI — alle schermweergave en DOM-manipulatie
+// ELEVATION — hoogteprofiel uit GPX-data
+// =============================================================================
+const ELEVATION = {
+
+    // Verwerkt de hoogte-array en tekent het profiel op de canvas
+    draw(elevations) {
+        if (!elevations || elevations.length < 2) return;
+
+        document.getElementById('elevation-section').style.display = 'block';
+
+        const canvas = document.getElementById('elevation-canvas');
+        const ctx    = canvas.getContext('2d');
+        const W      = canvas.offsetWidth  || 400;
+        const H      = canvas.offsetHeight || 80;
+        canvas.width  = W;
+        canvas.height = H;
+
+        const minE = Math.min(...elevations);
+        const maxE = Math.max(...elevations);
+        const rng  = maxE - minE || 1;
+
+        // Berekening stijging en daling
+        let up = 0, down = 0;
+        for (let i = 1; i < elevations.length; i++) {
+            const diff = elevations[i] - elevations[i - 1];
+            if (diff > 0) up   += diff;
+            else          down += Math.abs(diff);
+        }
+
+        // Grafiek achtergrond
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(0, 0, W, H);
+
+        // Gradient vulling onder de lijn
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0,   'rgba(0,191,255,0.4)');
+        grad.addColorStop(1,   'rgba(0,191,255,0.02)');
+
+        ctx.beginPath();
+        ctx.moveTo(0, H);
+        elevations.forEach((e, i) => {
+            const x = (i / (elevations.length - 1)) * W;
+            const y = H - ((e - minE) / rng) * (H - 10) - 2;
+            i === 0 ? ctx.lineTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.lineTo(W, H);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Lijn zelf
+        ctx.beginPath();
+        elevations.forEach((e, i) => {
+            const x = (i / (elevations.length - 1)) * W;
+            const y = H - ((e - minE) / rng) * (H - 10) - 2;
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = '#00bfff';
+        ctx.lineWidth   = 2;
+        ctx.stroke();
+
+        // Statistieken invullen
+        document.getElementById('elev-up').innerText   = Math.round(up);
+        document.getElementById('elev-down').innerText = Math.round(down);
+        document.getElementById('elev-max').innerText  = Math.round(maxE);
+        document.getElementById('elev-min').innerText  = Math.round(minE);
+    }
+};
+
+// =============================================================================
+// CORE — centrale datastore
+// =============================================================================
+const CORE = {
+    settings: {
+        wandelen: { ms: 0.36, th: 0.67, radius: 20, label: "STAPPEN"       },
+        fietsen:  { ms: 5.5,  th: 2.10, radius: 35, label: "OMWENTELINGEN" }
+    },
+    met_table: {
+        wandelen: [
+            { max: 1.5,      met: 1.0 }, { max: 4.0, met: 3.0 },
+            { max: 5.5,      met: 3.5 }, { max: Infinity, met: 4.5 }
+        ],
+        fietsen: [
+            { max: 1.5,      met: 1.0 }, { max: 15, met: 5.0 },
+            { max: 20,       met: 6.5 }, { max: Infinity, met: 8.0 }
+        ]
+    },
+    route:   { track: [], waypoints: [], cumDist: [], totalDist: 0, elevations: [] },
+    session: {
+        isStarted: false, isPaused: false, isOffRoute: false, finished: false,
+        lastTrackIdx: 0, tripDist: 0, movingTime: 0, pauseTime: 0, kcal: 0,
+        steps: 0, lastTick: null, watchId: null, currentMet: 1.0,
+        lastOffRouteSpeakDist: 0, moveSeconds: 0, lastHeading: null
+    },
+    speech: { queue: [], isSpeaking: false, lastMsg: "" }
+};
+
+// =============================================================================
+// LOGIC — pure hulpfuncties
+// =============================================================================
+const LOGIC = {
+    getDist(lat1, lon1, lat2, lon2) {
+        const R = 6371000, toRad = Math.PI / 180;
+        const dLat = (lat2 - lat1) * toRad, dLon = (lon2 - lon1) * toRad;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dLon/2)**2;
+        return 2 * R * Math.asin(Math.sqrt(a));
+    },
+    getMET(speed, profile) {
+        for (const e of CORE.met_table[profile]) if (speed <= e.max) return e.met;
+        return 1.0;
+    },
+    formatVoiceDist(m) {
+        return m < 1000 ? `${Math.round(m)} meter` : `${(m/1000).toFixed(1)} kilometer`.replace('.', ',');
+    },
+    nowStr() {
+        const d = new Date();
+        return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    },
+    // Berekent de heading (richting in graden) tussen twee GPS-punten
+    calcHeading(lat1, lon1, lat2, lon2) {
+        const toRad = Math.PI / 180;
+        const dLon  = (lon2 - lon1) * toRad;
+        const y     = Math.sin(dLon) * Math.cos(lat2 * toRad);
+        const x     = Math.cos(lat1 * toRad) * Math.sin(lat2 * toRad)
+                    - Math.sin(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.cos(dLon);
+        return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
+};
+
+// =============================================================================
+// UI — schermweergave
 // =============================================================================
 const UI = {
-
-    // Hoofdupdate: vernieuwt alle waarden op de Home-tab
-    update(lat = 0, lon = 0, acc = 0, speed = 0, offRoute = 0, posOnRoute = 0) {
+    update(lat = 0, lon = 0, acc = 0, speed = 0, offRoute = 0, posOnRoute = 0, heading = null) {
         const nextWp   = CORE.route.waypoints.find(w => !w.passed && !w.missed);
         const avgSpeed = CORE.session.movingTime > 2
             ? (CORE.session.tripDist / CORE.session.movingTime) * 3.6 : 0;
         const profile  = document.getElementById('profile').value;
         const config   = CORE.settings[profile];
 
-        document.getElementById('ui-total-len').innerText =
-            `Track: ${(CORE.route.totalDist / 1000).toFixed(2)} km`;
+        document.getElementById('ui-total-len').innerText    = `Track: ${(CORE.route.totalDist/1000).toFixed(2)} km`;
+        document.getElementById('ui-off-big').innerText      = Math.round(offRoute) + "m";
+        document.getElementById('ui-off-big').style.color    = offRoute > 50 ? 'var(--danger)' : 'var(--accent)';
+        document.getElementById('ui-speed-big').innerText    = speed.toFixed(1);
+        document.getElementById('ui-acc-big').innerText      = Math.round(acc) + "m";
+        document.getElementById('ui-next-wp').innerText      = nextWp ? nextWp.name : "FINISH";
+        document.getElementById('ui-dist').innerText         = nextWp ? Math.max(0, Math.round(nextWp.routePos - posOnRoute)) + "m" : "0m";
+        document.getElementById('ui-trip').innerText         = (CORE.session.tripDist/1000).toFixed(3) + " km";
+        document.getElementById('ui-mov-time').innerText     = this.fmt(CORE.session.movingTime);
+        document.getElementById('ui-pau-time').innerText     = this.fmt(CORE.session.pauseTime);
+        document.getElementById('ui-kcal').innerText         = Math.round(CORE.session.kcal);
+        document.getElementById('ui-met').innerText          = CORE.session.currentMet.toFixed(1);
+        document.getElementById('ui-avg-speed').innerText    = avgSpeed.toFixed(1);
+        document.getElementById('ui-steps').innerText        = Math.floor(CORE.session.steps);
+        document.getElementById('ui-count-label').innerText  = config.label;
 
-        // [FIX] Off-route kleur gebaseerd op dynamische drempel (zie gpsHandler)
-        document.getElementById('ui-off-big').innerText = Math.round(offRoute) + "m";
-        document.getElementById('ui-off-big').style.color =
-            offRoute > 50 ? 'var(--danger)' : 'var(--accent)';
-
-        document.getElementById('ui-speed-big').innerText = speed.toFixed(1);
-        document.getElementById('ui-acc-big').innerText   = Math.round(acc) + "m";
-
-        document.getElementById('ui-next-wp').innerText =
-            nextWp ? nextWp.name : "FINISH";
-        document.getElementById('ui-dist').innerText =
-            nextWp ? Math.max(0, Math.round(nextWp.routePos - posOnRoute)) + "m" : "0m";
-
-        document.getElementById('ui-trip').innerText     = (CORE.session.tripDist / 1000).toFixed(3) + " km";
-        document.getElementById('ui-mov-time').innerText = this.fmt(CORE.session.movingTime);
-        document.getElementById('ui-pau-time').innerText = this.fmt(CORE.session.pauseTime);
-        document.getElementById('ui-kcal').innerText     = Math.round(CORE.session.kcal);
-        document.getElementById('ui-met').innerText      = CORE.session.currentMet.toFixed(1);
-        document.getElementById('ui-avg-speed').innerText = avgSpeed.toFixed(1);
-        document.getElementById('ui-steps').innerText    = Math.floor(CORE.session.steps);
-        document.getElementById('ui-count-label').innerText = config.label;
-
-        // ETA: geschatte aankomsttijd op basis van resterende routeafstand
         let etaStr = "--:--";
         if (speed > 2.0 && nextWp) {
             const sec = (CORE.route.totalDist - posOnRoute) / (speed / 3.6);
             if (isFinite(sec)) {
-                const arrival = new Date(Date.now() + sec * 1000);
-                etaStr = arrival.getHours().toString().padStart(2, '0') + ":"
-                       + arrival.getMinutes().toString().padStart(2, '0');
+                const a = new Date(Date.now() + sec * 1000);
+                etaStr = a.getHours().toString().padStart(2,'0') + ':' + a.getMinutes().toString().padStart(2,'0');
             }
         }
         document.getElementById('ui-eta').innerText = etaStr;
 
-        // Segmentlabel: vorig ➔ volgend waypoint
         const prev = [...CORE.route.waypoints].reverse().find(w => w.passed);
         document.getElementById('ui-segment').innerText =
             (prev && nextWp) ? `${prev.name} ➔ ${nextWp.name}` :
             (nextWp          ? `Naar ${nextWp.name}`            : "🏁 Bestemming bereikt");
+
+        // Kaart bijwerken (alleen als kaart al geïnitialiseerd is)
+        if (MAP.initialized && lat !== 0) {
+            MAP.updatePosition(lat, lon, acc, heading, posOnRoute);
+        }
     },
 
-    // Hulpfunctie: seconden → HH:MM:SS string
     fmt(s) { return new Date(s * 1000).toISOString().substr(11, 8); },
 
-    // Toont/verbergt het configuratiepaneel
     toggleConfig() {
         const s = document.getElementById('configArea').style;
         s.display = (s.display === 'block' ? 'none' : 'block');
     },
 
-    // Profiel gewijzigd → scherm bijwerken
     updateProfile() { UI.update(); },
 
-    // Herbouwt de waypointtabel op de Waypoints-tab
     updateTable() {
-        const list = document.getElementById('wpList');
+        const list  = document.getElementById('wpList');
         const empty = document.getElementById('wp-empty');
-
-        if (CORE.route.waypoints.length === 0) {
-            empty.style.display = 'block';
-            list.innerHTML = '';
-            return;
-        }
-
+        if (CORE.route.waypoints.length === 0) { empty.style.display = 'block'; list.innerHTML = ''; return; }
         empty.style.display = 'none';
         list.innerHTML = CORE.route.waypoints.map((w, i) =>
             `<tr onclick="APP.readWp(${i})"
@@ -557,83 +980,66 @@ const UI = {
                  style="color:${w.passed ? 'var(--success)' : '#333'}">
                 <td style="width:30px">${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
                 <td><b>${w.name}</b>${w.desc ? '<span class="info-badge">i</span>' : ''}</td>
-                <td align="right">${(w.routePos / 1000).toFixed(2)}km</td>
+                <td align="right">${(w.routePos/1000).toFixed(2)}km</td>
             </tr>`
         ).join('');
     },
 
-    // Voegt een bericht toe aan het aankondigingslogboek op de Meldingen-tab.
-    // Berichten worden bovenaan ingevoegd (meest recent eerst).
-    // Icoon wordt automatisch gekozen op basis van het type bericht.
     logAnnouncement(text) {
-        const log  = document.getElementById('announce-log');
-
-        // Verwijder de "nog geen aankondigingen"-placeholder bij het eerste bericht
+        const log   = document.getElementById('announce-log');
         const empty = log.querySelector('.ann-empty');
         if (empty) empty.remove();
-
-        // Kies een passend icoon op basis van trefwoorden in de tekst
         let icon = '📻';
-        if (text.includes('bereikt'))   icon = '✅';
-        if (text.includes('gemist'))    icon = '❌';
-        if (text.includes('route'))     icon = '⚠️';
-        if (text.includes('terug'))     icon = '✅';
+        if (text.includes('bereikt'))    icon = '✅';
+        if (text.includes('gemist'))     icon = '❌';
+        if (text.includes('route'))      icon = '⚠️';
+        if (text.includes('terug'))      icon = '✅';
         if (text.includes('geactiveerd') || text.includes('Hervat')) icon = '▶️';
-        if (text.includes('gestopt') || text.includes('Pauze'))      icon = '⏸️';
-        if (text.includes('FINISH') || text.includes('Bestemming'))   icon = '🏁';
-
+        if (text.includes('gestopt')    || text.includes('Pauze'))   icon = '⏸️';
+        if (text.includes('FINISH')     || text.includes('Bestemming')) icon = '🏁';
         const li = document.createElement('li');
-        li.innerHTML =
-            `<span class="ann-icon">${icon}</span>
-             <span class="ann-text">${text}</span>
-             <span class="ann-time">${LOGIC.nowStr()}</span>`;
-
-        // Meest recente bericht bovenaan
+        li.innerHTML = `<span class="ann-icon">${icon}</span><span class="ann-text">${text}</span><span class="ann-time">${LOGIC.nowStr()}</span>`;
         log.insertBefore(li, log.firstChild);
     }
 };
 
 // =============================================================================
-// APP — GPX laden, GPS-verwerking, start/stop/pauze en spraak
+// APP — hoofdlogica
 // =============================================================================
 const APP = {
-
-    // Koppelt de GPX-bestandsinput aan de laadactie bij initialisatie
     init() {
         document.getElementById('gpxInput').onchange = (e) => this.loadGPX(e);
     },
 
-    // Laadt en verwerkt een GPX-bestand:
-    // bouwt trackpuntenlijst, cumulatieve afstanden en waypointlijst op
     loadGPX(e) {
         const reader = new FileReader();
         reader.onload = (ev) => {
-            const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
-            const pts = [...xml.getElementsByTagName('trkpt')];
+            const xml  = new DOMParser().parseFromString(ev.target.result, "text/xml");
+            const pts  = [...xml.getElementsByTagName('trkpt')];
             if (pts.length < 2) return alert("Foutieve GPX.");
 
-            // Zet alle trackpunten om naar {lat, lon}-objecten
-            CORE.route.track = pts.map(p => ({
-                lat: +p.getAttribute('lat'),
-                lon: +p.getAttribute('lon')
-            }));
+            // Bouw track op en verzamel hoogtepunten indien aanwezig
+            CORE.route.track      = [];
+            CORE.route.elevations = [];
 
-            // Bereken cumulatieve afstand per trackpunt t.o.v. het startpunt
+            pts.forEach(p => {
+                CORE.route.track.push({ lat: +p.getAttribute('lat'), lon: +p.getAttribute('lon') });
+                const ele = p.getElementsByTagName('ele')[0];
+                if (ele) CORE.route.elevations.push(parseFloat(ele.textContent));
+            });
+
+            // Cumulatieve afstand
             CORE.route.cumDist = [0];
             for (let i = 0; i < CORE.route.track.length - 1; i++) {
-                CORE.route.cumDist[i + 1] =
-                    CORE.route.cumDist[i] +
-                    LOGIC.getDist(
-                        CORE.route.track[i].lat, CORE.route.track[i].lon,
-                        CORE.route.track[i + 1].lat, CORE.route.track[i + 1].lon
-                    );
+                CORE.route.cumDist[i+1] = CORE.route.cumDist[i] +
+                    LOGIC.getDist(CORE.route.track[i].lat, CORE.route.track[i].lon,
+                                  CORE.route.track[i+1].lat, CORE.route.track[i+1].lon);
             }
             CORE.route.totalDist = CORE.route.cumDist.at(-1);
 
-            // Koppel elk GPX-waypoint aan zijn dichtstbijzijnde trackpositie
+            // Waypoints aan dichtstbijzijnde trackpositie koppelen
             let wpts = [...xml.getElementsByTagName('wpt')].map(w => {
-                const lat = +w.getAttribute('lat');
-                const lon = +w.getAttribute('lon');
+                const lat = +w.getAttribute('lat'), lon = +w.getAttribute('lon');
                 let bD = Infinity, bP = 0;
                 CORE.route.track.forEach((t, idx) => {
                     const d = LOGIC.getDist(lat, lon, t.lat, t.lon);
@@ -646,69 +1052,61 @@ const APP = {
                 };
             });
 
-            // Voeg START toe op positie 0 van het spoor
+            // START en FINISH automatisch toevoegen
             if (CORE.route.track.length > 0) {
-                wpts.push({
-                    name: "START", desc: "Startpunt",
+                wpts.push({ name:"START", desc:"Startpunt",
                     lat: CORE.route.track[0].lat, lon: CORE.route.track[0].lon,
-                    routePos: 0, passed: false, missed: false
-                });
+                    routePos: 0, passed: false, missed: false });
             }
-
-            // Voeg FINISH toe als dat nog niet in de GPX staat
             const lastWpDist = wpts.length > 0 ? Math.max(...wpts.map(w => w.routePos)) : 0;
             if (!wpts.find(w => w.name === "FINISH") && CORE.route.totalDist - lastWpDist > 10) {
-                wpts.push({
-                    name: "FINISH", desc: "Einde spoor",
+                wpts.push({ name:"FINISH", desc:"Einde spoor",
                     lat: CORE.route.track.at(-1).lat, lon: CORE.route.track.at(-1).lon,
-                    routePos: CORE.route.totalDist, passed: false, missed: false
-                });
+                    routePos: CORE.route.totalDist, passed: false, missed: false });
             }
-
-            // Sorteer op routepositie (oplopend)
             CORE.route.waypoints = wpts.sort((a, b) => a.routePos - b.routePos);
 
-            // Toon de live UI, verberg het standby-bericht en de bestandsinput
+            // UI bijwerken
             document.getElementById('standby-msg').style.display = 'none';
             document.getElementById('live-ui').style.display     = 'block';
             document.getElementById('gpxInput').style.display    = 'none';
-
-            // [FIX] Reset- en stopknop: reset direct tonen, stop pas bij START
-            document.getElementById('resetBtn').style.display = 'inline-block';
+            document.getElementById('resetBtn').style.display    = 'inline-block';
 
             UI.updateTable();
             UI.update();
+
+            // Kaart initialiseren en route tekenen
+            MAP.init();
+            MAP.drawRoute();
+
+            // Hoogteprofiel tekenen als er hoogtepunten beschikbaar zijn
+            if (CORE.route.elevations.length > 1) {
+                ELEVATION.draw(CORE.route.elevations);
+            }
         };
         reader.readAsText(e.target.files[0]);
     },
 
-    // Beheert de START / PAUZE / HERVAT-cyclus
     handleStartPause() {
         if (CORE.route.track.length === 0) return alert("Laad GPX.");
 
         if (!CORE.session.watchId) {
-            // === EERSTE START ===
             CORE.session.watchId = navigator.geolocation.watchPosition(
                 p => this.gpsHandler(p),
                 e => alert(e.message),
                 { enableHighAccuracy: true }
             );
             CORE.session.isPaused = false;
+            document.getElementById('stopBtn').style.display    = 'inline-block';
 
-            // [FIX] Stopknop pas zichtbaar bij daadwerkelijke start
-            document.getElementById('stopBtn').style.display = 'inline-block';
-
-            // [VERBETERING] Mark START direct als gepasseerd zodat bij een luswandeling
-            // de FINISH-check nooit verward raakt met de startzone
+            // [VERBETERING] START direct als gepasseerd markeren (luswandeling fix)
             const startWp = CORE.route.waypoints.find(w => w.name === "START");
             if (startWp) { startWp.passed = true; UI.updateTable(); }
 
             document.getElementById('startBtn').innerText        = "⏸ PAUZE";
             document.getElementById('startBtn').style.background = "var(--warning)";
             this.speak("Tracker geactiveerd.");
-
         } else {
-            // === PAUZE / HERVAT ===
             CORE.session.isPaused = !CORE.session.isPaused;
             document.getElementById('startBtn').innerText =
                 CORE.session.isPaused ? "▶ HERVAT" : "⏸ PAUZE";
@@ -716,79 +1114,64 @@ const APP = {
                 CORE.session.isPaused ? "var(--success)" : "var(--warning)";
             this.speak(CORE.session.isPaused ? "Pauze." : "Hervat.");
         }
-
-        // Stel lastTick in op dit moment zodat de eerste delta correct is
         CORE.session.lastTick = Date.now();
     },
 
-    // Stopt de GPS-watch en bevriest alle tellers
     handleStop() {
         if (!CORE.session.watchId) return;
         navigator.geolocation.clearWatch(CORE.session.watchId);
         CORE.session.watchId  = null;
         CORE.session.isPaused = false;
-
-        // [FIX] Reset lastTick → voorkomt tijdsprong bij herstart
-        CORE.session.lastTick = null;
-
+        CORE.session.lastTick = null;   // [FIX] voorkomt tijdsprong bij herstart
         document.getElementById('startBtn').innerText        = "▶ START";
         document.getElementById('startBtn').style.background = "var(--success)";
-
-        // [FIX] Verberg stopknop opnieuw na stoppen
-        document.getElementById('stopBtn').style.display = 'none';
-
+        document.getElementById('stopBtn').style.display     = 'none';
         this.speak("Tracker gestopt. De tellers zijn gepauzeerd.");
         UI.update(0, 0, 0, 0, 0, CORE.session.lastTrackIdx);
     },
 
-    // Verwerkt elke binnenkomende GPS-positie:
-    // tijdsberekening, bewegingsdetectie, routezoeken, off-route en waypoints
     gpsHandler(pos) {
         const now   = Date.now();
         const delta = CORE.session.lastTick ? (now - CORE.session.lastTick) / 1000 : 0;
         CORE.session.lastTick = now;
-
         if (CORE.session.isPaused || CORE.session.finished) return;
 
-        const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = pos.coords;
+        const { latitude: lat, longitude: lon, accuracy: acc, speed: s, heading: h } = pos.coords;
         const speedKmh = (s || 0) * 3.6;
         const profile  = document.getElementById('profile').value;
         const config   = CORE.settings[profile];
 
+        // Heading: gebruik apparaat-heading indien beschikbaar, anders berekend via positieverschil
+        let heading = h;
+        if ((heading == null || heading < 0) && CORE.session.lastLat != null) {
+            heading = LOGIC.calcHeading(CORE.session.lastLat, CORE.session.lastLon, lat, lon);
+        }
+        CORE.session.lastLat     = lat;
+        CORE.session.lastLon     = lon;
+        CORE.session.lastHeading = heading;
+
         // [VERBETERING] Profielafhankelijke bewegingsdrempels
-        // Wandelen: lagere snelheidsdrempel, strengere GPS-eis
-        // Fietsen: hogere snelheidsdrempel, iets ruimere GPS-grens
         const speedThresh    = profile === 'fietsen' ? 3.0 : 2.5;
         const accLimit       = profile === 'fietsen' ? 30  : 20;
-        const isMovingSignal = (speedKmh > speedThresh && acc < accLimit);
+        const isMovingSignal = speedKmh > speedThresh && acc < accLimit;
 
-        // Telt aaneengesloten bewegingstijd; na 3s wordt dit als "echt bewegen" beschouwd
-        if (isMovingSignal) {
-            CORE.session.moveSeconds += delta;
-        } else {
-            CORE.session.moveSeconds = 0;
-        }
+        if (isMovingSignal) { CORE.session.moveSeconds += delta; }
+        else                { CORE.session.moveSeconds  = 0;     }
 
         if (CORE.session.moveSeconds > 3) {
-            // === BEWEGING ===
             CORE.session.movingTime += delta;
             CORE.session.tripDist   += (s || 0) * delta;
             CORE.session.steps      += (s / config.th) * delta;
             CORE.session.currentMet  = LOGIC.getMET(speedKmh, profile);
-
-            // [FIX] Gecorrigeerde calorieformule: MET × kg × 3,5 / 200 / 60 × delta
+            // [FIX] Gecorrigeerde calorieformule
             const kg = parseFloat(document.getElementById('userWeight').value);
             CORE.session.kcal += (CORE.session.currentMet * kg * 3.5 / 200) / 60 * delta;
-
         } else {
-            // === STILSTAND ===
             CORE.session.pauseTime  += delta;
             CORE.session.currentMet  = 1.0;
         }
 
-        // === ROUTEPOSITIE BEREKENEN ===
-        // Zoek het dichtstbijzijnde trackpunt in een venster rond de laatste positie.
-        // [VERBETERING] Groter vooruitkijkvenster bij fietsen (hogere snelheid)
+        // Routepositie zoeken
         let bD = Infinity, bP = 0, bIdx = 0;
         const startIdx  = Math.max(0, CORE.session.lastTrackIdx - 50);
         const lookahead = profile === 'fietsen' ? 300 : 150;
@@ -800,14 +1183,12 @@ const APP = {
         }
         CORE.session.lastTrackIdx = bIdx;
 
-        // === OFF-ROUTE DETECTIE ===
-        // [FIX] Dynamische drempel: max(50m, acc × 1,5)
-        // Op brede straten met slechte GPS voorkomt dit fout-positieve meldingen
+        // [FIX] Dynamische off-route drempel op basis van GPS-accuraatheid
         const offThreshold = Math.max(50, acc * 1.5);
 
         if (bD > offThreshold && CORE.session.moveSeconds > 3) {
             if (!CORE.session.isOffRoute) {
-                CORE.session.isOffRoute            = true;
+                CORE.session.isOffRoute = true;
                 CORE.session.lastOffRouteSpeakDist = offThreshold;
                 this.speak("Opgelet, u bent van de route afgeweken.");
             }
@@ -817,76 +1198,55 @@ const APP = {
                 CORE.session.lastOffRouteSpeakDist = step;
             }
         } else if (CORE.session.isOffRoute && bD < 20) {
-            CORE.session.isOffRoute            = false;
+            CORE.session.isOffRoute = false;
             CORE.session.lastOffRouteSpeakDist = 0;
             this.speak("U bent terug op de route.");
         }
 
-        // === WAYPOINT-TRIGGERS ===
+        // Waypoint-triggers
         CORE.route.waypoints.forEach((w, i) => {
             if (w.passed || w.missed) return;
             const d = LOGIC.getDist(lat, lon, w.lat, w.lon);
-
             if (d < config.radius || (bP > w.routePos && d < 35)) {
-                // [FIX] FINISH triggert pas als alle andere WPs gepasseerd/gemist zijn
-                // Voorkomt vroege trigger bij luswandelingen
+                // [FIX] FINISH pas triggeren als alle andere WPs klaar zijn (luswandeling)
                 if (w.name === "FINISH") {
                     const allDone = CORE.route.waypoints
                         .filter(wp => wp !== w && wp.name !== "START")
                         .every(wp => wp.passed || wp.missed);
                     if (!allDone) return;
                 }
-
                 w.passed = true;
                 this.speak(`Punt bereikt: ${w.name}.`);
-
-                // Kondig het volgende waypoint aan met afstand langs de route
                 const next = CORE.route.waypoints.find((nw, idx) => idx > i && !nw.passed);
-                if (next) {
-                    const distStr = LOGIC.formatVoiceDist(next.routePos - bP);
-                    this.speak(`Volgend punt is ${next.name} over ${distStr}.`);
-                }
+                if (next) this.speak(`Volgend punt is ${next.name} over ${LOGIC.formatVoiceDist(next.routePos - bP)}.`);
                 UI.updateTable();
-
             } else if (bP > w.routePos + 100) {
-                // Waypoint gemist: routepositie al meer dan 100m voorbij
                 w.missed = true;
                 this.speak(`Waypoint ${w.name} gemist.`);
                 UI.updateTable();
             }
         });
 
-        UI.update(lat, lon, acc, speedKmh, bD, bP);
+        UI.update(lat, lon, acc, speedKmh, bD, bP, heading);
     },
 
-    // Leest de beschrijving van een waypoint voor (klik op rij in de tabel)
     readWp(i) {
         const w = CORE.route.waypoints[i];
         this.speak(w.desc ? `Info ${w.name}: ${w.desc}` : `Geen info over ${w.name}.`);
     },
 
-    // Voegt een tekst toe aan de spraakwachtrij én aan het aankondigingslogboek
     speak(t) {
         if (!t || t.length < 2) return;
-
-        // Altijd loggen in het aankondigingslogboek, ongeacht audio-instelling
         UI.logAnnouncement(t);
-
         if (!document.getElementById('audioToggle').checked) return;
-
-        // Voorkom herhaling van hetzelfde bericht als de wachtrij al vol is
         if (CORE.speech.lastMsg === t && CORE.speech.queue.length > 2) return;
         CORE.speech.lastMsg = t;
         CORE.speech.queue.push(t);
         if (!CORE.speech.isSpeaking) this.play();
     },
 
-    // Speelt het eerste item uit de spraakwachtrij af via de Web Speech API
     play() {
-        if (CORE.speech.queue.length === 0) {
-            CORE.speech.isSpeaking = false;
-            return;
-        }
+        if (CORE.speech.queue.length === 0) { CORE.speech.isSpeaking = false; return; }
         CORE.speech.isSpeaking = true;
         const u = new SpeechSynthesisUtterance(CORE.speech.queue.shift());
         u.lang  = 'nl-NL';
@@ -895,9 +1255,7 @@ const APP = {
     }
 };
 
-// Start de applicatie
 APP.init();
-
 </script>
 </body>
 </html>
