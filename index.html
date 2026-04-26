@@ -1,38 +1,43 @@
 <!DOCTYPE html>
 <html lang="nl">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WAYPOINTASSISTENT PRO - V4.6</title>
+    <title>WAYPOINTASSISTENT PRO - V4.7</title>
     <style>
         :root {
-            --bg-dark: #1a1a1a;
-            --accent: #00bfff;
-            --success: #27ae60;
-            --warning: #f39c12;
-            --danger: #e74c3c;
+            --bg-dark:   #1a1a1a;
+            --accent:    #00bfff;
+            --success:   #27ae60;
+            --warning:   #f39c12;
+            --danger:    #e74c3c;
             --text-main: #2c3e50;
+            --tab-h:     58px;   /* hoogte van de tabbalk onderaan */
         }
+
+        * { box-sizing: border-box; }
 
         body {
             font-family: -apple-system, system-ui, sans-serif;
-            padding: 5px;
             background: #f0f3f5;
             color: var(--text-main);
             font-size: 13px;
             margin: 0;
+            /* ruimte onderaan zodat content niet achter de tabbalk valt */
+            padding-bottom: calc(var(--tab-h) + 8px);
         }
 
+        /* ── Hoofdkaart ── */
         .card {
             max-width: 500px;
-            margin: auto;
+            margin: 8px auto 0;
             background: white;
             padding: 12px;
             border-radius: 15px;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 8px 20px rgba(0,0,0,.15);
         }
 
+        /* ── Console (donker vlak) ── */
         #console {
             background: var(--bg-dark);
             color: #00ff00;
@@ -44,6 +49,7 @@
             min-height: 100px;
         }
 
+        /* ── Stat-raster (3 kolommen bovenaan) ── */
         .stat-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -51,20 +57,19 @@
             gap: 10px;
             margin-bottom: 15px;
         }
-
         .stat-value {
             color: var(--accent);
             font-weight: 900;
             font-size: 1.8rem;
             display: block;
         }
-
         .stat-label {
-            font-size: 0.7rem;
+            font-size: .7rem;
             color: #7f8c8d;
             text-transform: uppercase;
         }
 
+        /* ── Config-sectie (achter tandwiel) ── */
         .config-section {
             background: #ecf0f1;
             padding: 10px;
@@ -73,6 +78,7 @@
             display: none;
         }
 
+        /* ── Flex-rij voor knoppen / inputs ── */
         .row {
             display: flex;
             gap: 8px;
@@ -80,6 +86,7 @@
             margin-bottom: 10px;
         }
 
+        /* ── Knoppen ── */
         button {
             padding: 12px;
             border: none;
@@ -89,69 +96,130 @@
             cursor: pointer;
             flex: 1;
         }
+        .btn-start { background: var(--success); flex: 2; }
+        .btn-blue  { background: var(--accent);  flex: 0.5; }
+        .btn-red   { background: var(--danger);   flex: 0.5; }
 
-        .btn-start {
-            background: var(--success);
-            flex: 2;
-        }
+        hr { border: 0; border-top: 1px solid #444; margin: 8px 0; }
 
-        .btn-blue {
-            background: var(--accent);
-            flex: 0.5;
-        }
-
-        .btn-red {
-            background: var(--danger);
-            flex: 0.5;
-        }
-
-        hr {
-            border: 0;
-            border-top: 1px solid #444;
-            margin: 8px 0;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.85rem;
-        }
-
-        td {
-            padding: 10px 4px;
-            border-bottom: 1px solid #eee;
-            cursor: pointer;
-        }
-
-        .strikethrough {
-            text-decoration: line-through;
-            opacity: 0.5;
-            color: var(--danger);
-        }
-
+        /* ── Waypointtabel ── */
+        table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        td    { padding: 10px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .strikethrough { text-decoration: line-through; opacity: .5; color: var(--danger); }
         .info-badge {
-            background: var(--accent);
-            color: white;
-            font-size: 0.6rem;
-            padding: 2px 5px;
-            border-radius: 50%;
-            margin-left: 5px;
-            font-weight: bold;
+            background: var(--accent); color: white;
+            font-size: .6rem; padding: 2px 5px;
+            border-radius: 50%; margin-left: 5px; font-weight: bold;
+        }
+
+        /* ════════════════════════════════════════
+           TAB-SYSTEEM
+           ════════════════════════════════════════ */
+
+        /* Elk tabpaneel is standaard verborgen */
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* Tabbalk — vast onderaan het scherm */
+        #tab-bar {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: var(--tab-h);
+            background: white;
+            border-top: 1px solid #dde3e8;
+            display: flex;
+            justify-content: space-around;
+            align-items: stretch;
+            z-index: 100;
+            box-shadow: 0 -4px 12px rgba(0,0,0,.08);
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        /* Individuele tabknop */
+        .tab-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            background: none;
+            border: none;
+            border-top: 3px solid transparent;
+            color: #95a5a6;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            cursor: pointer;
+            padding: 0;
+            transition: color .18s, border-color .18s;
+        }
+        .tab-btn .tab-icon { font-size: 1.3rem; line-height: 1; }
+        .tab-btn.active {
+            color: var(--accent);
+            border-top-color: var(--accent);
+        }
+
+        /* ── Kaart-tab placeholder ── */
+        #map-placeholder {
+            text-align: center;
+            padding: 40px 20px;
+            color: #95a5a6;
+        }
+        #map-placeholder .map-icon { font-size: 3rem; margin-bottom: 12px; }
+        #map-placeholder p { margin: 4px 0; font-size: .85rem; }
+
+        /* ── Aankondiging-tab: logboek van spraakberichten ── */
+        #announce-log {
+            list-style: none;
+            margin: 0; padding: 0;
+        }
+        #announce-log li {
+            padding: 10px 8px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            font-size: .85rem;
+        }
+        #announce-log li .ann-time {
+            color: #95a5a6;
+            font-size: .75rem;
+            white-space: nowrap;
+            padding-top: 2px;
+        }
+        #announce-log li .ann-icon { font-size: 1rem; }
+        #announce-log li .ann-text { flex: 1; }
+        #announce-log .ann-empty {
+            text-align: center;
+            color: #95a5a6;
+            padding: 30px 0;
+            font-size: .85rem;
         }
     </style>
 </head>
-
 <body>
 
+<!-- ══════════════════════════════════════
+     TAB 1 — HOME (dashboard + knoppen)
+     ══════════════════════════════════════ -->
+<div id="tab-home" class="tab-panel active">
     <div class="card">
-        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom:10px;">
-            <h2 style="margin:0; font-size:1.1rem;">WAYPOINTASSISTENT <span style="color:var(--accent)">PRO V4.6</span></h2>
-            <span onclick="UI.toggleConfig()" style="cursor:pointer; font-size: 1.2rem;">⚙️</span>
+
+        <!-- Koptekst + tandwiel -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h2 style="margin:0; font-size:1.1rem;">
+                WAYPOINTASSISTENT <span style="color:var(--accent)">PRO V4.7</span>
+            </h2>
+            <span onclick="UI.toggleConfig()" style="cursor:pointer; font-size:1.2rem;">⚙️</span>
         </div>
 
+        <!-- Configuratiepaneel (verborgen achter tandwiel) -->
         <div id="configArea" class="config-section">
             <div class="row">
-                <select id="profile" onchange="UI.updateProfile()" style="padding:8px; flex: 1;">
+                <select id="profile" onchange="UI.updateProfile()" style="padding:8px; flex:1;">
                     <option value="wandelen">🚶 Wandelen</option>
                     <option value="fietsen">🚲 Fietsen</option>
                 </select>
@@ -162,404 +230,666 @@
             <input type="file" id="gpxInput" accept=".gpx" style="width:100%;">
         </div>
 
+        <!-- Drie grote statistieken bovenaan -->
         <div class="stat-grid">
-            <div><span class="stat-label">Off-Route</span><span id="ui-off-big" class="stat-value">0m</span></div>
-            <div><span class="stat-label">KM/U</span><span id="ui-speed-big" class="stat-value">0.0</span></div>
-            <div><span class="stat-label">GPS Acc</span><span id="ui-acc-big" class="stat-value">0m</span></div>
-        </div>
-
-        <div style="background: #e8f4fd; padding: 10px; border-radius: 8px; border-left: 4px solid var(--accent); margin-bottom: 10px;">
-            <div style="display:flex; justify-content:space-between; align-items: baseline;">
-                <span class="stat-label">Traject:</span>
-                <span id="ui-total-len" style="font-size:0.75rem; font-weight:bold; color:var(--success);">Afstand: --</span>
+            <div>
+                <span class="stat-label">Off-Route</span>
+                <span id="ui-off-big" class="stat-value">0m</span>
             </div>
-            <span id="ui-segment" style="font-weight:bold; font-size: 0.95rem;">Wacht op GPX...</span>
+            <div>
+                <span class="stat-label">KM/U</span>
+                <span id="ui-speed-big" class="stat-value">0.0</span>
+            </div>
+            <div>
+                <span class="stat-label">GPS Acc</span>
+                <span id="ui-acc-big" class="stat-value">0m</span>
+            </div>
         </div>
 
+        <!-- Segmentbalk: vorig ➔ volgend waypoint -->
+        <div style="background:#e8f4fd; padding:10px; border-radius:8px; border-left:4px solid var(--accent); margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                <span class="stat-label">Traject:</span>
+                <span id="ui-total-len" style="font-size:.75rem; font-weight:bold; color:var(--success);">Afstand: --</span>
+            </div>
+            <span id="ui-segment" style="font-weight:bold; font-size:.95rem;">Wacht op GPX...</span>
+        </div>
+
+        <!-- Knoppen: START / lijst / stop / reset -->
         <div class="row">
-            <button id="startBtn" onclick="APP.handleStartPause()" class="btn-start">▶ START</button>
-            <button onclick="UI.toggleTable()" class="btn-blue">📑</button>
-            <button id="stopBtn" onclick="APP.handleStop()" class="btn-red" style="background: #7f8c8d; display:none;">⏹</button>
-            <button id="resetBtn" onclick="location.reload()" class="btn-red" style="display:none;">🔄</button>
+            <button id="startBtn"  onclick="APP.handleStartPause()" class="btn-start">▶ START</button>
+            <button id="stopBtn"   onclick="APP.handleStop()"       class="btn-red"
+                    style="background:#7f8c8d; display:none;">⏹</button>
+            <button id="resetBtn"  onclick="location.reload()"      class="btn-red"
+                    style="display:none;">🔄</button>
         </div>
 
+        <!-- Console: live GPS-data -->
         <div id="console">
-            <div id="standby-msg" style="text-align:center; padding: 20px;">Laad een GPX bestand om te beginnen.</div>
+            <div id="standby-msg" style="text-align:center; padding:20px;">
+                Laad een GPX bestand om te beginnen.
+            </div>
             <div id="live-ui" style="display:none;">
-                <div style="display:flex; justify-content:space-between; align-items: center;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span>WP: <span id="ui-next-wp" style="color:#fff; font-weight:bold;">---</span></span>
-                    <span id="ui-dist" style="color:var(--accent); font-size: 1.2rem; font-weight: bold;">0m</span>
+                    <span id="ui-dist" style="color:var(--accent); font-size:1.2rem; font-weight:bold;">0m</span>
                 </div>
                 <hr>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem;">
-                    <div>TRIP: <span id="ui-trip" style="color:#00ff00">0.000 km</span></div>
-                    <div>ETA: <span id="ui-eta" style="color:#00ff00">--:--</span></div>
-                    <div>MOVE: <span id="ui-mov-time" style="color:#00ff00">00:00:00</span></div>
-                    <div>PAUZE: <span id="ui-pau-time" style="color:#00ff00">00:00:00</span></div>
-                    <div>KCAL: <span id="ui-kcal" style="color:#00ff00">0</span></div>
-                    <div>MET: <span id="ui-met" style="color:#00ff00">1.0</span></div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:.8rem;">
+                    <div>TRIP:     <span id="ui-trip"      style="color:#00ff00">0.000 km</span></div>
+                    <div>ETA:      <span id="ui-eta"       style="color:#00ff00">--:--</span></div>
+                    <div>MOVE:     <span id="ui-mov-time"  style="color:#00ff00">00:00:00</span></div>
+                    <div>PAUZE:    <span id="ui-pau-time"  style="color:#00ff00">00:00:00</span></div>
+                    <div>KCAL:     <span id="ui-kcal"      style="color:#00ff00">0</span></div>
+                    <div>MET:      <span id="ui-met"       style="color:#00ff00">1.0</span></div>
                     <div>AVG KM/U: <span id="ui-avg-speed" style="color:#00ff00">0.0</span></div>
-                    <div><span id="ui-count-label">STAPPEN</span>: <span id="ui-steps" style="color:#00ff00">0</span></div>
+                    <div>
+                        <span id="ui-count-label">STAPPEN</span>:
+                        <span id="ui-steps" style="color:#00ff00">0</span>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div id="tableCon" style="display:none;">
-            <table id="wpList"></table>
+    </div><!-- /card -->
+</div><!-- /tab-home -->
+
+
+<!-- ══════════════════════════════════════
+     TAB 2 — AANKONDIGINGEN (logboek)
+     ══════════════════════════════════════ -->
+<div id="tab-announce" class="tab-panel">
+    <div class="card">
+        <h3 style="margin:0 0 12px; font-size:.95rem; color:var(--text-main);">
+            📢 Aankondigingen
+        </h3>
+        <ul id="announce-log">
+            <li class="ann-empty">Nog geen aankondigingen.<br>Start de tracker om berichten te zien.</li>
+        </ul>
+    </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     TAB 3 — WAYPOINTS (overzichtslijst)
+     ══════════════════════════════════════ -->
+<div id="tab-waypoints" class="tab-panel">
+    <div class="card">
+        <h3 style="margin:0 0 12px; font-size:.95rem; color:var(--text-main);">
+            📍 Waypoints
+        </h3>
+        <div id="wp-empty" style="text-align:center; color:#95a5a6; padding:30px 0; font-size:.85rem;">
+            Laad een GPX bestand om de waypoints te zien.
+        </div>
+        <table id="wpList"></table>
+    </div>
+</div>
+
+
+<!-- ══════════════════════════════════════
+     TAB 4 — KAART (placeholder)
+     ══════════════════════════════════════ -->
+<div id="tab-map" class="tab-panel">
+    <div class="card">
+        <div id="map-placeholder">
+            <div class="map-icon">🗺️</div>
+            <p><strong>Kaartweergave</strong></p>
+            <p>Nog niet beschikbaar in deze versie.</p>
+            <p style="margin-top:12px; font-size:.75rem;">
+                Tip: exporteer je GPX naar
+                <a href="https://www.gpxstudio.org" target="_blank" style="color:var(--accent)">gpxstudio.org</a>
+                voor een volledige kaartweergave.
+            </p>
         </div>
     </div>
+</div>
 
-    <script>
-        const CORE = {
-            settings: {
-                wandelen: { ms: 0.36, th: 0.67, radius: 20, label: "STAPPEN" },
-                fietsen: { ms: 5.5, th: 2.10, radius: 35, label: "OMWENTELINGEN" }
-            },
-            met_table: {
-                wandelen: [{ max: 1.5, met: 1.0 }, { max: 4.0, met: 3.0 }, { max: 5.5, met: 3.5 }, { max: Infinity, met: 4.5 }],
-                fietsen: [{ max: 1.5, met: 1.0 }, { max: 15, met: 5.0 }, { max: 20, met: 6.5 }, { max: Infinity, met: 8.0 }]
-            },
-            route: { track: [], waypoints: [], cumDist: [], totalDist: 0 },
-            session: {
-                isStarted: false, isPaused: false, isOffRoute: false, finished: false,
-                lastTrackIdx: 0, tripDist: 0, movingTime: 0, pauseTime: 0, kcal: 0,
-                steps: 0, lastTick: null, watchId: null, currentMet: 1.0,
-                lastOffRouteSpeakDist: 0, moveSeconds: 0
-            },
-            speech: { queue: [], isSpeaking: false, lastMsg: "" }
-        };
 
-        const LOGIC = {
-            getDist(lat1, lon1, lat2, lon2) {
-                const R = 6371000;
-                const toRad = Math.PI / 180;
-                const dLat = (lat2 - lat1) * toRad;
-                const dLon = (lon2 - lon1) * toRad;
-                const lat1r = lat1 * toRad;
-                const lat2r = lat2 * toRad;
-                const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1r) * Math.cos(lat2r) * Math.sin(dLon / 2) ** 2;
-                return 2 * R * Math.asin(Math.sqrt(a));
-            },
+<!-- ══════════════════════════════════════
+     TABBALK (vast onderaan)
+     ══════════════════════════════════════ -->
+<nav id="tab-bar">
+    <button class="tab-btn active" onclick="TAB.show('home')" id="tbtn-home">
+        <span class="tab-icon">🏠</span>Home
+    </button>
+    <button class="tab-btn" onclick="TAB.show('announce')" id="tbtn-announce">
+        <span class="tab-icon">📢</span>Meldingen
+    </button>
+    <button class="tab-btn" onclick="TAB.show('waypoints')" id="tbtn-waypoints">
+        <span class="tab-icon">📍</span>Waypoints
+    </button>
+    <button class="tab-btn" onclick="TAB.show('map')" id="tbtn-map">
+        <span class="tab-icon">🗺️</span>Kaart
+    </button>
+</nav>
 
-            getMET(speed, profile) {
-                const table = CORE.met_table[profile];
-                for (const entry of table) {
-                    if (speed <= entry.max) return entry.met;
-                }
-                return 1.0;
-            },
 
-            formatVoiceDist(meters) {
-                return meters < 1000
-                    ? `${Math.round(meters)} meter`
-                    : `${(meters / 1000).toFixed(1)} kilometer`.replace('.', ',');
+<!-- ══════════════════════════════════════
+     JAVASCRIPT
+     ══════════════════════════════════════ -->
+<script>
+
+// =============================================================================
+// TAB — beheert de onderste navigatiebalk
+// =============================================================================
+const TAB = {
+    // Wisselt naar het opgegeven tabpaneel en activeert de bijbehorende knop
+    show(name) {
+        // Verberg alle panelen en deactiveer alle knoppen
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+
+        // Activeer het gewenste paneel en de bijbehorende knop
+        document.getElementById('tab-' + name).classList.add('active');
+        document.getElementById('tbtn-' + name).classList.add('active');
+    }
+};
+
+// =============================================================================
+// CORE — centrale datastore: instellingen, route en sessie-staat
+// =============================================================================
+const CORE = {
+    settings: {
+        wandelen: { ms: 0.36, th: 0.67, radius: 20, label: "STAPPEN"        },
+        fietsen:  { ms: 5.5,  th: 2.10, radius: 35, label: "OMWENTELINGEN"  }
+    },
+
+    met_table: {
+        wandelen: [
+            { max: 1.5,      met: 1.0 },
+            { max: 4.0,      met: 3.0 },
+            { max: 5.5,      met: 3.5 },
+            { max: Infinity, met: 4.5 }
+        ],
+        fietsen: [
+            { max: 1.5,      met: 1.0 },
+            { max: 15,       met: 5.0 },
+            { max: 20,       met: 6.5 },
+            { max: Infinity, met: 8.0 }
+        ]
+    },
+
+    route:   { track: [], waypoints: [], cumDist: [], totalDist: 0 },
+
+    session: {
+        isStarted: false, isPaused: false, isOffRoute: false, finished: false,
+        lastTrackIdx: 0, tripDist: 0, movingTime: 0, pauseTime: 0, kcal: 0,
+        steps: 0, lastTick: null, watchId: null, currentMet: 1.0,
+        lastOffRouteSpeakDist: 0, moveSeconds: 0
+    },
+
+    speech: { queue: [], isSpeaking: false, lastMsg: "" }
+};
+
+// =============================================================================
+// LOGIC — pure hulpfuncties zonder neveneffecten
+// =============================================================================
+const LOGIC = {
+
+    // Haversine-formule: rechte afstand in meters tussen twee GPS-coördinaten
+    getDist(lat1, lon1, lat2, lon2) {
+        const R     = 6371000;
+        const toRad = Math.PI / 180;
+        const dLat  = (lat2 - lat1) * toRad;
+        const dLon  = (lon2 - lon1) * toRad;
+        const lat1r = lat1 * toRad;
+        const lat2r = lat2 * toRad;
+        const a = Math.sin(dLat / 2) ** 2
+                + Math.cos(lat1r) * Math.cos(lat2r) * Math.sin(dLon / 2) ** 2;
+        return 2 * R * Math.asin(Math.sqrt(a));
+    },
+
+    // Geeft de juiste MET-waarde terug voor de huidige snelheid en het profiel
+    getMET(speed, profile) {
+        for (const entry of CORE.met_table[profile]) {
+            if (speed <= entry.max) return entry.met;
+        }
+        return 1.0;
+    },
+
+    // Formateert een afstand in meters naar een leesbare Nederlandse string
+    formatVoiceDist(meters) {
+        return meters < 1000
+            ? `${Math.round(meters)} meter`
+            : `${(meters / 1000).toFixed(1)} kilometer`.replace('.', ',');
+    },
+
+    // Geeft het huidige tijdstip terug als HH:MM string (voor het aankondigingslogboek)
+    nowStr() {
+        const d = new Date();
+        return d.getHours().toString().padStart(2, '0') + ':'
+             + d.getMinutes().toString().padStart(2, '0');
+    }
+};
+
+// =============================================================================
+// UI — alle schermweergave en DOM-manipulatie
+// =============================================================================
+const UI = {
+
+    // Hoofdupdate: vernieuwt alle waarden op de Home-tab
+    update(lat = 0, lon = 0, acc = 0, speed = 0, offRoute = 0, posOnRoute = 0) {
+        const nextWp   = CORE.route.waypoints.find(w => !w.passed && !w.missed);
+        const avgSpeed = CORE.session.movingTime > 2
+            ? (CORE.session.tripDist / CORE.session.movingTime) * 3.6 : 0;
+        const profile  = document.getElementById('profile').value;
+        const config   = CORE.settings[profile];
+
+        document.getElementById('ui-total-len').innerText =
+            `Track: ${(CORE.route.totalDist / 1000).toFixed(2)} km`;
+
+        // [FIX] Off-route kleur gebaseerd op dynamische drempel (zie gpsHandler)
+        document.getElementById('ui-off-big').innerText = Math.round(offRoute) + "m";
+        document.getElementById('ui-off-big').style.color =
+            offRoute > 50 ? 'var(--danger)' : 'var(--accent)';
+
+        document.getElementById('ui-speed-big').innerText = speed.toFixed(1);
+        document.getElementById('ui-acc-big').innerText   = Math.round(acc) + "m";
+
+        document.getElementById('ui-next-wp').innerText =
+            nextWp ? nextWp.name : "FINISH";
+        document.getElementById('ui-dist').innerText =
+            nextWp ? Math.max(0, Math.round(nextWp.routePos - posOnRoute)) + "m" : "0m";
+
+        document.getElementById('ui-trip').innerText     = (CORE.session.tripDist / 1000).toFixed(3) + " km";
+        document.getElementById('ui-mov-time').innerText = this.fmt(CORE.session.movingTime);
+        document.getElementById('ui-pau-time').innerText = this.fmt(CORE.session.pauseTime);
+        document.getElementById('ui-kcal').innerText     = Math.round(CORE.session.kcal);
+        document.getElementById('ui-met').innerText      = CORE.session.currentMet.toFixed(1);
+        document.getElementById('ui-avg-speed').innerText = avgSpeed.toFixed(1);
+        document.getElementById('ui-steps').innerText    = Math.floor(CORE.session.steps);
+        document.getElementById('ui-count-label').innerText = config.label;
+
+        // ETA: geschatte aankomsttijd op basis van resterende routeafstand
+        let etaStr = "--:--";
+        if (speed > 2.0 && nextWp) {
+            const sec = (CORE.route.totalDist - posOnRoute) / (speed / 3.6);
+            if (isFinite(sec)) {
+                const arrival = new Date(Date.now() + sec * 1000);
+                etaStr = arrival.getHours().toString().padStart(2, '0') + ":"
+                       + arrival.getMinutes().toString().padStart(2, '0');
             }
-        };
+        }
+        document.getElementById('ui-eta').innerText = etaStr;
 
-        const UI = {
-            update(lat = 0, lon = 0, acc = 0, speed = 0, offRoute = 0, posOnRoute = 0) {
-                const nextWp = CORE.route.waypoints.find(w => !w.passed && !w.missed);
-                const avgSpeed = CORE.session.movingTime > 2 ? (CORE.session.tripDist / CORE.session.movingTime) * 3.6 : 0;
-                const profile = document.getElementById('profile').value;
-                const config = CORE.settings[profile];
+        // Segmentlabel: vorig ➔ volgend waypoint
+        const prev = [...CORE.route.waypoints].reverse().find(w => w.passed);
+        document.getElementById('ui-segment').innerText =
+            (prev && nextWp) ? `${prev.name} ➔ ${nextWp.name}` :
+            (nextWp          ? `Naar ${nextWp.name}`            : "🏁 Bestemming bereikt");
+    },
 
-                document.getElementById('ui-total-len').innerText = `Track: ${(CORE.route.totalDist / 1000).toFixed(2)} km`;
-                document.getElementById('ui-off-big').innerText = Math.round(offRoute) + "m";
-                document.getElementById('ui-off-big').style.color = offRoute > 45 ? 'var(--danger)' : 'var(--accent)';
-                document.getElementById('ui-speed-big').innerText = speed.toFixed(1);
-                document.getElementById('ui-acc-big').innerText = Math.round(acc) + "m";
+    // Hulpfunctie: seconden → HH:MM:SS string
+    fmt(s) { return new Date(s * 1000).toISOString().substr(11, 8); },
 
-                document.getElementById('ui-next-wp').innerText = nextWp ? nextWp.name : "FINISH";
-                document.getElementById('ui-dist').innerText = nextWp ? Math.max(0, Math.round(nextWp.routePos - posOnRoute)) + "m" : "0m";
-                document.getElementById('ui-trip').innerText = (CORE.session.tripDist / 1000).toFixed(3) + " km";
-                document.getElementById('ui-mov-time').innerText = this.fmt(CORE.session.movingTime);
-                document.getElementById('ui-pau-time').innerText = this.fmt(CORE.session.pauseTime);
-                document.getElementById('ui-kcal').innerText = Math.round(CORE.session.kcal);
-                document.getElementById('ui-met').innerText = CORE.session.currentMet.toFixed(1);
-                document.getElementById('ui-avg-speed').innerText = avgSpeed.toFixed(1);
-                document.getElementById('ui-steps').innerText = Math.floor(CORE.session.steps);
-                document.getElementById('ui-count-label').innerText = config.label;
+    // Toont/verbergt het configuratiepaneel
+    toggleConfig() {
+        const s = document.getElementById('configArea').style;
+        s.display = (s.display === 'block' ? 'none' : 'block');
+    },
 
-                let etaStr = "--:--";
-                if (speed > 2.0 && nextWp) {
-                    const sec = (CORE.route.totalDist - posOnRoute) / (speed / 3.6);
-                    if (isFinite(sec)) {
-                        const arrival = new Date(Date.now() + sec * 1000);
-                        etaStr = arrival.getHours().toString().padStart(2, '0') + ":" + arrival.getMinutes().toString().padStart(2, '0');
-                    }
-                }
-                document.getElementById('ui-eta').innerText = etaStr;
+    // Profiel gewijzigd → scherm bijwerken
+    updateProfile() { UI.update(); },
 
-                const prev = [...CORE.route.waypoints].reverse().find(w => w.passed);
-                document.getElementById('ui-segment').innerText =
-                    (prev && nextWp) ? `${prev.name} ➔ ${nextWp.name}` :
-                        (nextWp ? `Naar ${nextWp.name}` : "🏁 Bestemming bereikt");
-            },
+    // Herbouwt de waypointtabel op de Waypoints-tab
+    updateTable() {
+        const list = document.getElementById('wpList');
+        const empty = document.getElementById('wp-empty');
 
-            fmt(s) { return new Date(s * 1000).toISOString().substr(11, 8); },
+        if (CORE.route.waypoints.length === 0) {
+            empty.style.display = 'block';
+            list.innerHTML = '';
+            return;
+        }
 
-            toggleConfig() {
-                const s = document.getElementById('configArea').style;
-                s.display = (s.display === 'block' ? 'none' : 'block');
-            },
+        empty.style.display = 'none';
+        list.innerHTML = CORE.route.waypoints.map((w, i) =>
+            `<tr onclick="APP.readWp(${i})"
+                 class="${w.missed ? 'strikethrough' : ''}"
+                 style="color:${w.passed ? 'var(--success)' : '#333'}">
+                <td style="width:30px">${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
+                <td><b>${w.name}</b>${w.desc ? '<span class="info-badge">i</span>' : ''}</td>
+                <td align="right">${(w.routePos / 1000).toFixed(2)}km</td>
+            </tr>`
+        ).join('');
+    },
 
-            toggleTable() {
-                const s = document.getElementById('tableCon').style;
-                s.display = (s.display === 'none' ? 'block' : 'none');
-            },
+    // Voegt een bericht toe aan het aankondigingslogboek op de Meldingen-tab.
+    // Berichten worden bovenaan ingevoegd (meest recent eerst).
+    // Icoon wordt automatisch gekozen op basis van het type bericht.
+    logAnnouncement(text) {
+        const log  = document.getElementById('announce-log');
 
-            updateProfile() { UI.update(); },
+        // Verwijder de "nog geen aankondigingen"-placeholder bij het eerste bericht
+        const empty = log.querySelector('.ann-empty');
+        if (empty) empty.remove();
 
-            updateTable() {
-                document.getElementById('wpList').innerHTML = CORE.route.waypoints.map((w, i) =>
-                    `<tr onclick="APP.readWp(${i})" class="${w.missed ? 'strikethrough' : ''}" style="color:${w.passed ? 'var(--success)' : '#333'}">
-                        <td style="width:30px">${w.passed ? '✅' : (w.missed ? '❌' : '⏳')}</td>
-                        <td><b>${w.name}</b>${w.desc ? '<span class="info-badge">i</span>' : ''}</td>
-                        <td align="right">${(w.routePos / 1000).toFixed(2)}km</td>
-                    </tr>`).join('');
-            }
-        };
+        // Kies een passend icoon op basis van trefwoorden in de tekst
+        let icon = '📻';
+        if (text.includes('bereikt'))   icon = '✅';
+        if (text.includes('gemist'))    icon = '❌';
+        if (text.includes('route'))     icon = '⚠️';
+        if (text.includes('terug'))     icon = '✅';
+        if (text.includes('geactiveerd') || text.includes('Hervat')) icon = '▶️';
+        if (text.includes('gestopt') || text.includes('Pauze'))      icon = '⏸️';
+        if (text.includes('FINISH') || text.includes('Bestemming'))   icon = '🏁';
 
-        const APP = {
-            init() {
-                document.getElementById('gpxInput').onchange = (e) => this.loadGPX(e);
-            },
+        const li = document.createElement('li');
+        li.innerHTML =
+            `<span class="ann-icon">${icon}</span>
+             <span class="ann-text">${text}</span>
+             <span class="ann-time">${LOGIC.nowStr()}</span>`;
 
-            loadGPX(e) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
-                    const pts = [...xml.getElementsByTagName('trkpt')];
-                    if (pts.length < 2) return alert("Foutieve GPX.");
+        // Meest recente bericht bovenaan
+        log.insertBefore(li, log.firstChild);
+    }
+};
 
-                    CORE.route.track = pts.map(p => ({
-                        lat: +p.getAttribute('lat'),
-                        lon: +p.getAttribute('lon')
-                    }));
+// =============================================================================
+// APP — GPX laden, GPS-verwerking, start/stop/pauze en spraak
+// =============================================================================
+const APP = {
 
-                    CORE.route.cumDist = [0];
-                    for (let i = 0; i < CORE.route.track.length - 1; i++) {
-                        CORE.route.cumDist[i + 1] =
-                            CORE.route.cumDist[i] +
-                            LOGIC.getDist(
-                                CORE.route.track[i].lat,
-                                CORE.route.track[i].lon,
-                                CORE.route.track[i + 1].lat,
-                                CORE.route.track[i + 1].lon
-                            );
-                    }
+    // Koppelt de GPX-bestandsinput aan de laadactie bij initialisatie
+    init() {
+        document.getElementById('gpxInput').onchange = (e) => this.loadGPX(e);
+    },
 
-                    CORE.route.totalDist = CORE.route.cumDist.at(-1);
+    // Laadt en verwerkt een GPX-bestand:
+    // bouwt trackpuntenlijst, cumulatieve afstanden en waypointlijst op
+    loadGPX(e) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const xml = new DOMParser().parseFromString(ev.target.result, "text/xml");
+            const pts = [...xml.getElementsByTagName('trkpt')];
+            if (pts.length < 2) return alert("Foutieve GPX.");
 
-                    let wpts = [...xml.getElementsByTagName('wpt')].map(w => {
-                        const lat = +w.getAttribute('lat');
-                        const lon = +w.getAttribute('lon');
-                        let bD = Infinity, bP = 0;
+            // Zet alle trackpunten om naar {lat, lon}-objecten
+            CORE.route.track = pts.map(p => ({
+                lat: +p.getAttribute('lat'),
+                lon: +p.getAttribute('lon')
+            }));
 
-                        CORE.route.track.forEach((t, idx) => {
-                            const d = LOGIC.getDist(lat, lon, t.lat, t.lon);
-                            if (isFinite(d) && d < bD) {
-                                bD = d;
-                                bP = CORE.route.cumDist[idx];
-                            }
-                        });
-
-                        return {
-                            name: w.getElementsByTagName('name')[0]?.textContent || "WP",
-                            desc: w.getElementsByTagName('desc')[0]?.textContent || "",
-                            lat, lon,
-                            routePos: bP,
-                            passed: false,
-                            missed: false
-                        };
-                    });
-
-                    if (CORE.route.track.length > 0) {
-                        wpts.push({
-                            name: "START",
-                            desc: "Startpunt",
-                            lat: CORE.route.track[0].lat,
-                            lon: CORE.route.track[0].lon,
-                            routePos: 0,
-                            passed: false,
-                            missed: false
-                        });
-                    }
-
-                    const lastWpDist = wpts.length > 0 ? Math.max(...wpts.map(w => w.routePos)) : 0;
-                    if (!wpts.find(w => w.name === "FINISH") && CORE.route.totalDist - lastWpDist > 10) {
-                        wpts.push({
-                            name: "FINISH",
-                            desc: "Einde spoor",
-                            lat: CORE.route.track.at(-1).lat,
-                            lon: CORE.route.track.at(-1).lon,
-                            routePos: CORE.route.totalDist,
-                            passed: false,
-                            missed: false
-                        });
-                    }
-
-                    CORE.route.waypoints = wpts.sort((a, b) => a.routePos - b.routePos);
-
-                    document.getElementById('standby-msg').style.display = 'none';
-                    document.getElementById('live-ui').style.display = 'block';
-                    document.getElementById('gpxInput').style.display = 'none';
-                    document.getElementById('stopBtn').style.display = 'inline-block';
-                    document.getElementById('resetBtn').style.display = 'inline-block';
-
-                    UI.updateTable();
-                    UI.update();
-                };
-                reader.readAsText(e.target.files[0]);
-            },
-
-            handleStartPause() {
-                if (CORE.route.track.length === 0) return alert("Laad GPX.");
-
-                if (!CORE.session.watchId) {
-                    CORE.session.watchId = navigator.geolocation.watchPosition(
-                        p => this.gpsHandler(p),
-                        e => alert(e.message),
-                        { enableHighAccuracy: true }
+            // Bereken cumulatieve afstand per trackpunt t.o.v. het startpunt
+            CORE.route.cumDist = [0];
+            for (let i = 0; i < CORE.route.track.length - 1; i++) {
+                CORE.route.cumDist[i + 1] =
+                    CORE.route.cumDist[i] +
+                    LOGIC.getDist(
+                        CORE.route.track[i].lat, CORE.route.track[i].lon,
+                        CORE.route.track[i + 1].lat, CORE.route.track[i + 1].lon
                     );
-                    CORE.session.isPaused = false;
-                    document.getElementById('startBtn').innerText = "⏸ PAUZE";
-                    document.getElementById('startBtn').style.background = "var(--warning)";
-                    this.speak("Tracker geactiveerd.");
-                } else {
-                    CORE.session.isPaused = !CORE.session.isPaused;
-                    document.getElementById('startBtn').innerText = CORE.session.isPaused ? "▶ HERVAT" : "⏸ PAUZE";
-                    document.getElementById('startBtn').style.background = CORE.session.isPaused ? "var(--success)" : "var(--warning)";
-                    this.speak(CORE.session.isPaused ? "Pauze." : "Hervat.");
-                }
-                CORE.session.lastTick = Date.now();
-            },
-
-            handleStop() {
-                if (!CORE.session.watchId) return;
-                navigator.geolocation.clearWatch(CORE.session.watchId);
-                CORE.session.watchId = null;
-                CORE.session.isPaused = false;
-                document.getElementById('startBtn').innerText = "▶ START";
-                document.getElementById('startBtn').style.background = "var(--success)";
-                this.speak("Tracker gestopt. De tellers zijn gepauzeerd.");
-                UI.update(0, 0, 0, 0, 0, CORE.session.lastTrackIdx);
-            },
-
-            gpsHandler(pos) {
-                const now = Date.now();
-                const delta = CORE.session.lastTick ? (now - CORE.session.lastTick) / 1000 : 0;
-                CORE.session.lastTick = now;
-
-                if (CORE.session.isPaused || CORE.session.finished) return;
-
-                const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = pos.coords;
-                const speedKmh = (s || 0) * 3.6;
-                const profile = document.getElementById('profile').value;
-                const config = CORE.settings[profile];
-
-                const isMovingSignal = (speedKmh > 1.8 && acc < 25);
-                if (isMovingSignal) {
-                    CORE.session.moveSeconds += delta;
-                } else {
-                    CORE.session.moveSeconds = 0;
-                }
-
-                if (CORE.session.moveSeconds > 3) {
-                    CORE.session.movingTime += delta;
-                    CORE.session.tripDist += (s || 0) * delta;
-                    CORE.session.steps += (s / config.th) * delta;
-                    CORE.session.currentMet = LOGIC.getMET(speedKmh, profile);
-                    CORE.session.kcal += (CORE.session.currentMet * parseFloat(document.getElementById('userWeight').value) * 1.05) / 3600 * delta;
-                } else {
-                    CORE.session.pauseTime += delta;
-                    CORE.session.currentMet = 1.0;
-                }
-
-                let bD = Infinity, bP = 0, bIdx = 0;
-                const startIdx = Math.max(0, CORE.session.lastTrackIdx - 50);
-                const endIdx = Math.min(CORE.route.track.length, CORE.session.lastTrackIdx + 150);
-
-                for (let i = startIdx; i < endIdx; i++) {
-                    const d = LOGIC.getDist(lat, lon, CORE.route.track[i].lat, CORE.route.track[i].lon);
-                    if (isFinite(d) && d < bD) {
-                        bD = d;
-                        bP = CORE.route.cumDist[i] || 0;
-                        bIdx = i;
-                    }
-                }
-
-                CORE.session.lastTrackIdx = bIdx;
-
-                if (bD > 50 && CORE.session.moveSeconds > 3) {
-                    if (!CORE.session.isOffRoute) {
-                        CORE.session.isOffRoute = true;
-                        this.speak("Opgelet, u bent van de route afgeweken.");
-                        CORE.session.lastOffRouteSpeakDist = 50;
-                    }
-                    let step = Math.floor(bD / 50) * 50;
-                    if (step > CORE.session.lastOffRouteSpeakDist) {
-                        this.speak(`Afwijking nu ${step} meter.`);
-                        CORE.session.lastOffRouteSpeakDist = step;
-                    }
-                } else if (CORE.session.isOffRoute && bD < 20) {
-                    CORE.session.isOffRoute = false;
-                    CORE.session.lastOffRouteSpeakDist = 0;
-                    this.speak("U bent terug op de route.");
-                }
-
-                CORE.route.waypoints.forEach((w, i) => {
-                    if (w.passed || w.missed) return;
-                    const d = LOGIC.getDist(lat, lon, w.lat, w.lon);
-                    if (d < config.radius || (bP > w.routePos && d < 35)) {
-                        if (w.name === "FINISH" && bP < CORE.route.totalDist * 0.9) return;
-                        w.passed = true;
-                        this.speak(`Punt bereikt: ${w.name}.`);
-                        const next = CORE.route.waypoints.find((nw, idx) => idx > i && !nw.passed);
-                        if (next) {
-                            const distStr = LOGIC.formatVoiceDist(next.routePos - bP);
-                            this.speak(`Volgend punt is ${next.name} over ${distStr}.`);
-                        }
-                        UI.updateTable();
-                    } else if (bP > w.routePos + 100) {
-                        w.missed = true;
-                        this.speak(`Waypoint ${w.name} gemist.`);
-                        UI.updateTable();
-                    }
-                });
-
-                UI.update(lat, lon, acc, speedKmh, bD, bP);
-            },
-
-            readWp(i) {
-                const w = CORE.route.waypoints[i];
-                this.speak(w.desc ? `Info ${w.name}: ${w.desc}` : `Geen info over ${w.name}.`);
-            },
-
-            speak(t) {
-                if (!document.getElementById('audioToggle').checked) return;
-                if (!t || t.length < 2) return;
-                if (CORE.speech.lastMsg === t && CORE.speech.queue.length > 2) return;
-                CORE.speech.lastMsg = t;
-                CORE.speech.queue.push(t);
-                if (!CORE.speech.isSpeaking) this.play();
-            },
-
-            play() {
-                if (CORE.speech.queue.length === 0) {
-                    CORE.speech.isSpeaking = false;
-                    return;
-                }
-                CORE.speech.isSpeaking = true;
-                const u = new SpeechSynthesisUtterance(CORE.speech.queue.shift());
-                u.lang = 'nl-NL';
-                u.onend = () => setTimeout(() => this.play(), 500);
-                window.speechSynthesis.speak(u);
             }
+            CORE.route.totalDist = CORE.route.cumDist.at(-1);
+
+            // Koppel elk GPX-waypoint aan zijn dichtstbijzijnde trackpositie
+            let wpts = [...xml.getElementsByTagName('wpt')].map(w => {
+                const lat = +w.getAttribute('lat');
+                const lon = +w.getAttribute('lon');
+                let bD = Infinity, bP = 0;
+                CORE.route.track.forEach((t, idx) => {
+                    const d = LOGIC.getDist(lat, lon, t.lat, t.lon);
+                    if (isFinite(d) && d < bD) { bD = d; bP = CORE.route.cumDist[idx]; }
+                });
+                return {
+                    name: w.getElementsByTagName('name')[0]?.textContent || "WP",
+                    desc: w.getElementsByTagName('desc')[0]?.textContent || "",
+                    lat, lon, routePos: bP, passed: false, missed: false
+                };
+            });
+
+            // Voeg START toe op positie 0 van het spoor
+            if (CORE.route.track.length > 0) {
+                wpts.push({
+                    name: "START", desc: "Startpunt",
+                    lat: CORE.route.track[0].lat, lon: CORE.route.track[0].lon,
+                    routePos: 0, passed: false, missed: false
+                });
+            }
+
+            // Voeg FINISH toe als dat nog niet in de GPX staat
+            const lastWpDist = wpts.length > 0 ? Math.max(...wpts.map(w => w.routePos)) : 0;
+            if (!wpts.find(w => w.name === "FINISH") && CORE.route.totalDist - lastWpDist > 10) {
+                wpts.push({
+                    name: "FINISH", desc: "Einde spoor",
+                    lat: CORE.route.track.at(-1).lat, lon: CORE.route.track.at(-1).lon,
+                    routePos: CORE.route.totalDist, passed: false, missed: false
+                });
+            }
+
+            // Sorteer op routepositie (oplopend)
+            CORE.route.waypoints = wpts.sort((a, b) => a.routePos - b.routePos);
+
+            // Toon de live UI, verberg het standby-bericht en de bestandsinput
+            document.getElementById('standby-msg').style.display = 'none';
+            document.getElementById('live-ui').style.display     = 'block';
+            document.getElementById('gpxInput').style.display    = 'none';
+
+            // [FIX] Reset- en stopknop: reset direct tonen, stop pas bij START
+            document.getElementById('resetBtn').style.display = 'inline-block';
+
+            UI.updateTable();
+            UI.update();
         };
+        reader.readAsText(e.target.files[0]);
+    },
 
-        APP.init();
-    </script>
+    // Beheert de START / PAUZE / HERVAT-cyclus
+    handleStartPause() {
+        if (CORE.route.track.length === 0) return alert("Laad GPX.");
+
+        if (!CORE.session.watchId) {
+            // === EERSTE START ===
+            CORE.session.watchId = navigator.geolocation.watchPosition(
+                p => this.gpsHandler(p),
+                e => alert(e.message),
+                { enableHighAccuracy: true }
+            );
+            CORE.session.isPaused = false;
+
+            // [FIX] Stopknop pas zichtbaar bij daadwerkelijke start
+            document.getElementById('stopBtn').style.display = 'inline-block';
+
+            // [VERBETERING] Mark START direct als gepasseerd zodat bij een luswandeling
+            // de FINISH-check nooit verward raakt met de startzone
+            const startWp = CORE.route.waypoints.find(w => w.name === "START");
+            if (startWp) { startWp.passed = true; UI.updateTable(); }
+
+            document.getElementById('startBtn').innerText        = "⏸ PAUZE";
+            document.getElementById('startBtn').style.background = "var(--warning)";
+            this.speak("Tracker geactiveerd.");
+
+        } else {
+            // === PAUZE / HERVAT ===
+            CORE.session.isPaused = !CORE.session.isPaused;
+            document.getElementById('startBtn').innerText =
+                CORE.session.isPaused ? "▶ HERVAT" : "⏸ PAUZE";
+            document.getElementById('startBtn').style.background =
+                CORE.session.isPaused ? "var(--success)" : "var(--warning)";
+            this.speak(CORE.session.isPaused ? "Pauze." : "Hervat.");
+        }
+
+        // Stel lastTick in op dit moment zodat de eerste delta correct is
+        CORE.session.lastTick = Date.now();
+    },
+
+    // Stopt de GPS-watch en bevriest alle tellers
+    handleStop() {
+        if (!CORE.session.watchId) return;
+        navigator.geolocation.clearWatch(CORE.session.watchId);
+        CORE.session.watchId  = null;
+        CORE.session.isPaused = false;
+
+        // [FIX] Reset lastTick → voorkomt tijdsprong bij herstart
+        CORE.session.lastTick = null;
+
+        document.getElementById('startBtn').innerText        = "▶ START";
+        document.getElementById('startBtn').style.background = "var(--success)";
+
+        // [FIX] Verberg stopknop opnieuw na stoppen
+        document.getElementById('stopBtn').style.display = 'none';
+
+        this.speak("Tracker gestopt. De tellers zijn gepauzeerd.");
+        UI.update(0, 0, 0, 0, 0, CORE.session.lastTrackIdx);
+    },
+
+    // Verwerkt elke binnenkomende GPS-positie:
+    // tijdsberekening, bewegingsdetectie, routezoeken, off-route en waypoints
+    gpsHandler(pos) {
+        const now   = Date.now();
+        const delta = CORE.session.lastTick ? (now - CORE.session.lastTick) / 1000 : 0;
+        CORE.session.lastTick = now;
+
+        if (CORE.session.isPaused || CORE.session.finished) return;
+
+        const { latitude: lat, longitude: lon, accuracy: acc, speed: s } = pos.coords;
+        const speedKmh = (s || 0) * 3.6;
+        const profile  = document.getElementById('profile').value;
+        const config   = CORE.settings[profile];
+
+        // [VERBETERING] Profielafhankelijke bewegingsdrempels
+        // Wandelen: lagere snelheidsdrempel, strengere GPS-eis
+        // Fietsen: hogere snelheidsdrempel, iets ruimere GPS-grens
+        const speedThresh    = profile === 'fietsen' ? 3.0 : 2.5;
+        const accLimit       = profile === 'fietsen' ? 30  : 20;
+        const isMovingSignal = (speedKmh > speedThresh && acc < accLimit);
+
+        // Telt aaneengesloten bewegingstijd; na 3s wordt dit als "echt bewegen" beschouwd
+        if (isMovingSignal) {
+            CORE.session.moveSeconds += delta;
+        } else {
+            CORE.session.moveSeconds = 0;
+        }
+
+        if (CORE.session.moveSeconds > 3) {
+            // === BEWEGING ===
+            CORE.session.movingTime += delta;
+            CORE.session.tripDist   += (s || 0) * delta;
+            CORE.session.steps      += (s / config.th) * delta;
+            CORE.session.currentMet  = LOGIC.getMET(speedKmh, profile);
+
+            // [FIX] Gecorrigeerde calorieformule: MET × kg × 3,5 / 200 / 60 × delta
+            const kg = parseFloat(document.getElementById('userWeight').value);
+            CORE.session.kcal += (CORE.session.currentMet * kg * 3.5 / 200) / 60 * delta;
+
+        } else {
+            // === STILSTAND ===
+            CORE.session.pauseTime  += delta;
+            CORE.session.currentMet  = 1.0;
+        }
+
+        // === ROUTEPOSITIE BEREKENEN ===
+        // Zoek het dichtstbijzijnde trackpunt in een venster rond de laatste positie.
+        // [VERBETERING] Groter vooruitkijkvenster bij fietsen (hogere snelheid)
+        let bD = Infinity, bP = 0, bIdx = 0;
+        const startIdx  = Math.max(0, CORE.session.lastTrackIdx - 50);
+        const lookahead = profile === 'fietsen' ? 300 : 150;
+        const endIdx    = Math.min(CORE.route.track.length, CORE.session.lastTrackIdx + lookahead);
+
+        for (let i = startIdx; i < endIdx; i++) {
+            const d = LOGIC.getDist(lat, lon, CORE.route.track[i].lat, CORE.route.track[i].lon);
+            if (isFinite(d) && d < bD) { bD = d; bP = CORE.route.cumDist[i] || 0; bIdx = i; }
+        }
+        CORE.session.lastTrackIdx = bIdx;
+
+        // === OFF-ROUTE DETECTIE ===
+        // [FIX] Dynamische drempel: max(50m, acc × 1,5)
+        // Op brede straten met slechte GPS voorkomt dit fout-positieve meldingen
+        const offThreshold = Math.max(50, acc * 1.5);
+
+        if (bD > offThreshold && CORE.session.moveSeconds > 3) {
+            if (!CORE.session.isOffRoute) {
+                CORE.session.isOffRoute            = true;
+                CORE.session.lastOffRouteSpeakDist = offThreshold;
+                this.speak("Opgelet, u bent van de route afgeweken.");
+            }
+            const step = Math.floor(bD / 50) * 50;
+            if (step > CORE.session.lastOffRouteSpeakDist) {
+                this.speak(`Afwijking nu ${step} meter.`);
+                CORE.session.lastOffRouteSpeakDist = step;
+            }
+        } else if (CORE.session.isOffRoute && bD < 20) {
+            CORE.session.isOffRoute            = false;
+            CORE.session.lastOffRouteSpeakDist = 0;
+            this.speak("U bent terug op de route.");
+        }
+
+        // === WAYPOINT-TRIGGERS ===
+        CORE.route.waypoints.forEach((w, i) => {
+            if (w.passed || w.missed) return;
+            const d = LOGIC.getDist(lat, lon, w.lat, w.lon);
+
+            if (d < config.radius || (bP > w.routePos && d < 35)) {
+                // [FIX] FINISH triggert pas als alle andere WPs gepasseerd/gemist zijn
+                // Voorkomt vroege trigger bij luswandelingen
+                if (w.name === "FINISH") {
+                    const allDone = CORE.route.waypoints
+                        .filter(wp => wp !== w && wp.name !== "START")
+                        .every(wp => wp.passed || wp.missed);
+                    if (!allDone) return;
+                }
+
+                w.passed = true;
+                this.speak(`Punt bereikt: ${w.name}.`);
+
+                // Kondig het volgende waypoint aan met afstand langs de route
+                const next = CORE.route.waypoints.find((nw, idx) => idx > i && !nw.passed);
+                if (next) {
+                    const distStr = LOGIC.formatVoiceDist(next.routePos - bP);
+                    this.speak(`Volgend punt is ${next.name} over ${distStr}.`);
+                }
+                UI.updateTable();
+
+            } else if (bP > w.routePos + 100) {
+                // Waypoint gemist: routepositie al meer dan 100m voorbij
+                w.missed = true;
+                this.speak(`Waypoint ${w.name} gemist.`);
+                UI.updateTable();
+            }
+        });
+
+        UI.update(lat, lon, acc, speedKmh, bD, bP);
+    },
+
+    // Leest de beschrijving van een waypoint voor (klik op rij in de tabel)
+    readWp(i) {
+        const w = CORE.route.waypoints[i];
+        this.speak(w.desc ? `Info ${w.name}: ${w.desc}` : `Geen info over ${w.name}.`);
+    },
+
+    // Voegt een tekst toe aan de spraakwachtrij én aan het aankondigingslogboek
+    speak(t) {
+        if (!t || t.length < 2) return;
+
+        // Altijd loggen in het aankondigingslogboek, ongeacht audio-instelling
+        UI.logAnnouncement(t);
+
+        if (!document.getElementById('audioToggle').checked) return;
+
+        // Voorkom herhaling van hetzelfde bericht als de wachtrij al vol is
+        if (CORE.speech.lastMsg === t && CORE.speech.queue.length > 2) return;
+        CORE.speech.lastMsg = t;
+        CORE.speech.queue.push(t);
+        if (!CORE.speech.isSpeaking) this.play();
+    },
+
+    // Speelt het eerste item uit de spraakwachtrij af via de Web Speech API
+    play() {
+        if (CORE.speech.queue.length === 0) {
+            CORE.speech.isSpeaking = false;
+            return;
+        }
+        CORE.speech.isSpeaking = true;
+        const u = new SpeechSynthesisUtterance(CORE.speech.queue.shift());
+        u.lang  = 'nl-NL';
+        u.onend = () => setTimeout(() => this.play(), 500);
+        window.speechSynthesis.speak(u);
+    }
+};
+
+// Start de applicatie
+APP.init();
+
+</script>
 </body>
-
 </html>
